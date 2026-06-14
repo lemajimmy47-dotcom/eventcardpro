@@ -1,0 +1,218 @@
+export interface EventDetails {
+  id: string;
+  senderId: string;
+  name: string;
+  date: string;
+  time: string;
+  period: 'Asubuhi' | 'Mchana' | 'Jioni' | 'Usiku';
+  eventHallName: string;
+  coordinates: string;
+  hostName: string;
+  dressCode: string;
+  contact1: string;
+  contact1Name?: string;
+  contact2: string;
+  contact2Name?: string;
+  contact3: string;
+  contact3Name?: string;
+  mapsLink?: string;
+  
+  eventImgUrl?: string;
+
+  // Logs for persistence
+  messageLogs?: MessageLog[];
+
+  // Optional Contribution configuration
+  contributionsEnabled?: boolean;
+  fundraisingGoal?: number;
+  autoRsvpRemindersEnabled?: boolean;
+}
+
+export interface ContributionPayment {
+  id: string;
+  amount: number;
+  date: string;
+  reference: string;
+  notes: string;
+}
+
+export interface ContributionCardTemplate {
+  eventId: string;
+  imageUrl?: string;
+  guestNameX: number;
+  guestNameY: number;
+  guestNameSize: number;
+  guestNameColor: string;
+  pledgeAmountX: number;
+  pledgeAmountY: number;
+  pledgeAmountSize: number;
+  pledgeAmountColor: string;
+  eventNameX: number;
+  eventNameY: number;
+  eventNameSize: number;
+  eventNameColor: string;
+  deadlineX: number;
+  deadlineY: number;
+  deadlineSize: number;
+  deadlineColor: string;
+  qrCodeX: number;
+  qrCodeY: number;
+  qrCodeSize: number;
+  qrCodeColor: string;
+  cardTypeX: number;
+  cardTypeY: number;
+  cardTypeSize: number;
+  cardTypeColor: string;
+  themeId?: string;
+  showEventName?: boolean;
+  showGuestName?: boolean;
+  showPledgeAmount?: boolean;
+  showDeadline?: boolean;
+  showCardType?: boolean;
+  showQrCode?: boolean;
+}
+
+export interface ContributionMessageLog {
+  id: string;
+  eventId: string;
+  guestName: string;
+  phone: string;
+  channel: 'SMS' | 'whatsApp' | 'WhatsApp' | 'sms';
+  type: 'Pledge Request' | 'Reminder' | 'Thank You';
+  message: string;
+  sentAt: string;
+  status: 'sent' | 'delivered' | 'read' | 'failed';
+}
+
+export interface MessageLog {
+  id: string;
+  guestName: string;
+  phone: string;
+  type: 'SMS' | 'WhatsApp';
+  templateUsed: string;
+  sentAt: string;
+  status: 'sent' | 'delivered' | 'read' | 'failed';
+}
+
+export interface TemplateSettings {
+  imageUrl: string; // Base64 or preset URL
+  textColor: string; // Default base color
+  fontFamily: string;
+  
+  // Custom positions (in percentage of the card layout)
+  guestNameX: number;
+  guestNameY: number;
+  guestNameSize: number;
+  guestNameColor?: string; // Custom color for guest name
+  
+  qrCodeX: number;
+  qrCodeY: number;
+  qrCodeSize: number;
+  qrCodeColor?: string; // Custom color for QR code
+  
+  cardTypeX: number;
+  cardTypeY: number;
+  cardTypeSize: number;
+  cardTypeColor?: string; // Custom color for card type badge
+}
+
+export interface Guest {
+  id: string;
+  eventId?: string;
+  code: string; // Alphanumeric check-in code e.g. KY-3801
+  name: string;
+  phone: string;
+  cardType: string; // 'SINGLE' | 'DOUBLE' | 'UNCLASSIFIED'
+  smsStatus: 'Sijatuma' | 'Inatuma' | 'Imetumia';
+  whatsappStatus: 'Sijatuma' | 'Inatuma' | 'Imetumia';
+  rsvpStatus: 'Bado' | 'Atahudhuria' | 'Hatahudhuria' | 'Labda';
+  rsvpGuestsCount: number;
+  rsvpComment?: string;
+  checkedIn: boolean;
+  checkedInTime?: string;
+  photoUrl?: string; // Opt photo taken during check-in
+  cardImageUrl?: string; // Generated preview image
+  smsCount?: number;
+  whatsappCount?: number;
+  category?: string;
+
+  // Contribution Module Fields
+  pledgeAmount?: number;
+  paidAmount?: number;
+  pledgeStatus?: 'No Pledge' | 'Pledged' | 'Partially Paid' | 'Fully Paid';
+  payments?: ContributionPayment[];
+  rsvpUpdatedAt?: string;
+  rsvpSeen?: boolean;
+}
+
+export interface SaveTheDate {
+  id: string;
+  event_id: string;
+  title: string;
+  message: string;
+  image_url?: string;
+  created_at: string;
+}
+
+export interface SaveTheDateRecipient {
+  id: string;
+  save_the_date_id: string;
+  guest_id: string;
+  sent_at?: string;
+  status: 'Pending' | 'Sent';
+}
+
+export interface WalletTransaction {
+  id: string;
+  type: 'In' | 'Out';
+  amount: number;
+  description: string;
+  date: string;
+}
+
+export interface UserAccount {
+  username: string;
+  phone: string;
+  email: string;
+  walletBalance: number;
+  transactions: WalletTransaction[];
+}
+
+export interface CommitteeMember {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  position: 'Chairperson' | 'Treasurer' | 'Secretary' | 'Committee Member' | 'Event Owner';
+  permissionLevel: 'Full Access' | 'Treasurer Access' | 'Viewer Access' | 'Summary Access';
+  token?: string;
+}
+
+export interface AppAuditLog {
+  id: string;
+  timestamp: string;
+  user: string;
+  action: string;
+  details: string;
+  ipAddress?: string;
+}
+
+export interface CommitteeActivityLog {
+  id: string;
+  user: string;
+  role: string;
+  action: string;
+  date: string;
+  time: string;
+  ipAddress: string;
+}
+
+export interface CommitteeNotification {
+  id: string;
+  type: 'pledge' | 'payment' | 'completed' | 'target_reached';
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
+

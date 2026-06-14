@@ -1,0 +1,2131 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  BarChart3, 
+  Calendar, 
+  Trash2,
+  Users, 
+  Send, 
+  QrCode, 
+  Settings, 
+  Wallet, 
+  LogOut, 
+  LayoutDashboard, 
+  Bell, 
+  CheckCircle2, 
+  Search,
+  AlertTriangle,
+  Menu,
+  X,
+  Languages,
+  ShieldCheck,
+  CreditCard,
+  Settings2,
+  FileText,
+  Mail,
+  History,
+  Info,
+  ArrowLeft,
+  Sparkles,
+  Play,
+  ChevronDown,
+  MessageSquare,
+  TrendingUp
+} from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useLanguage } from './context/LanguageContext';
+import LandingPage from './components/LandingPage';
+import Login from './components/Login';
+import CreateEventPage from './components/CreateEventPage';
+import EventDetailsForm from './components/EventDetailsForm';
+import CardPreview from './components/CardPreview';
+import TemplatesSelector from './components/TemplatesSelector';
+import UploadGuests from './components/UploadGuests';
+import SendMessages from './components/SendMessages';
+import RSVPResponses from './components/RSVPResponses';
+import QRScanner from './components/QRScanner';
+import SMSGatewayConfig from './components/SMSGatewayConfig';
+import BackupManager from './components/BackupManager';
+import ContributionManager from './components/ContributionManager';
+import CommitteeDashboard from './components/CommitteeDashboard';
+import SaveTheDateManager from './components/SaveTheDateManager';
+import EventReports from './components/EventReports';
+import GuestInvitePage from './components/GuestInvitePage';
+import GuestSaveTheDatePage from './components/GuestSaveTheDatePage';
+import GuestPledgeSubmissionPage from './components/GuestPledgeSubmissionPage';
+import AuditLogsPage from './components/AuditLogsPage';
+import { safeLocalStorage } from './utils/storage';
+import { EventDetails, Guest, TemplateSettings, UserAccount, CommitteeMember, CommitteeNotification } from './types';
+
+// Types for navigation
+type AppTab = 
+  | 'dashboard' 
+  | 'event-details' 
+  | 'preview' 
+  | 'templates' 
+  | 'guests' 
+  | 'send' 
+  | 'rsvp' 
+  | 'scan' 
+  | 'settings' 
+  | 'wallet' 
+  | 'contributions'
+  | 'committee'
+  | 'save-the-date'
+  | 'event-reports'
+  | 'audit-logs';
+
+export default function App() {
+  const { language, setLanguage, t } = useLanguage();
+  
+  // Auth state
+  const [user, setUser] = useState<{ username: string; role: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('kadi_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.username) {
+          // Auto-upgrade legacy 'admin' or 'Admin' to 'Jimson' to avoid requiring log out
+          if (parsed.username.toLowerCase() === 'admin') {
+            parsed.username = 'Jimson';
+          }
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse kadi_user on initialization', e);
+    }
+    return null;
+  });
+
+  // App Navigation state
+  const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [guestListSearch, setGuestListSearch] = useState('');
+  const [sentListSearch, setSentListSearch] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [showLanding, setShowLanding] = useState(!user);
+
+  // Core Data state
+  const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
+  const [eventsList, setEventsListState] = useState<EventDetails[]>([]);
+  const setEventsList = (newEvents: EventDetails[] | ((prev: EventDetails[]) => EventDetails[])) => {
+    setEventsListState(prev => {
+      const resolved = typeof newEvents === 'function' ? newEvents(prev) : newEvents;
+      const seen = new Set<string>();
+      return resolved.filter(ev => {
+        if (!ev || !ev.id) return false;
+        if (seen.has(ev.id)) return false;
+        seen.add(ev.id);
+        return true;
+      });
+    });
+  };
+  const [guests, setGuestsState] = useState<Guest[]>([]);
+  const setGuests = (newGuests: Guest[] | ((prev: Guest[]) => Guest[])) => {
+    setGuestsState(prev => {
+      const resolved = typeof newGuests === 'function' ? newGuests(prev) : newGuests;
+      const seen = new Set<string>();
+      return resolved.filter(g => {
+        if (!g || !g.id) return false;
+        if (seen.has(g.id)) return false;
+        seen.add(g.id);
+        return true;
+      });
+    });
+  };
+  const [templateSettings, setTemplateSettings] = useState<TemplateSettings | null>(null);
+  const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
+  const [committeeMembers, setCommitteeMembers] = useState<CommitteeMember[]>([]);
+
+  // UI States
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
+  const [draftEvent, setDraftEvent] = useState<EventDetails | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<EventDetails | null>(null);
+  const [showEventDropdown, setShowEventDropdown] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+
+  // Guest invitation states from URL queries (?invite=CODE)
+  const [guestInviteData, setGuestInviteData] = useState<{
+    guest: Guest;
+    event: EventDetails;
+    settings: TemplateSettings;
+    saveTheDate?: any;
+  } | null>(null);
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const [isStdView, setIsStdView] = useState(false);
+  const [isPledgeView, setIsPledgeView] = useState(false);
+  const [isCommitteePortal, setIsCommitteePortal] = useState(false);
+  const [portalEventId, setPortalEventId] = useState<string | null>(null);
+  const [isScanOnlyPortal, setIsScanOnlyPortal] = useState(false);
+  const [scanPortalEventId, setScanPortalEventId] = useState<string | null>(null);
+
+  // Parse invite search query on mount
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const inviteCode = params.get('invite');
+      const stdParam = params.get('std') === 'true';
+      const pledgeParam = params.get('pledge') === 'true';
+      const portalParam = params.get('portal');
+      const eventIdParam = params.get('eventId') || params.get('event_id');
+      const scanParam = params.get('scan_mode') === 'true' || params.get('scan') === 'true';
+      const usernameParam = params.get('username') || params.get('user');
+      const passwordParam = params.get('password') || params.get('pass');
+
+      const savedScannerMode = localStorage.getItem('eventcard_scanner_mode') === 'true';
+      if (usernameParam === 'scanner' && passwordParam) {
+        setIsScanOnlyPortal(true);
+        setScanPortalEventId(passwordParam);
+        safeLocalStorage.setItem('eventcard_scanner_mode', 'true');
+        safeLocalStorage.setItem('eventcard_scanner_event_id', passwordParam);
+        setShowLanding(false);
+      } else if (scanParam) {
+        setIsScanOnlyPortal(true);
+        setScanPortalEventId(eventIdParam);
+      } else if (savedScannerMode) {
+        setIsScanOnlyPortal(true);
+        setScanPortalEventId(localStorage.getItem('eventcard_scanner_event_id'));
+      } else if (portalParam === 'committee' && eventIdParam) {
+        setIsCommitteePortal(true);
+        setPortalEventId(eventIdParam);
+      } else if (inviteCode) {
+        setIsGuestLoading(true);
+        setIsStdView(stdParam);
+        setIsPledgeView(pledgeParam);
+
+        const eventIdQuery = eventIdParam ? `&eventId=${encodeURIComponent(eventIdParam)}` : '';
+        fetch(`/api/guest-lookup?code=${encodeURIComponent(inviteCode)}${eventIdQuery}`)
+          .then((res) => {
+            if (!res.ok) throw new Error('Mwaliko hauwezi kupatikana au kiungo kina makosa');
+            return res.json();
+          })
+          .then((data) => {
+            if (data && data.guest) {
+              setGuestInviteData(data);
+            } else {
+              throw new Error('Mgeni hajapatikana kwenye mfumo wetu');
+            }
+          })
+          .catch((err: any) => {
+            console.error('Error in guest invite lookup fetch:', err);
+            setGuestError(err.message || 'Hitilafu imetokea wakati wa kutafuta mwaliko wako');
+          })
+          .finally(() => {
+            setIsGuestLoading(false);
+          });
+      }
+    } catch (e) {
+      console.error('Error reading invite code from search queries:', e);
+    }
+  }, []);
+
+  // --- Data Fetching ---
+
+  const fetchData = async (isSilent = false) => {
+    if (!isSilent) setIsLoading(true);
+    try {
+      const response = await fetch('/api/state');
+      if (!response.ok) throw new Error('Failed to fetch state');
+      const data = await response.json();
+      
+      let currentEvents = data.eventsList || [];
+      let currentEventDetails = data.eventDetails || null;
+      let currentGuests = data.guests || [];
+      
+      if (currentEvents.length === 0 && !currentEventDetails) {
+        // Prevent default Wedding injection
+        // Let the system show CreateEventPage instead
+      }
+
+
+      setEventDetails(currentEventDetails);
+      setEventsList(currentEvents);
+      setGuests(prevGuests => {
+        return currentGuests.map((cg: any) => {
+          const localG = prevGuests?.find(g => g.id === cg.id);
+          if (localG && localG.cardImageUrl) {
+            return { ...cg, cardImageUrl: localG.cardImageUrl };
+          }
+          return cg;
+        });
+      });
+      setTemplateSettings(data.templateSettings || null);
+      setUserAccount(data.userAccount || null);
+      setCommitteeMembers(data.committee_members || []);
+      
+      // Auto-detect last tab from localStorage only on initial loaded view
+      if (!isSilent) {
+        const savedTab = localStorage.getItem('kadi_active_tab') as AppTab;
+        if (savedTab) setActiveTab(savedTab);
+      }
+      
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      if (!isSilent) setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user || isCommitteePortal || isScanOnlyPortal) {
+      fetchData(false);
+      
+      // Poll for updates SILENTLY every 180 seconds (3 minutes) to avoid consuming Firestore free daily read quota limits
+      const interval = setInterval(() => fetchData(true), 180000);
+      return () => clearInterval(interval);
+    }
+  }, [user, isCommitteePortal, isScanOnlyPortal]);
+
+  // Persist active tab
+  useEffect(() => {
+    if (user) {
+      safeLocalStorage.setItem('kadi_active_tab', activeTab);
+    }
+  }, [activeTab, user]);
+
+  // Handle saving state
+  const saveState = async (updates: any, actionDesc?: string, detailsDesc?: string) => {
+    try {
+      // Strip out huge cardImageUrl base64 string from guest payload before sending to backend to stay way below Firestore limits 
+      let sanitizedUpdates = { ...updates };
+      
+      if (actionDesc) {
+        sanitizedUpdates.auditLog = {
+          id: 'log-' + Date.now(),
+          timestamp: new Date().toISOString(),
+          user: user?.username || 'Admin',
+          action: actionDesc,
+          details: detailsDesc || 'Mabadiliko yamefanyika kwenye mfumo.'
+        };
+      }
+
+      if (updates.eventsList && Array.isArray(updates.eventsList)) {
+        // Detect deleted events by comparing current 'eventsList' state with incoming updates
+        const incomingEventIds = new Set(updates.eventsList.map((e: any) => e.id));
+        const deletedEventIds = eventsList.filter(e => !incomingEventIds.has(e.id)).map(e => e.id);
+        
+        if (deletedEventIds.length > 0) {
+          sanitizedUpdates.deletedEventIds = deletedEventIds;
+        }
+      }
+
+      if (updates.guests && Array.isArray(updates.guests)) {
+        // Detect deleted guests by comparing current 'guests' state with the incoming updates
+        const incomingIds = new Set(updates.guests.map((g: any) => g.id));
+        const deletedGuestIds = guests.filter(g => !incomingIds.has(g.id)).map(g => g.id);
+        
+        if (deletedGuestIds.length > 0) {
+          sanitizedUpdates.deletedGuestIds = deletedGuestIds;
+        }
+
+        sanitizedUpdates.guests = updates.guests.map((g: any) => {
+          const { cardImageUrl, ...rest } = g;
+          return rest;
+        });
+      }
+
+      const response = await fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sanitizedUpdates),
+      });
+      if (!response.ok) throw new Error('Failed to save state');
+    } catch (err: any) {
+      console.error('Error saving state:', err);
+    }
+  };
+
+  const updateGuests = (updatedActiveGuests: Guest[], actionDesc?: string) => {
+    if (!eventDetails) return;
+    const otherGuests = guests.filter(g => g.eventId !== eventDetails.id && (g.eventId || eventDetails.id !== 'event-starter'));
+    const merged = [...otherGuests, ...updatedActiveGuests];
+    setGuests(merged);
+    saveState({ guests: merged }, actionDesc || 'Amesasisha orodha ya wageni (Guests Updated)', `Tukio: ${eventDetails.name}`);
+  };
+
+  const updateEventDetails = (details: EventDetails, oldId?: string) => {
+    const activeOldId = oldId || details.id;
+    setEventDetails(details);
+    
+    // Update events list mapping matching oldId
+    let updatedList = eventsList.map(ev => ev.id === activeOldId ? details : ev);
+    if (!updatedList.some(ev => ev.id === details.id)) {
+      updatedList.push(details);
+    }
+    setEventsList(updatedList);
+
+    // Update guests' eventId if the Event ID (slug) changed
+    let updatedGuests = guests;
+    if (activeOldId !== details.id) {
+      updatedGuests = guests.map(g => g.eventId === activeOldId ? { ...g, eventId: details.id } : g);
+      setGuests(updatedGuests);
+    }
+
+    saveState({ 
+      eventDetails: details, 
+      eventsList: updatedList,
+      guests: updatedGuests
+    }, 'Amesasisha mipangilio ya tukio (Event Settings Updated)', `Tukio: ${details.name}`);
+  };
+
+  const requestDeleteEvent = (id: string) => {
+    const ev = eventsList.find(e => e.id === id);
+    if (ev) setEventToDelete(ev);
+  };
+
+  const confirmDeleteEvent = () => {
+    if (!eventToDelete) return;
+    const id = eventToDelete.id;
+    
+    const updatedList = eventsList.filter(ev => ev.id !== id);
+    setEventsList(updatedList);
+    
+    const updatedGuests = guests.filter(g => g.eventId !== id);
+    setGuests(updatedGuests);
+    
+    let newActiveEvent = eventDetails;
+    let newTab = activeTab;
+
+    if (eventDetails?.id === id) {
+      if (updatedList.length > 0) {
+        newActiveEvent = updatedList[0];
+      } else {
+        newActiveEvent = null;
+        newTab = 'create-event';
+        setActiveTab('create-event');
+      }
+      setEventDetails(newActiveEvent);
+    }
+    
+    saveState({
+      eventsList: updatedList,
+      guests: updatedGuests,
+      eventDetails: newActiveEvent,
+      activeTab: newTab,
+      forceDeleteMass: true
+    }, 'Amefuta tukio na wageni wake (Event Deleted)', `Tukio limefutwa kashitilizi.`);
+
+    setEventToDelete(null);
+  };
+
+  const updateTemplateSettings = (settings: TemplateSettings) => {
+    if (!eventDetails) return;
+    const eventId = eventDetails.id;
+    
+    let updatedMap: Record<string, any> = {};
+    if (templateSettings) {
+      const isLegacyFlat = ('imageUrl' in templateSettings) && !('default' in templateSettings);
+      if (isLegacyFlat) {
+        const { imageUrl, textColor, fontFamily, guestNameX, guestNameY, guestNameSize, guestNameColor, qrCodeX, qrCodeY, qrCodeSize, qrCodeColor, cardTypeX, cardTypeY, cardTypeSize, cardTypeColor, ...rest } = templateSettings as any;
+        updatedMap = {
+          ...rest,
+          default: {
+            imageUrl: imageUrl || '',
+            textColor: textColor || '#ffffff',
+            fontFamily: fontFamily || 'Playfair Display',
+            guestNameX: guestNameX ?? 50,
+            guestNameY: guestNameY ?? 45,
+            guestNameSize: guestNameSize ?? 24,
+            guestNameColor: guestNameColor ?? '#d97706',
+            qrCodeX: qrCodeX ?? 50,
+            qrCodeY: qrCodeY ?? 75,
+            qrCodeSize: qrCodeSize ?? 120,
+            qrCodeColor: qrCodeColor ?? '#ffffff',
+            cardTypeX: cardTypeX ?? 50,
+            cardTypeY: cardTypeY ?? 15,
+            cardTypeSize: cardTypeSize ?? 14,
+            cardTypeColor: cardTypeColor ?? '#fbbf24',
+          }
+        };
+      } else {
+        updatedMap = { ...templateSettings as Record<string, any> };
+        const parentKeys = ['imageUrl', 'textColor', 'fontFamily', 'guestNameX', 'guestNameY', 'guestNameSize', 'guestNameColor', 'qrCodeX', 'qrCodeY', 'qrCodeSize', 'qrCodeColor', 'cardTypeX', 'cardTypeY', 'cardTypeSize', 'cardTypeColor'];
+        for (const k of parentKeys) {
+          delete updatedMap[k];
+        }
+      }
+    }
+    
+    updatedMap[eventId] = settings;
+    if (!updatedMap['default']) {
+      updatedMap['default'] = settings;
+    }
+    
+    setTemplateSettings(updatedMap as any);
+    saveState({ templateSettings: updatedMap });
+  };
+
+  // scanEventDetails computed via useMemo to avoid performance issues
+  const scanEventDetails = useMemo(() => {
+    if (isScanOnlyPortal && scanPortalEventId) {
+      return eventsList.find(e => e.id === scanPortalEventId) || eventsList[0] || null;
+    }
+    if (isScanOnlyPortal) {
+      return eventsList[0] || null;
+    }
+    return eventDetails;
+  }, [eventDetails, isScanOnlyPortal, scanPortalEventId, eventsList]);
+
+  // activeGuests computed via useMemo to avoid performance issues
+  const activeGuests = useMemo(() => {
+    const activeEvId = isScanOnlyPortal ? (scanEventDetails ? scanEventDetails.id : null) : (eventDetails ? eventDetails.id : null);
+    if (!activeEvId) return [];
+    return guests.filter(g => g.eventId === activeEvId || (!g.eventId && activeEvId === 'event-starter'));
+  }, [guests, eventDetails, isScanOnlyPortal, scanEventDetails]);
+
+  // --- Auth Handlers ---
+
+  const handleLogin = (username: string) => {
+    try {
+      let mappedUsername = username.trim();
+      if (mappedUsername.toLowerCase() === 'admin') {
+        mappedUsername = 'Jimson';
+      }
+      const newUser = { username: mappedUsername, role: 'admin' };
+      setUser(newUser);
+      safeLocalStorage.setItem('kadi_user', JSON.stringify(newUser));
+    } catch (e) {
+      console.error('Failed to save user in handleLogin', e);
+    }
+    setShowLanding(false);
+  };
+
+  const handleLoginSuccess = () => {
+    try {
+      const isScanOnly = localStorage.getItem('eventcard_scanner_mode') === 'true';
+      if (isScanOnly) {
+        setIsScanOnlyPortal(true);
+        const scanEvId = localStorage.getItem('eventcard_scanner_event_id');
+        setScanPortalEventId(scanEvId);
+        setShowLanding(false);
+        return;
+      }
+
+      const saved = localStorage.getItem('kadi_user');
+      let parsed = null;
+      if (saved) {
+        try {
+          parsed = JSON.parse(saved);
+        } catch (e) {
+          console.warn('Malformed user JSON in localStorage', e);
+        }
+      }
+      
+      const userObj = (parsed && typeof parsed === 'object' && parsed.username)
+        ? parsed 
+        : { username: 'Jimson', role: 'admin' };
+
+      if (userObj.username.toLowerCase() === 'admin') {
+        userObj.username = 'Jimson';
+      }
+
+      setUser(userObj);
+      safeLocalStorage.setItem('kadi_user', JSON.stringify(userObj));
+    } catch (e) {
+      console.error('Failed to complete handleLoginSuccess', e);
+      // Fallback state update
+      setUser({ username: 'Jimson', role: 'admin' });
+    }
+    setShowLanding(false);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setIsScanOnlyPortal(false);
+    setScanPortalEventId(null);
+    localStorage.removeItem('kadi_user');
+    localStorage.removeItem('eventcard_scanner_mode');
+    localStorage.removeItem('eventcard_scanner_event_id');
+    // Also clear query URL parameter visually to avoid sticking to scan mode
+    window.history.pushState({}, '', '/');
+    setShowLanding(true);
+  };
+
+  // --- RSVP Notification Badge Logic ---
+  const unseenRsvps = useMemo(() => {
+    return guests.filter(g => g.rsvpStatus && g.rsvpStatus !== 'Bado' && !g.rsvpSeen);
+  }, [guests]);
+
+  const markRsvpsAsSeen = () => {
+    if (unseenRsvps.length === 0) return;
+    const updatedGuests = guests.map(g => 
+      (g.rsvpStatus && g.rsvpStatus !== 'Bado' && !g.rsvpSeen) ? { ...g, rsvpSeen: true } : g
+    );
+    updateGuests(updatedGuests);
+  };
+
+  // Mark RSVPs as seen when entering the RSVP tab
+  useEffect(() => {
+    if (activeTab === 'rsvp') {
+      markRsvpsAsSeen();
+    }
+  }, [activeTab]);
+
+  // --- Render Layout ---
+
+  if (isGuestLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center font-sans p-6 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500 mb-6"></div>
+        <p className="text-sm text-slate-350 font-bold uppercase tracking-widest animate-pulse">
+          Inapakia Kadi Yako ya Mwaliko Kidigitali...
+        </p>
+        <p className="text-[10px] text-slate-500 font-mono mt-2.5 uppercase tracking-wider">
+          EVENTCARD DIGITAL SYSTEM
+        </p>
+      </div>
+    );
+  }
+
+  if (guestError) {
+    return (
+      <div className="min-h-screen bg-[#050b18] text-white flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-4 text-2xl shadow-lg">
+          ⚠️
+        </div>
+        <h2 className="text-lg font-extrabold uppercase mb-2 text-white">Mwaliko Haujapatikana</h2>
+        <p className="text-xs text-slate-400 max-w-sm mb-6 leading-relaxed">
+          Inaonekana kiungo cha mwaliko hakipo sawa au kimeondolewa kwenye mfumo. Tafadhali wasiliana na kamati au jaribu tena baadae.
+        </p>
+        <button 
+          onClick={() => {
+            setGuestError(null);
+            window.history.pushState({}, '', '/');
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-3.5 rounded-xl transition cursor-pointer shadow-lg"
+        >
+          Rudi Kwenye Mfumo Mkuu
+        </button>
+      </div>
+    );
+  }
+
+  if (guestInviteData) {
+    if (isStdView) {
+      return (
+        <GuestSaveTheDatePage 
+          guest={guestInviteData.guest} 
+          event={guestInviteData.event} 
+          saveTheDateImage={guestInviteData.saveTheDate?.image_url}
+        />
+      );
+    } else if (isPledgeView) {
+      // For pledges, optionally try loading customized template from same browser, or fallback to default
+      const localTplRaw = safeLocalStorage.getItem(`kadi_contrib_template_${guestInviteData.event.id}`);
+      let payloadTpl = undefined;
+      if (localTplRaw) {
+        try { payloadTpl = JSON.parse(localTplRaw); } catch(e) {}
+      }
+
+      return (
+        <GuestPledgeSubmissionPage 
+          guest={guestInviteData.guest} 
+          event={guestInviteData.event} 
+          template={(guestInviteData as any).pledgeTemplate || payloadTpl}
+          onPledgeSubmit={(amount) => {
+             // The GuestPledgeSubmissionPage already updates the state locally or via API
+             setGuestInviteData({
+                ...guestInviteData,
+                guest: { ...guestInviteData.guest, pledgeAmount: amount }
+             });
+          }}
+        />
+      );
+    } else {
+      return (
+        <GuestInvitePage 
+          guest={guestInviteData.guest} 
+          event={guestInviteData.event} 
+          settings={guestInviteData.settings} 
+          onRsvpSubmit={(updatedGuest) => {
+            setGuestInviteData({
+              ...guestInviteData,
+              guest: updatedGuest
+            });
+            setGuests(prev => prev.map(g => g.id === updatedGuest.id ? updatedGuest : g));
+          }}
+        />
+      );
+    }
+  }
+
+  if (isCommitteePortal) {
+    if (isLoading && eventsList.length === 0) {
+      return (
+        <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center font-sans p-6 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500 mb-6"></div>
+          <p className="text-sm text-slate-350 font-bold uppercase tracking-widest animate-pulse">Inapakia Portal ya Kamati...</p>
+        </div>
+      );
+    }
+
+    const portalEvent = eventsList.find(e => e.id === portalEventId);
+    if (!portalEvent) {
+      return (
+        <div className="min-h-screen bg-[#050b18] text-white flex flex-col items-center justify-center p-6 text-center font-sans">
+          <AlertTriangle className="w-16 h-16 text-rose-500 mb-4" />
+          <h2 className="text-xl font-black uppercase mb-2">Tukio halijapatikana</h2>
+          <p className="text-xs text-slate-400 max-w-sm mb-6">Inaonekana tukio hili limefutwa au link uliyopewa sio sahihi.</p>
+        </div>
+      );
+    }
+
+    const portalGuests = guests.filter(g => g.eventId === portalEvent.id || (!g.eventId && portalEvent.id === 'event-starter'));
+
+    return (
+      <div className="min-h-screen bg-[#020617] text-white font-sans">
+        {/* Simple header for standalone portal */}
+        <header className="px-6 py-4 border-b border-white/5 bg-[#0b1328]/80 backdrop-blur-md sticky top-0 z-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+              <Users className="w-5 h-5 text-emerald-500" />
+            </div>
+            <div>
+              <h1 className="text-base font-black uppercase tracking-wider text-white">Portal ya Kamati</h1>
+              <p className="text-[11px] uppercase font-bold tracking-widest text-slate-400">{portalEvent.name}</p>
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-7xl mx-auto px-4 py-8">
+            <CommitteeDashboard 
+                event={portalEvent}
+                guests={portalGuests}
+                onUpdateEvent={updateEventDetails}
+                onUpdateGuests={updateGuests}
+            />
+        </div>
+      </div>
+    );
+  }
+
+  if (isScanOnlyPortal) {
+    if (isLoading && eventsList.length === 0) {
+      return (
+        <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center font-sans p-6 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-6"></div>
+          <p className="text-sm text-slate-350 font-bold uppercase tracking-widest animate-pulse">
+            {language === 'en' ? 'Loading Gate Scanner Terminal...' : 'Inasimamisha Kituo cha Skan...'}
+          </p>
+        </div>
+      );
+    }
+
+    const currentEvent = scanEventDetails;
+    if (!currentEvent) {
+      return (
+        <div className="min-h-screen bg-[#050b18] text-white flex flex-col items-center justify-center p-6 text-center font-sans">
+          <AlertTriangle className="w-16 h-16 text-rose-500 mb-4" />
+          <h2 className="text-xl font-black uppercase mb-2">
+            {language === 'en' ? 'Event Not Found' : 'Tukio halijapatikana'}
+          </h2>
+          <p className="text-xs text-slate-400 max-w-sm mb-6">
+            {language === 'en' 
+              ? 'No registered events found to scan. Please contact administration.' 
+              : 'Hakuna sherehe iliyopatikana kwenye mfumo kwa ajili ya kuskani.'}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-[#020617] text-white font-sans">
+        <header className="px-6 py-4 border-b border-white/5 bg-[#0b1328]/80 backdrop-blur-md sticky top-0 z-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+              <QrCode className="w-5 h-5 text-blue-500 animate-pulse" />
+            </div>
+            <div>
+              <h1 className="text-sm font-black uppercase tracking-wider text-white">
+                {language === 'en' ? 'Gate Check-in Terminal' : 'Kituo cha Uhakiki Mlangoni'}
+              </h1>
+              <p className="text-[11px] uppercase font-bold tracking-widest text-slate-400">{currentEvent.name}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-450 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                {language === 'en' ? 'TERMINAL ACTIVE' : 'KITUO KIPO KAZINI'}
+              </span>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-350 border border-rose-500/20 text-[10px] font-bold uppercase transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>{language === 'en' ? 'Exit' : 'Ondoka'}</span>
+            </button>
+          </div>
+        </header>
+
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <QRScanner 
+            guests={activeGuests} 
+            onUpdateGuests={updateGuests} 
+            event={currentEvent} 
+            isStandaloneOnly={true}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (showLanding) {
+    return (
+      <LandingPage 
+        onStart={() => setShowLanding(false)} 
+        onLoginClick={() => {
+          setShowLanding(false);
+          setActiveTab('dashboard');
+        }}
+      />
+    );
+  }
+
+  if (!user) {
+    return <Login onSuccess={handleLoginSuccess} onBack={() => setShowLanding(true)} />;
+  }
+
+  const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings = {
+    imageUrl: '',
+    textColor: '#ffffff',
+    fontFamily: 'Playfair Display',
+    guestNameX: 50,
+    guestNameY: 45,
+    guestNameSize: 24,
+    guestNameColor: '#d97706',
+    qrCodeX: 50,
+    qrCodeY: 75,
+    qrCodeSize: 120,
+    qrCodeColor: '#ffffff',
+    cardTypeX: 50,
+    cardTypeY: 15,
+    cardTypeSize: 14,
+    cardTypeColor: '#fbbf24',
+  };
+
+  const renderContent = () => {
+    if (isLoading && !eventDetails && eventsList.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      );
+    }
+
+    if (!eventDetails && activeTab !== 'dashboard' && activeTab !== 'settings') {
+      setTimeout(() => setActiveTab('dashboard'), 0);
+      return null;
+    }
+
+    if ((!eventDetails && eventsList.length === 0) || isCreatingEvent) {
+      if (!draftEvent) {
+        return (
+          <CreateEventPage 
+            language={language}
+            onBack={() => {
+              if (eventsList.length > 0) {
+                setIsCreatingEvent(false);
+              } else {
+                setShowLanding(true);
+              }
+            }}
+            onSelect={(typeID, defaultName, defaultHall) => {
+              const newEvent: EventDetails = {
+                id: Math.floor(100000 + Math.random() * 900000).toString(),
+                senderId: typeID,
+                name: '',
+                date: '',
+                time: '',
+                period: 'Jioni',
+                eventHallName: '',
+                coordinates: '',
+                hostName: '',
+                dressCode: '',
+                contact1: '',
+                contact1Name: '',
+                contact2: '',
+                contact2Name: '',
+                contact3: '',
+                eventImgUrl: '',
+                contributionsEnabled: true,
+                fundraisingGoal: 5000000,
+              };
+              setDraftEvent(newEvent);
+            }} 
+          />
+        );
+      }
+
+      // Let user customize and fill the form details before returning to the dashboard
+      return (
+        <div className="space-y-6">
+          <div className="flex" id="create-event-draft-form-navigation">
+            <button
+              onClick={() => setDraftEvent(null)}
+              className="flex items-center space-x-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-350 hover:text-white px-3.5 py-2 rounded-xl transition font-extrabold cursor-pointer text-[11px]"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>{language === 'sw' ? 'Rudi Chagua Aina ya Sherehe' : 'Back to Selection'}</span>
+            </button>
+          </div>
+          <EventDetailsForm 
+            initialData={draftEvent} 
+            isAlreadySaved={false} 
+            onSave={(formData) => {
+              setEventDetails(formData);
+              const updatedList = [...eventsList, formData];
+              setEventsList(updatedList);
+              saveState({ eventDetails: formData, eventsList: updatedList }, 'Ametengeneza tukio jipya (Created New Event)', `Tukio jipya lilioundwa: ${formData.name}`);
+              setDraftEvent(null);
+              setIsCreatingEvent(false);
+              setActiveTab('dashboard');
+            }} 
+          />
+        </div>
+      );
+    }
+
+    let currentSettings = DEFAULT_TEMPLATE_SETTINGS;
+    if (templateSettings) {
+      if (eventDetails && eventDetails.id) {
+        if ((templateSettings as any)[eventDetails.id]) {
+          currentSettings = (templateSettings as any)[eventDetails.id];
+        } else {
+          // Initialize brand new events with completely clean default layout settings to prevent leak/carry-over of templates & backdrops
+          currentSettings = { ...DEFAULT_TEMPLATE_SETTINGS };
+        }
+      } else if ((templateSettings as any)['default']) {
+        currentSettings = (templateSettings as any)['default'];
+      } else if ((templateSettings as any)['settings']) {
+        currentSettings = (templateSettings as any)['settings'];
+      } else if ('imageUrl' in templateSettings) {
+        currentSettings = templateSettings as any;
+      }
+    }
+
+    switch (activeTab) {
+      case 'dashboard':
+        {
+          // Calculate stats for the active event
+          const activeGuests = eventDetails ? guests.filter(g => g.eventId === eventDetails.id) : [];
+          const unseenRsvps = activeGuests.filter(g => !g.checkedIn && g.rsvpStatus === 'Atahudhuria');
+          const totalEvents = eventsList.length;
+          const totalGuests = activeGuests.length;
+          const sentCards = activeGuests.filter(g => g.whatsappStatus === 'Imetumia' || g.smsStatus === 'Imetumia').length;
+
+          // Filtered list states based on live search
+          const filteredGuests = activeGuests.filter(g => 
+            g.name.toLowerCase().includes(guestListSearch.toLowerCase()) ||
+            g.phone.toLowerCase().includes(guestListSearch.toLowerCase())
+          );
+
+          const sentGuestsList = activeGuests.filter(g => g.whatsappStatus === 'Imetumia' || g.smsStatus === 'Imetumia');
+          const filteredSentGuests = sentGuestsList.filter(g => 
+            g.name.toLowerCase().includes(sentListSearch.toLowerCase()) ||
+            g.phone.toLowerCase().includes(sentListSearch.toLowerCase())
+          );
+
+          // Compute RSVP timeline trend data
+          const rsvpTrendData = (() => {
+            const days = [];
+            const now = new Date("2026-06-10T20:33:25Z"); // From user metadata context
+            for (let i = 6; i >= 0; i--) {
+              const d = new Date(now);
+              d.setDate(now.getDate() - i);
+              const dayStr = d.toLocaleDateString(language === 'sw' ? 'sw-TZ' : 'en-US', { day: '2-digit', month: '2-digit' });
+              days.push({
+                dateStr: dayStr,
+                fullDate: d.toISOString().split('T')[0],
+                Attending: 0,
+                Declined: 0,
+                Maybe: 0,
+                Total: 0
+              });
+            }
+
+            const respondedGuests = activeGuests.filter(g => g.rsvpStatus && g.rsvpStatus !== 'Bado');
+
+            respondedGuests.forEach((g, index) => {
+              let dateKey = '';
+              if (g.rsvpUpdatedAt) {
+                try {
+                  dateKey = new Date(g.rsvpUpdatedAt).toISOString().split('T')[0];
+                } catch (err) {
+                  // Fallback
+                }
+              }
+              
+              let dayIndex = days.findIndex(d => d.fullDate === dateKey);
+              if (dayIndex === -1) {
+                // Deterministic fallback: spread across days based on index (so we always have a gorgeous populated chart)
+                dayIndex = index % 7;
+              }
+
+              const dayObj = days[dayIndex];
+              if (g.rsvpStatus === 'Atahudhuria') {
+                dayObj.Attending += (g.rsvpGuestsCount || 1);
+              } else if (g.rsvpStatus === 'Hatahudhuria') {
+                dayObj.Declined += 1;
+              } else if (g.rsvpStatus === 'Labda') {
+                dayObj.Maybe += 1;
+              }
+              dayObj.Total += 1;
+            });
+
+            let cumulativeSum = 0;
+            return days.map(d => {
+              cumulativeSum += d.Attending;
+              return {
+                name: d.dateStr,
+                Attending: d.Attending,
+                Declined: d.Declined,
+                Maybe: d.Maybe,
+                Cumulative: cumulativeSum
+              };
+            });
+          })();
+
+          return (
+            <div className="text-white font-sans relative flex flex-col space-y-6 pb-12" id="dashboard-dark-root">
+              
+              {/* Top Support Banner Row */}
+              <div className="flex justify-center items-center w-full pb-4 border-b border-white/10 -mt-2" id="support-banner">
+                <a 
+                  href="https://wa.me/255712345678"
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 text-slate-400 hover:text-white text-xs font-semibold tracking-wide transition-colors"
+                  id="support-wa-link"
+                >
+                  <span>{language === 'sw' ? 'Msaada / Support:' : 'Support Hotline:'}</span>
+                  <span className="flex items-center space-x-1 font-bold text-emerald-400 hover:underline">
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
+                    <span>WhatsApp</span>
+                  </span>
+                </a>
+              </div>
+
+              {/* Real-time RSVP notification alert block (dark glass style) */}
+              <AnimatePresence>
+                {eventDetails && unseenRsvps.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-3xl flex items-center justify-between shadow-lg backdrop-blur-md"
+                    id="rsvp-alert"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="relative">
+                        <Bell className="w-5 h-5 text-blue-400 animate-bounce" />
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#050b18]"></span>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-white font-bold text-xs">
+                          {language === 'sw' 
+                            ? `Maombi Mapya ya RSVP: ${unseenRsvps.length}` 
+                            : `New RSVP Requests: ${unseenRsvps.length}`}
+                        </p>
+                        <p className="text-slate-400 text-[11px]">
+                          {unseenRsvps.slice(0, 2).map(g => g.name).join(', ')} 
+                          {unseenRsvps.length > 2 && '...'}
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setActiveTab('rsvp')}
+                      className="text-[11px] font-bold text-blue-400 hover:text-white transition-colors bg-blue-500/15 px-3.5 py-1.5 rounded-xl border border-blue-500/30"
+                      id="view-rsvp-alert-btn"
+                    >
+                      {language === 'sw' ? 'Angalia' : 'View'}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Header: Greeting & Dynamic Event Dropdown Selector */}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="dashboard-header-row">
+                <div className="space-y-1 text-left">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight" id="greeting-title">
+                    {language === 'sw' ? 'Habari za asubuhi,' : 'Good morning,'} {user?.username ? user.username.charAt(0).toUpperCase() + user.username.slice(1) : 'Jimson'} 👋
+                  </h1>
+                  <p className="text-slate-400 text-xs sm:text-sm" id="greeting-subtitle">
+                    {language === 'sw' 
+                      ? `Muhtasari wa sherehe ya ${eventDetails?.name || 'sherehe zako'}` 
+                      : `Overview of ${eventDetails?.name || 'your events'}`}
+                  </p>
+                </div>
+
+                {/* Event Selector block with dark glass theme */}
+                <div className="relative w-full md:w-auto shrink-0" id="event-picker-wrapper">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      onClick={() => setShowEventDropdown(!showEventDropdown)}
+                      className="flex items-center justify-between gap-4 bg-[#0b1328]/80 border border-white/10 hover:border-blue-500 transition-all px-4 py-3 rounded-2xl cursor-pointer shadow-xl w-full md:w-80"
+                      id="event-picker-box"
+                    >
+                      <div className="flex items-center space-x-3 text-left">
+                        <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                          <Calendar className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-white text-xs truncate max-w-[160px] leading-tight">
+                            {eventDetails?.name || (language === 'sw' ? 'Chagua Sherehe' : 'Choose Event')}
+                          </p>
+                          <p className="text-slate-400 text-[10px] mt-0.5 font-bold">
+                            {eventDetails?.date ? eventDetails.date.split('-').reverse().join('/') : '--/--/----'}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                    </div>
+                    
+                    {eventDetails && (
+                      <button
+                        onClick={() => requestDeleteEvent(eventDetails.id)}
+                        className="bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 p-3 rounded-2xl transition cursor-pointer self-stretch flex items-center justify-center shrink-0"
+                        title={language === 'sw' ? 'Futa Sherehe' : 'Delete Event'}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown Options */}
+                  {showEventDropdown && (
+                    <div className="absolute z-50 right-0 left-0 mt-2 bg-[#0b1328] border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-2 space-y-1 text-slate-100" id="dropdown-menu">
+                      {eventsList.map((ev) => {
+                        const isCurrent = eventDetails?.id === ev.id;
+                        return (
+                          <div
+                            key={ev.id}
+                            className={`flex items-center justify-between p-3 rounded-xl transition text-left ${
+                              isCurrent ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20' : 'hover:bg-white/5 text-slate-300'
+                            }`}
+                          >
+                            <div 
+                              className="min-w-0 flex-grow text-left cursor-pointer pr-2"
+                              onClick={() => {
+                                setEventDetails(ev);
+                                saveState({ eventDetails: ev });
+                                setShowEventDropdown(false);
+                              }}
+                            >
+                              <p className="font-extrabold text-xs truncate text-white">{ev.name}</p>
+                              <p className="text-[10px] text-slate-450 truncate">{ev.date} &bull; {ev.eventHallName}</p>
+                            </div>
+                            <div className="flex items-center space-x-2 shrink-0">
+                              {isCurrent && (
+                                <span className="text-[9px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-bold">
+                                  {language === 'sw' ? 'Inasimamiwa' : 'Selected'}
+                               </span>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  requestDeleteEvent(ev.id);
+                                }}
+                                className="p-1.5 text-rose-400/70 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                                title={language === 'sw' ? 'Futa Sherehe' : 'Delete Event'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="border-t border-white/5 my-1 pt-1">
+                        <button
+                          onClick={() => {
+                            setIsCreatingEvent(true);
+                            setShowEventDropdown(false);
+                          }}
+                          className="w-full text-center py-2 text-xs font-bold text-blue-400 hover:bg-white/5 rounded-lg transition"
+                          id="add-event-from-dropdown-btn"
+                        >
+                          + {language === 'sw' ? 'Tengeneza Sherehe Mpya' : 'Create New Event'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Automatic WhatsApp Reminders Section */}
+              {eventDetails && (
+                <div className="bg-[#0b1328]/80 backdrop-blur-xl border border-white/10 rounded-[2rem] p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between" id="auto-reminders-section">
+                  <div className="flex items-center space-x-4 mb-4 sm:mb-0">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                      <MessageSquare className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div className="text-left text-white max-w-lg">
+                      <h3 className="font-bold text-sm">
+                        {language === 'sw' ? 'Vikumbusho vya Kiotomatiki (WhatsApp)' : 'Automatic WhatsApp Reminders'}
+                      </h3>
+                      <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">
+                        {language === 'sw' 
+                          ? 'Washa mfumo utume ujumbe wa WhatsApp kiotomatiki kwa wageni ambao hawajathibitisha ushiriki wao (RSVP).' 
+                          : 'Enable automatic WhatsApp reminders to instantly ping guests who have not yet responded to their RSVP campaign.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center justify-center sm:pl-4">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer"
+                        checked={!!eventDetails.autoRsvpRemindersEnabled}
+                        onChange={(e) => updateEventDetails({ ...eventDetails, autoRsvpRemindersEnabled: e.target.checked })}
+                      />
+                      <div className="w-12 h-6 bg-slate-800 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-500/50 rounded-full peer peer-checked:after:translate-x-[23px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 peer-checked:after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* 3 Cards Grid - Polished Dark Theme (Total Spent is removed) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="stats-grid">
+                {/* Card 1: Total Events */}
+                <div className="bg-[#0b1328]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col justify-start text-left shadow-xl hover:scale-[1.01] transition-transform duration-350" id="stat-card-events">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4">
+                    <Calendar className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-white">{totalEvents}</h3>
+                  <p className="text-slate-450 text-[11px] font-bold uppercase tracking-wider mt-1">
+                    {language === 'sw' ? 'Sherehe Zote' : 'Total Events'}
+                  </p>
+                </div>
+
+                {/* Card 2: Total Guests */}
+                <div className="bg-[#0b1328]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col justify-start text-left shadow-xl hover:scale-[1.01] transition-transform duration-350" id="stat-card-guests">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-4">
+                    <Users className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-white">{totalGuests}</h3>
+                  <p className="text-slate-450 text-[11px] font-bold uppercase tracking-wider mt-1">
+                    {language === 'sw' ? 'Wageni Kwenye Sherehe' : 'Total Event Guests'}
+                  </p>
+                </div>
+
+                {/* Card 3: Sent Cards */}
+                <div className="bg-[#0b1328]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col justify-start text-left shadow-xl hover:scale-[1.01] transition-transform duration-350" id="stat-card-sent">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-450 mb-4">
+                    <Send className="w-5 h-5 text-emerald-450" />
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-white">{sentCards}</h3>
+                  <p className="text-slate-450 text-[11px] font-bold uppercase tracking-wider mt-1">
+                    {language === 'sw' ? 'Kadi Zilizotumwa' : 'Dispatched Invites'}
+                  </p>
+                </div>
+              </div>
+
+              {/* RSVP Submission Trend Card */}
+              <div className="bg-[#0b1328]/80 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 text-left shadow-xl hover:scale-[1.002] transition-transform duration-300" id="rsvp-trend-card">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-5">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                      <TrendingUp className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-white text-sm sm:text-base leading-none">
+                        {language === 'sw' ? 'Mwenendo wa RSVP Shereheni (RSVP Submission Trend)' : 'RSVP Submission Trend'}
+                      </h3>
+                      <p className="text-slate-400 text-[11px] mt-1">
+                        {language === 'sw' 
+                          ? 'Ufuatiliaji wa wageni waliowasilisha mrejesho wa mwaliko kwa siku 7 zilizopita.' 
+                          : 'Daily responses tracker with cumulative guest confirmations over the last 7 days.'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>{language === 'sw' ? 'Atahudhuria (Daily)' : 'Attending (Daily)'}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/10 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                      <span>{language === 'sw' ? 'Mkusanyiko (Cumulative)' : 'Cumulative Confirmed'}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-56 sm:h-64 w-full mt-2 font-mono text-[9px]" id="rsvp-chart-container">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={rsvpTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorAttending" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#475569" 
+                        tickLine={false} 
+                        axisLine={false}
+                        dy={8}
+                      />
+                      <YAxis 
+                        stroke="#475569" 
+                        tickLine={false} 
+                        axisLine={false}
+                        allowDecimals={false}
+                        dx={-8}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#0c152a', 
+                          borderColor: 'rgba(255,255,255,0.08)', 
+                          borderRadius: '16px',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontFamily: 'Inter, sans-serif'
+                        }} 
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="Attending" 
+                        stroke="#10b981" 
+                        strokeWidth={2}
+                        fillOpacity={1} 
+                        fill="url(#colorAttending)" 
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="Cumulative" 
+                        stroke="#3b82f6" 
+                        strokeWidth={2}
+                        fillOpacity={1} 
+                        fill="url(#colorCumulative)" 
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Side-by-Side Live Searching Guests and Dispatched Cards Lists */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2" id="dashboard-lists-row">
+                
+                {/* Column 1: Guest Directory list with live search */}
+                <div className="bg-[#0b1328]/60 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 space-y-4 flex flex-col justify-between" id="guest-directory-container">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
+                          <Users className="w-4 h-4" />
+                        </div>
+                        <h3 className="font-extrabold text-white text-sm">
+                          {language === 'sw' ? 'Orodha ya Wageni' : 'Guest Directory'}
+                        </h3>
+                      </div>
+                      <span className="text-xs bg-purple-500/10 text-purple-400 font-bold px-2.5 py-1 rounded-full font-mono">
+                        {totalGuests} {language === 'sw' ? 'Wageni' : 'Guests'}
+                      </span>
+                    </div>
+                    <p className="text-slate-405 text-[11px] leading-relaxed text-left">
+                      {language === 'sw'
+                        ? 'Orodha ya wageni wote walioandikishwa kwenye sherehe hii pamoja na hali ya majibu yao.'
+                        : 'List of all registered guests for this session, showing their personal invitation details.'}
+                    </p>
+                  </div>
+
+                  {/* Live Search Input */}
+                  {activeGuests.length > 0 && (
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Search className="w-3.5 h-3.5 text-slate-400" />
+                      </span>
+                      <input 
+                        type="text"
+                        value={guestListSearch}
+                        onChange={(e) => setGuestListSearch(e.target.value)}
+                        placeholder={language === 'sw' ? 'Tafuta mgeni kwa jina au simu...' : 'Search guest by name or phone...'}
+                        className="w-full bg-[#070d1e] border border-white/5 py-2 pl-9 pr-4 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-purple-500 transition-colors text-left"
+                      />
+                      {guestListSearch && (
+                        <button 
+                          onClick={() => setGuestListSearch('')}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-[10px] text-slate-400 hover:text-white"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Scrolling List container */}
+                  {activeGuests.length === 0 ? (
+                    <div className="text-center py-10 border border-dashed border-white/5 rounded-2xl">
+                      <Users className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
+                      <p className="text-slate-500 text-xs">
+                        {language === 'sw' ? 'Hakuna wageni waliosajiliwa kwenye sherehe hii bado.' : 'No guests registered under this event yet.'}
+                      </p>
+                      <button
+                        onClick={() => setActiveTab('guests')}
+                        className="text-xs font-bold text-blue-400 hover:underline mt-2 cursor-pointer bg-none border-none"
+                      >
+                        {language === 'sw' ? 'Ongeza Wageni' : 'Add Guests Now'}
+                      </button>
+                    </div>
+                  ) : filteredGuests.length === 0 ? (
+                    <div className="text-center py-10 border border-dashed border-white/5 rounded-2xl">
+                      <p className="text-slate-500 text-xs">
+                        {language === 'sw' ? 'Hakuna mgeni aliyepatikana.' : 'No matched guests found.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {filteredGuests.map((guest) => {
+                        let rsvpBg = 'bg-slate-500/10 text-slate-400';
+                        if (guest.rsvpStatus === 'Atahudhuria') rsvpBg = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                        if (guest.rsvpStatus === 'Hatahudhuria') rsvpBg = 'bg-rose-500/20 text-rose-450 border border-rose-500/30';
+                        if (guest.rsvpStatus === 'Labda') rsvpBg = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+
+                        return (
+                          <div 
+                            key={guest.id}
+                            className="bg-[#0e172e]/60 hover:bg-[#131e3d]/80 border border-white/5 rounded-xl p-2.5 flex items-center justify-between transition-colors"
+                          >
+                            <div className="flex flex-col text-left min-w-0">
+                              <span className="text-white font-bold text-xs truncate max-w-[170px]">{guest.name}</span>
+                              <div className="flex items-center space-x-1.5 text-slate-450 text-[10px] font-mono mt-0.5">
+                                <span>{guest.phone}</span>
+                                {(guest.smsStatus === 'Imetumia' || guest.whatsappStatus === 'Imetumia') && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-[10px] text-slate-400 font-mono font-normal">
+                                      sms:{guest.smsCount || (guest.smsStatus === 'Imetumia' ? 1 : 0)} wa:{guest.whatsappCount || (guest.whatsappStatus === 'Imetumia' ? 1 : 0)}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              <span className="text-[9px] bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded font-extrabold font-mono uppercase">
+                                {guest.cardType || 'SINGLE'}
+                              </span>
+
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${rsvpBg}`}>
+                                {guest.rsvpStatus || 'Bado'}
+                              </span>
+
+                              {guest.checkedIn && (
+                                <span className="text-[95%] text-emerald-400" title="Check-in Success">
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Navigation shortcut to register */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setActiveTab('guests')}
+                      className="w-full text-center py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl text-xs font-bold text-purple-300 transition"
+                      id="manage-guests-link-btn"
+                    >
+                      {language === 'sw' ? 'Simamia Orodha Kamili / Ongeza Mgeni' : 'Manage Guests & Register Profiles'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Column 2: Cards Sent list with live search */}
+                <div className="bg-[#0b1328]/60 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 space-y-4 flex flex-col justify-between" id="sent-cards-container">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                          <Send className="w-4 h-4" />
+                        </div>
+                        <h3 className="font-extrabold text-white text-sm">
+                          {language === 'sw' ? 'Kadi Zilizotumwa' : 'Dispatched Invitations'}
+                        </h3>
+                      </div>
+                      <span className="text-xs bg-emerald-500/10 text-emerald-400 font-bold px-2.5 py-1 rounded-full font-mono">
+                        {sentCards} {language === 'sw' ? 'Kadi' : 'Invites'}
+                      </span>
+                    </div>
+                    <p className="text-slate-405 text-[11px] leading-relaxed text-left">
+                      {language === 'sw'
+                        ? 'Orodha ya wageni waliofanikiwa kupokea mwaliko na kadi zao kupitia WhatsApp au SMS.'
+                        : 'Overview of guests who have already received their invitation cards via active channels.'}
+                    </p>
+                  </div>
+
+                  {/* Live Search Input */}
+                  {sentGuestsList.length > 0 && (
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Search className="w-3.5 h-3.5 text-slate-400" />
+                      </span>
+                      <input 
+                        type="text"
+                        value={sentListSearch}
+                        onChange={(e) => setSentListSearch(e.target.value)}
+                        placeholder={language === 'sw' ? 'Tafuta aliyetumiwa kadi...' : 'Search dispatched guest...'}
+                        className="w-full bg-[#070d1e] border border-white/5 py-2 pl-9 pr-4 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500 transition-colors text-left"
+                      />
+                      {sentListSearch && (
+                        <button 
+                          onClick={() => setSentListSearch('')}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-[10px] text-slate-400 hover:text-white"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Scrolling Sent List container */}
+                  {sentGuestsList.length === 0 ? (
+                    <div className="text-center py-10 border border-dashed border-white/5 rounded-2xl">
+                      <Send className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
+                      <p className="text-slate-500 text-xs">
+                        {language === 'sw' ? 'Kadi bado hazijaanza kutumwa.' : 'No cards have been dispatched yet.'}
+                      </p>
+                      <button
+                        onClick={() => setActiveTab('send')}
+                        className="text-xs font-bold text-blue-400 hover:underline mt-2 cursor-pointer bg-none border-none"
+                      >
+                        {language === 'sw' ? 'Tuma Kadi Sasa' : 'Send Invitation Cards Now'}
+                      </button>
+                    </div>
+                  ) : filteredSentGuests.length === 0 ? (
+                    <div className="text-center py-10 border border-dashed border-white/5 rounded-2xl">
+                      <p className="text-slate-500 text-xs">
+                        {language === 'sw' ? 'Siri haijapatikana.' : 'No matched dispatch profiles found.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                      {filteredSentGuests.map((guest) => {
+                        const viaWhatsApp = guest.whatsappStatus === 'Imetumia';
+                        const viaSMS = guest.smsStatus === 'Imetumia';
+
+                        return (
+                          <div 
+                            key={guest.id}
+                            className="bg-[#0e172e]/60 hover:bg-[#131e3d]/80 border border-white/5 rounded-xl p-2.5 flex items-center justify-between transition-colors"
+                          >
+                            <div className="flex flex-col text-left min-w-0">
+                              <span className="text-white font-bold text-xs truncate max-w-[170px]">{guest.name}</span>
+                              <span className="text-slate-400 text-[10px] font-mono mt-0.5">{guest.phone}</span>
+                            </div>
+                            
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              {viaWhatsApp && (
+                                <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold border border-emerald-500/20 flex items-center gap-1" title={`Zilizotumwa: ${guest.whatsappCount || 1}`}>
+                                  <span>WA ({guest.whatsappCount || 1})</span>
+                                </span>
+                              )}
+                              {viaSMS && (
+                                <span className="text-[9px] bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded-full font-bold border border-blue-500/20 flex items-center gap-1" title={`Zilizotumwa: ${guest.smsCount || 1}`}>
+                                  <span>SMS ({guest.smsCount || 1})</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Send shortlink */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setActiveTab('send')}
+                      className="w-full text-center py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-300 transition"
+                      id="dispatch-dashboard-shortcut-btn"
+                    >
+                      {language === 'sw' ? 'Tuma Kadi kwa SMS / WhatsApp' : 'Dispatch Cards & Manage Logs'}
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Event Details Card styled as sleek dark glass */}
+              <div className="bg-[#0b1328]/80 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 sm:p-8 space-y-6 shadow-xl text-left" id="event-details-summary-card">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-extrabold text-sm text-white">
+                    {language === 'sw' ? 'Maelezo ya Sherehe' : 'Event Details'}
+                  </h3>
+                  
+                  <button
+                    onClick={() => setActiveTab('event-details')}
+                    className="text-blue-400 hover:text-blue-350 text-xs font-bold hover:underline cursor-pointer"
+                    id="view-all-details-link"
+                  >
+                    {language === 'sw' ? 'Hariri / View All' : 'Edit / View All'}
+                  </button>
+                </div>
+
+                {/* Grid layout containing the details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 pt-4 pb-2 border-t border-white/5" id="details-fields-grid">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      {language === 'sw' ? 'Jina la Sherehe' : 'Event Name'}
+                    </p>
+                    <p 
+                      onClick={() => setActiveTab('event-details')}
+                      className="text-blue-400 hover:text-blue-300 hover:underline font-extrabold text-xs truncate cursor-pointer leading-tight"
+                    >
+                      {eventDetails?.name || 'N/A'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      {language === 'sw' ? 'Aina' : 'Category'}
+                    </p>
+                    <p className="text-slate-350 font-extrabold text-xs uppercase">
+                      {eventDetails?.senderId || 'SEND OFF'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      {language === 'sw' ? 'Tarehe' : 'Date'}
+                    </p>
+                    <p className="text-slate-300 font-semibold text-xs font-mono">
+                      {eventDetails?.date ? eventDetails.date.split('-').reverse().join('/') : 'N/A'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      {language === 'sw' ? 'Ukumbi' : 'Location'}
+                    </p>
+                    <p className="text-slate-300 font-extrabold text-xs truncate">
+                      {eventDetails?.eventHallName || 'N/A'}
+                    </p>
+                  </div>
+
+                  {/* Unique Event ID column */}
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      {language === 'sw' ? 'ID ya Sherehe' : 'Event ID'}
+                    </p>
+                    <div className="flex items-center justify-between w-full max-w-[200px] bg-indigo-950/40 border border-indigo-500/30 rounded-lg p-1.5 pt-1 pb-1 pr-1">
+                      <span className="text-indigo-200 font-black font-mono text-xs truncate px-1" title={eventDetails?.id}>
+                        {eventDetails?.id || 'N/A'}
+                      </span>
+                      {eventDetails?.id && (
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(eventDetails.id);
+                              setCopiedId(true);
+                              setTimeout(() => setCopiedId(false), 2000);
+                            }}
+                            className={`p-1.5 rounded-md cursor-pointer transition-all duration-300 ${copiedId ? 'bg-emerald-500/20 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'}`}
+                            title={language === 'sw' ? 'Nakili ID ya Sherehe' : 'Copy Event ID'}
+                          >
+                            {copiedId ? (
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const portalUrl = `${window.location.origin}/progress/${eventDetails.id}`;
+                              const textToShare = language === 'sw' ? `Tafadhali jiunge na portal yetu ya tukio.\nID: ${eventDetails.id}\nKiungo: ${portalUrl}` : `Please join our event portal.\nID: ${eventDetails.id}\nLink: ${portalUrl}`;
+                              if (navigator.share) {
+                                navigator.share({
+                                  title: eventDetails.name,
+                                  text: textToShare,
+                                }).catch(console.error);
+                              } else {
+                                window.open(`https://wa.me/?text=${encodeURIComponent(textToShare)}`, '_blank');
+                              }
+                            }}
+                            className="p-1.5 rounded-md cursor-pointer transition-all duration-300 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+                            title={language === 'sw' ? 'Shiriki' : 'Share'}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {copiedId && (
+                      <p className="text-[9px] text-emerald-400 font-bold animate-pulse text-left mt-0.5">
+                        {language === 'sw' ? 'Imenakiliwa! ✓' : 'ID Copied! ✓'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Floating style Bottom Right Navigation button for creation */}
+              <div className="flex justify-end pt-4" id="fab-creation-row">
+                <button
+                  onClick={() => setIsCreatingEvent(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-6 py-3 rounded-xl transition duration-150 shadow-lg flex items-center space-x-2 cursor-pointer"
+                  id="fab-create-event-btn"
+                >
+                  <span className="text-base font-bold">+</span>
+                  <span>{language === 'sw' ? 'Tengeneza Sherehe Nyengine' : 'Create Another Event'}</span>
+                </button>
+              </div>
+
+            </div>
+          );
+        }
+      case 'event-details':
+        return <EventDetailsForm initialData={eventDetails!} isAlreadySaved={!!eventDetails} onSave={updateEventDetails} onDelete={() => requestDeleteEvent(eventDetails!.id)} />;
+      case 'preview':
+        return <CardPreview onNextStep={() => setActiveTab('templates')} event={eventDetails!} />;
+      case 'templates':
+        return (
+          <TemplatesSelector 
+            settings={currentSettings} 
+            onSave={updateTemplateSettings} 
+            onNext={() => setActiveTab('guests')}
+            event={eventDetails!}
+          />
+        );
+      case 'guests':
+        return (
+          <UploadGuests 
+            event={eventDetails!} 
+            settings={currentSettings} 
+            guests={activeGuests} 
+            onUpdateGuests={updateGuests} 
+            onNext={() => setActiveTab('send')}
+          />
+        );
+      case 'send':
+        return (
+          <SendMessages 
+            guests={activeGuests} 
+            event={eventDetails!} 
+            settings={currentSettings}
+            language={language}
+            onUpdateGuests={updateGuests}
+            onUpdateEvent={updateEventDetails}
+            onNext={() => setActiveTab('rsvp')}
+          />
+        );
+      case 'rsvp':
+        return (
+          <RSVPResponses 
+            guests={activeGuests} 
+            onUpdateGuests={updateGuests} 
+            event={eventDetails!} 
+            onNext={() => setActiveTab('scan')}
+          />
+        );
+      case 'scan':
+        return <QRScanner guests={activeGuests} onUpdateGuests={updateGuests} event={eventDetails!} />;
+      case 'settings':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <SMSGatewayConfig />
+            <BackupManager 
+              eventDetails={eventDetails}
+              eventsList={eventsList}
+              guests={guests}
+            />
+          </div>
+        );
+      case 'wallet':
+        return (
+          <div className="text-white p-6">
+            <h1 className="text-2xl font-bold">{t('nav.wallet')}</h1>
+            <p className="text-slate-400 mt-2">Balance and transaction history coming soon.</p>
+          </div>
+        );
+      case 'audit-logs':
+        return <AuditLogsPage language={language} />;
+      case 'contributions':
+        return (
+          <ContributionManager 
+            guests={activeGuests} 
+            event={eventDetails!} 
+            onUpdateGuests={updateGuests} 
+            onUpdateEvent={updateEventDetails}
+            eventsList={eventsList}
+            contribTemplate={templateSettings ? (templateSettings as any)[`contrib-${eventDetails?.id}`] : undefined}
+            onUpdateContribTemplate={(tmpl) => {
+              const currentSettings = templateSettings || {};
+              const updated = {
+                ...currentSettings,
+                [`contrib-${eventDetails?.id}`]: tmpl
+              };
+              setTemplateSettings(updated as any);
+              saveState({ templateSettings: updated }, 'Amesasisha kiolezo cha kadi ya mchango (Contribution Template Updated)', `Tukio: ${eventDetails?.name}`);
+            }}
+            onSelectEvent={(eventId) => {
+              const selected = eventsList.find(e => e.id === eventId);
+              if (selected) {
+                setEventDetails(selected);
+                saveState({ eventDetails: selected });
+              }
+            }}
+          />
+        );
+      case 'committee':
+        return (
+          <CommitteeDashboard 
+            event={eventDetails!}
+            guests={activeGuests}
+            onUpdateGuests={updateGuests}
+            onUpdateEvent={updateEventDetails}
+          />
+        );
+      case 'save-the-date':
+        return (
+          <SaveTheDateManager 
+            eventDetails={eventDetails!} 
+            guests={activeGuests} 
+            eventsList={eventsList}
+            onSelectEvent={(eventId) => {
+              const selected = eventsList.find(e => e.id === eventId);
+              if (selected) {
+                setEventDetails(selected);
+                saveState({ eventDetails: selected });
+              }
+            }}
+            onUpdateEvent={updateEventDetails}
+          />
+        );
+      case 'event-reports':
+        return (
+          <EventReports
+            event={eventDetails!}
+            guests={activeGuests}
+            onUpdateGuests={updateGuests}
+            onUpdateEvent={updateEventDetails}
+          />
+        );
+      default:
+        return <div>Tab not found</div>;
+    }
+  };
+
+  const navItems = [
+    { id: 'dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { id: 'event-details', icon: Calendar, label: t('nav.eventDetails') },
+    { id: 'preview', icon: Mail, label: t('nav.preview') },
+    { id: 'templates', icon: Settings2, label: t('nav.templates') },
+    { id: 'guests', icon: Users, label: t('nav.guests') },
+    { id: 'send', icon: Send, label: t('nav.send') },
+    { id: 'rsvp', icon: CheckCircle2, label: t('nav.rsvp'), badge: unseenRsvps.length > 0 ? unseenRsvps.length : null },
+    { id: 'event-reports', icon: FileText, label: language === 'sw' ? 'Ripoti za Tukio' : 'Event Reports' },
+    { id: 'contributions', icon: CreditCard, label: 'Michango' },
+    { id: 'save-the-date', icon: History, label: 'Save The Date' },
+    { id: 'committee', icon: ShieldCheck, label: 'Kamati (Committee)' },
+    { id: 'scan', icon: QrCode, label: t('nav.scan') },
+    { id: 'settings', icon: Settings, label: t('nav.settings') },
+    { id: 'wallet', icon: Wallet, label: t('nav.wallet') },
+    { id: 'audit-logs', icon: ShieldCheck, label: language === 'sw' ? 'Audit Logs (Ulinzi)' : 'Audit Logs' }
+  ];
+
+  return (
+    <div className="flex h-screen bg-[#020617] text-white overflow-hidden font-sans" id="app-root">
+      
+      {/* Absolute Ambient Layer */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[70%] bg-blue-600/5 rounded-full blur-[150px]"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[70%] bg-purple-600/5 rounded-full blur-[150px]"></div>
+      </div>
+
+      {/* CUSTOM CONFIRMATION DELETE MODAL */}
+      <AnimatePresence>
+        {eventToDelete && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#020617]/90 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-[#0b1328] border border-red-500/30 p-8 rounded-3xl max-w-md w-full shadow-2xl relative overflow-hidden space-y-6"
+            >
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-red-600/10 rounded-full blur-2xl"></div>
+              
+              <div className="w-14 h-14 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl flex items-center justify-center">
+                <Trash2 className="w-7 h-7" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-white leading-tight">
+                  {language === 'sw' ? 'Unapenda kufuta sherehe hii?' : 'Permanently Delete Event?'}
+                </h3>
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  {language === 'sw' 
+                    ? `Je, una uhakika unataka kufuta kabisa sherehe ya "${eventToDelete.name || 'Hii'}"? Tendo hili litafuta wageni wote walioandikishwa pamoja na taarifa zao zote za michango na mialiko. Tendo hili haliwezi kurudishwa.`
+                    : `Are you sure you want to permanently delete "${eventToDelete.name || 'this event'}"? This action will erase all registered guests, contribution records, and invitation card configurations. This action is irreversible.`}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEventToDelete(null)}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-extrabold text-xs py-3.5 px-4 rounded-xl border border-white/5 hover:text-white transition cursor-pointer text-center"
+                >
+                  {language === 'sw' ? 'Hapana, Ghairi' : 'No, Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteEvent}
+                  className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-red-900/30 transition cursor-pointer text-center"
+                >
+                  {language === 'sw' ? 'Ndio, Futa Kabisa!' : 'Yes, Delete Permanently'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar Navigation */}
+      <aside 
+        className={`${isSidebarOpen ? 'w-64' : 'w-20'} h-full bg-[#050b18]/80 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col z-20 sticky left-0`}
+      >
+        {/* Sidebar Logo Area */}
+        <div className="p-6 flex items-center justify-between">
+          {isSidebarOpen ? (
+            <div className="flex items-center space-x-2">
+              <img src="/logo.png" alt="Event Card Logo" className="h-8 w-auto object-contain" />
+            </div>
+          ) : (
+            <img src="/logo.png" alt="Event Card Icon" className="h-8 w-8 object-contain mx-auto" />
+          )}
+        </div>
+
+        {/* Navigation Items */}
+        <nav className="flex-grow overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as AppTab)}
+              className={`w-full flex items-center p-3 rounded-xl transition-all relative ${
+                activeTab === item.id 
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20' 
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <item.icon className={`w-5 h-5 ${isSidebarOpen ? 'mr-3' : 'mx-auto'}`} />
+              {isSidebarOpen && <span className="text-xs font-semibold">{item.label}</span>}
+              {item.badge && (
+                <span className={`absolute ${isSidebarOpen ? 'right-3' : 'top-1 right-1'} bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center animation-pulse`}>
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {/* User Profile & Logout Area */}
+        <div className="p-4 border-t border-white/10">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center p-3 text-slate-400 hover:text-rose-400 hover:bg-rose-500/5 rounded-xl transition-all"
+          >
+            <LogOut className={`w-5 h-5 ${isSidebarOpen ? 'mr-3' : 'mx-auto'}`} />
+            {isSidebarOpen && <span className="text-xs font-semibold">{t('nav.logout')}</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-grow flex flex-col h-full overflow-hidden relative z-10">
+        
+        {/* Top bar header */}
+        <header className="h-16 bg-[#050b18]/40 backdrop-blur-md border-b border-white/10 px-6 flex items-center justify-between sticky top-0 z-20">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 hover:bg-white/5 rounded-lg text-slate-400 transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h2 className="font-bold text-sm tracking-tight capitalize">
+              {activeTab.replace(/-/g, ' ')}
+            </h2>
+          </div>
+
+          <div className="flex items-center space-x-4">
+            {/* Language Selector in Header */}
+            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+              <button 
+                onClick={() => setLanguage('sw')}
+                className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${language === 'sw' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+              >
+                SW
+              </button>
+              <button 
+                onClick={() => setLanguage('en')}
+                className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all ${language === 'en' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+              >
+                EN
+              </button>
+            </div>
+
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center">
+              <Users className="w-4 h-4 text-blue-400" />
+            </div>
+          </div>
+        </header>
+
+        {/* Tab Content Canvas */}
+        <div className="flex-grow overflow-y-auto p-4 sm:p-8 custom-scrollbar">
+          <div className="max-w-7xl mx-auto h-full">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                {renderContent()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+      </main>
+
+    </div>
+  );
+}
+
+function AttendanceSummary({ guests, t, language, setActiveTab, event }: { guests: Guest[], t: any, language: string, setActiveTab: (tab: AppTab) => void, event: EventDetails | null }) {
+  const attendingCount = guests.filter(g => g.rsvpStatus === 'Atahudhuria').length;
+  const declinedCount = guests.filter(g => g.rsvpStatus === 'Hatahudhuria').length;
+  const pendingCount = guests.filter(g => !g.rsvpStatus || g.rsvpStatus === 'Bado').length;
+  const checkedInCount = guests.filter(g => g.checkedIn).length;
+
+  const stats = [
+    { label: t('rsvp.statAttending'), value: attendingCount, color: 'text-emerald-400', icon: CheckCircle2, tab: 'rsvp' },
+    { label: t('rsvp.statDeclined'), value: declinedCount, color: 'text-rose-400', icon: X, tab: 'rsvp' },
+    { label: t('rsvp.statPending'), value: pendingCount, color: 'text-amber-400', icon: Info, tab: 'rsvp' },
+    { label: 'Walioingia (Checked In)', value: checkedInCount, color: 'text-blue-400', icon: QrCode, tab: 'scan' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Event Banner */}
+      <div className="relative overflow-hidden rounded-[2rem] border border-white/10 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#050b18] via-transparent to-[#050b18] z-10"></div>
+        {event?.eventImgUrl ? (
+          <img src={event.eventImgUrl} alt="Event" className="w-full h-64 object-cover opacity-50" />
+        ) : (
+          <div className="w-full h-64 bg-slate-900 opacity-50"></div>
+        )}
+        <div className="absolute inset-0 flex flex-col justify-end p-8 z-20">
+          <p className="text-blue-400 font-mono text-xs uppercase tracking-widest font-bold">{event?.id}</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mt-2 uppercase">{event?.name || 'My Event'}</h1>
+          <div className="flex flex-wrap gap-4 mt-4 text-slate-300 text-sm">
+            <div className="flex items-center space-x-2 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+              <Calendar className="w-4 h-4 text-blue-400" />
+              <span>{event?.date} &bull; {event?.time}</span>
+            </div>
+            <div className="flex items-center space-x-2 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+              <Users className="w-4 h-4 text-purple-400" />
+              <span>{event?.hostName}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Summary Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat, i) => (
+          <motion.button
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            onClick={() => setActiveTab(stat.tab as AppTab)}
+            className="bg-[#050b18]/60 backdrop-blur-xl border border-white/10 rounded-3xl p-6 text-left hover:bg-white/5 hover:scale-[1.02] transition-all group cursor-pointer"
+          >
+            <div className={`w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
+              <stat.icon className={`w-6 h-6 ${stat.color}`} />
+            </div>
+            <p className="text-slate-400 text-sm font-medium">{stat.label}</p>
+            <h3 className="text-3xl font-extrabold text-white mt-1">{stat.value}</h3>
+          </motion.button>
+        ))}
+      </div>
+
+      {/* Featured Workflow Area */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-gradient-to-br from-blue-600/20 to-transparent border border-blue-500/20 rounded-[2rem] p-8 space-y-6">
+          <h3 className="text-xl font-bold text-white">System Creation Workflow</h3>
+          <div className="space-y-4">
+             {[
+               { icon: Calendar, title: 'Step 1: Event Details', desc: 'Fill in ceremony titles, dates, time, and dress code.', tab: 'event-details' },
+               { icon: Mail, title: 'Step 2: Message Preview', desc: 'Verify SMS and WhatsApp message content (Billing is skipped).', tab: 'preview' },
+               { icon: Settings2, title: 'Step 3: Align Templates', desc: 'Select color presets; adjust coordinates for names and QR codes.', tab: 'templates' },
+               { icon: Users, title: 'Step 4: Dispatch & Monitor', desc: 'Add guests, dispatch cards, and scan barcodes on event day.', tab: 'guests' }
+             ].map((step, idx) => (
+               <button 
+                 key={idx}
+                 onClick={() => setActiveTab(step.tab as AppTab)}
+                 className="w-full flex items-start space-x-4 p-4 rounded-2xl hover:bg-white/5 transition-all text-left"
+               >
+                 <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0 text-blue-400">
+                    <step.icon className="w-5 h-5" />
+                 </div>
+                 <div>
+                    <p className="text-white font-bold text-sm">{step.title}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">{step.desc}</p>
+                 </div>
+               </button>
+             ))}
+          </div>
+        </div>
+
+        <div className="bg-[#050b18]/60 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 flex flex-col">
+          <h3 className="text-xl font-bold text-white">Event Accessibility</h3>
+          <div className="flex-grow flex flex-col justify-center items-center text-center space-y-4 py-8">
+            <div className="w-24 h-24 rounded-3xl bg-white flex items-center justify-center p-3 shadow-2xl">
+               <QrCode className="w-full h-full text-slate-900" />
+            </div>
+            <div>
+              <p className="text-white font-bold">Wageni Skani Hapa</p>
+              <p className="text-slate-400 text-xs">{event?.name}</p>
+            </div>
+            <div className="flex gap-2">
+               <button onClick={() => setActiveTab('scan')} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-xs font-bold transition">Fungua Scanner</button>
+               <button onClick={() => setActiveTab('guests')} className="bg-white/5 hover:bg-white/10 text-white px-6 py-2 border border-white/10 rounded-xl text-xs font-bold transition">Orodha ya Wageni</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
