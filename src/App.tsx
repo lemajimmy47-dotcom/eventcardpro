@@ -242,7 +242,16 @@ export default function App() {
       }
 
 
-      setEventDetails(currentEventDetails);
+      // Check if we have a persisted event ID in local storage to prevent resetting on page reload
+      const savedEvId = localStorage.getItem('kadi_active_event_id');
+      let targetEvent = currentEventDetails;
+      if (savedEvId && currentEvents.length > 0) {
+        const found = currentEvents.find((e: any) => e.id === savedEvId);
+        if (found) {
+          targetEvent = found;
+        }
+      }
+      setEventDetails(targetEvent);
       setEventsList(currentEvents);
       setGuests(prevGuests => {
         return currentGuests.map((cg: any) => {
@@ -286,6 +295,13 @@ export default function App() {
       safeLocalStorage.setItem('kadi_active_tab', activeTab);
     }
   }, [activeTab, user]);
+
+  // Persist active event ID to prevent resetting on page reload
+  useEffect(() => {
+    if (user && eventDetails && eventDetails.id) {
+      safeLocalStorage.setItem('kadi_active_event_id', eventDetails.id);
+    }
+  }, [eventDetails, user]);
 
   // Handle saving state
   const saveState = async (updates: any, actionDesc?: string, detailsDesc?: string) => {

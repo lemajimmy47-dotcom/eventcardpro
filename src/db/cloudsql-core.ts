@@ -7,13 +7,46 @@ import path from "path";
 const DB_PATH = path.join(process.cwd(), "database.json");
 
 // Robust Error Handling Wrappers
-async function executeQuery<T>(label: string, queryFn: () => Promise<T>): Promise<T> {
-  try {
-    return await queryFn();
-  } catch (error) {
-    console.error(`[CloudSQL Error] ${label} failed:`, error);
-    throw new Error(`Database operation '${label}' failed. Please try again later.`, { cause: error });
+const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+function hasConnectionError(error: any): boolean {
+  if (!error) return false;
+  const msg = String(error.message || "").toLowerCase();
+  const causeMsg = error.cause ? String(error.cause.message || "").toLowerCase() : "";
+  const stackMsg = String(error.stack || "").toLowerCase();
+  
+  const searchStr = `${msg} ${causeMsg} ${stackMsg}`;
+  
+  return (
+    searchStr.includes("connection terminated") ||
+    searchStr.includes("econnreset") ||
+    searchStr.includes("timeout") ||
+    searchStr.includes("etimedout") ||
+    searchStr.includes("connection closed") ||
+    searchStr.includes("unexpected termination") ||
+    searchStr.includes("ssl syscall error") ||
+    searchStr.includes("broken pipe")
+  );
+}
+
+async function executeQuery<T>(label: string, queryFn: () => Promise<T>, retries = 3): Promise<T> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await queryFn();
+    } catch (error: any) {
+      const isConnectionDrop = hasConnectionError(error);
+
+      if (isConnectionDrop && attempt < retries) {
+        console.warn(`[CloudSQL] ${label} failed (attempt ${attempt}): ${error.message}. Retrying in ${attempt * 1500}ms...`);
+        await wait(attempt * 1500);
+        continue;
+      }
+      
+      console.error(`[CloudSQL Error] ${label} failed on attempt ${attempt}:`, error);
+      throw new Error(`Database operation '${label}' failed. Please try again later.`, { cause: error });
+    }
   }
+  throw new Error(`Database operation '${label}' failed after ${retries} attempts.`);
 }
 
 // 1. One-time Boot Seeder / Backup File Importer
@@ -281,30 +314,17 @@ export async function seedFromBackupFile(): Promise<boolean> {
 // 2. State Reconstruction function
 export async function fetchFullStateFromDB(): Promise<any> {
   return await executeQuery("fetchFullStateFromDB", async () => {
-    // Load all tables in parallel to minimize total round-trip time and avoid sequential stall timeouts
-    const [
-      sqlEvents,
-      sqlGuests,
-      sqlSaveTheDates,
-      sqlRecipients,
-      sqlTemplates,
-      sqlSmsSettings,
-      sqlCommitteeMembers,
-      sqlCommitteeRoles,
-      sqlAuditLogs,
-      sqlUserAcc
-    ] = await Promise.all([
-      db.select().from(schema.events),
-      db.select().from(schema.guests),
-      db.select().from(schema.saveTheDates),
-      db.select().from(schema.saveTheDateRecipients),
-      db.select().from(schema.templateSettings),
-      db.select().from(schema.smsGatewaySettings),
-      db.select().from(schema.committeeMembers),
-      db.select().from(schema.committeeRoles),
-      db.select().from(schema.auditLogs),
-      db.select().from(schema.userAccount)
-    ]);
+    // Load tables sequentially or in smaller batches to avoid overwhelming the Render free-tier pool
+    const sqlEvents = await db.select().from(schema.events);
+    const sqlGuests = await db.select().from(schema.guests);
+    const sqlSaveTheDates = await db.select().from(schema.saveTheDates);
+    const sqlRecipients = await db.select().from(schema.saveTheDateRecipients);
+    const sqlTemplates = await db.select().from(schema.templateSettings);
+    const sqlSmsSettings = await db.select().from(schema.smsGatewaySettings);
+    const sqlCommitteeMembers = await db.select().from(schema.committeeMembers);
+    const sqlCommitteeRoles = await db.select().from(schema.committeeRoles);
+    const sqlAuditLogs = await db.select().from(schema.auditLogs);
+    const sqlUserAcc = await db.select().from(schema.userAccount);
 
     // Reconstruct lists and nested formats
     const eventsList = sqlEvents.map(e => ({
@@ -557,12 +577,12 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
     // 3.2. Save Guests (BATCHED)
     if (data.guests && Array.isArray(data.guests) && data.guests.length > 0) {
       const guestChunks = [];
-      const CHUNK_SIZE = 50;
+      const CHUNK_SIZE = 1000;
       for (let i = 0; i < data.guests.length; i += CHUNK_SIZE) {
         guestChunks.push(data.guests.slice(i, i + CHUNK_SIZE));
       }
 
-      for (const chunk of guestChunks) {
+      const guestPromises = guestChunks.map(async (chunk) => {
         const values = chunk
           .filter((g: any) => g.id)
           .map((g: any) => ({
@@ -622,7 +642,8 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             },
           });
         }
-      }
+      });
+      await Promise.all(guestPromises);
     }
 
     // 3.3. Delete explicitly requested guests if client sends deletedGuestIds

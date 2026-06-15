@@ -11,9 +11,10 @@ export const createPool = () => {
     return new Pool({
       connectionString: databaseUrl,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      connectionTimeoutMillis: 60000,
-      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 10000,
       max: 10,
+      keepAlive: true,
     });
   }
 
@@ -36,9 +37,10 @@ export const createPool = () => {
     password,
     database: database || "postgres",
     ssl: isUnixSocket ? false : (host ? { rejectUnauthorized: false } : false),
-    connectionTimeoutMillis: 60000,
-    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 15000,
+    idleTimeoutMillis: 10000,
     max: 10,
+    keepAlive: true,
   });
 };
 

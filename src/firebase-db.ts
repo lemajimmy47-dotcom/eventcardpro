@@ -1,6 +1,7 @@
 import { seedFromBackupFile, fetchFullStateFromDB, syncStateToRelationalDB } from "./db/cloudsql-core.ts";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 
 const DB_PATH = path.join(process.cwd(), "database.json");
 let inMemoryDB: any = null;
@@ -48,6 +49,15 @@ export async function initDB() {
 
   console.log("[CloudSQL Initializer] Preparing Cloud SQL connection parameters...");
   try {
+    // Automatically provision tables inside Supabase if they do not yet exist
+    console.log("[CloudSQL Initializer] Running schema push to create tables on PostgreSQL if needed...");
+    try {
+      execSync("npx drizzle-kit push --config=src/db/drizzle.config.ts --force", { stdio: "inherit" });
+      console.log("[CloudSQL Initializer] Schema pushed successfully.");
+    } catch (migrationErr) {
+      console.error("[CloudSQL Initializer] Optional schema push returned a warning or error, attempting to proceed:", migrationErr);
+    }
+
     // 1. If SQL database is empty, seed it from existing database.json
     // We wrap this in a timeout-like behavior or ensure it doesn't block forever
     console.log("[CloudSQL Initializer] Seeding from backup if needed...");
@@ -75,11 +85,18 @@ export function readDB() {
   return inMemoryDB;
 }
 
+let isSyncingToDB = false;
+
 export async function readDBLatest() {
   if (!hasSQLConfig()) {
     if (!inMemoryDB) {
       inMemoryDB = getLocalDBFallback();
     }
+    return inMemoryDB;
+  }
+
+  // If we are actively writing to DB, reading from DB will yield stale records. Return in memory state.
+  if (isSyncingToDB && inMemoryDB) {
     return inMemoryDB;
   }
 
@@ -137,12 +154,18 @@ export async function writeDB(data: any) {
     return;
   }
 
-  // Sync / write directly to PostgreSQL!
+  // Sync / write directly to PostgreSQL! (Fire and forget so HTTP response is fast)
   try {
-    await syncStateToRelationalDB(data);
+    isSyncingToDB = true;
+    syncStateToRelationalDB(data).then(() => {
+      isSyncingToDB = false;
+    }).catch((error) => {
+      console.error("[CloudSQL writeDB] Relational sync error (async):", error);
+      isSyncingToDB = false;
+    });
   } catch (error) {
-    console.error("[CloudSQL writeDB] Relational sync error:", error);
-    // Fail-safe so server operations (and HTTP responses) never block or error out
+    console.error("[CloudSQL writeDB] Relational sync error trigger:", error);
+    isSyncingToDB = false;
   }
 }
 
