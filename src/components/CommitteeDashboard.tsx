@@ -124,6 +124,57 @@ export default function CommitteeDashboard({
     setActiveRole('Event Owner');
   };
 
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processUploadedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const processUploadedFile = (file: File) => {
+    if (file.size > 20 * 1024 * 1024) { // Increase to 20MB
+      setUploadError(isEn ? "File is too large (max 20MB)" : "Faili ni kubwa kupita kiasi (max 20MB)");
+      return;
+    }
+    
+    const categoryFromType = (type: string): "pdf" | "spreadsheet" | "document" | "image" | "other" => {
+      if (type.includes("pdf")) return "pdf";
+      if (type.includes("sheet") || type.includes("excel") || type.includes("csv")) return "spreadsheet";
+      if (type.includes("word") || type.includes("text") || type.includes("document")) return "document";
+      if (type.includes("image")) return "image";
+      return "other";
+    };
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      const newFile = {
+        id: "file-" + Date.now(),
+        name: file.name,
+        type: file.type,
+        size: (file.size / 1024).toFixed(1) + " KB",
+        category: categoryFromType(file.type),
+        dataUrl: content,
+        uploadedAt: new Date().toLocaleString()
+      };
+      setEventFiles(prev => [newFile, ...prev]);
+      setUploadError(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // GROUP LEVEL SUMMARIES CALCULATIONS
   const groupSummaries = useMemo(() => {
     const groupMap = new Map<string, { count: number; pledged: number; collected: number; balances: number }>();

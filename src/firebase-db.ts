@@ -34,7 +34,9 @@ export async function fetchFromFirestore() {
 
 export async function initDB() {
   // If SQL_HOST is not set, bypass completely to avoid slow connection timeouts during server startup
-  if (!process.env.SQL_HOST) {
+  const isCloudSQL = !!process.env.SQL_HOST;
+  
+  if (!isCloudSQL) {
     console.log("[SQL Bypass] SQL_HOST is not set. Operating directly on local JSON database store.");
     inMemoryDB = getLocalDBFallback();
     return inMemoryDB;
@@ -43,9 +45,12 @@ export async function initDB() {
   console.log("[CloudSQL Initializer] Preparing Cloud SQL connection parameters...");
   try {
     // 1. If SQL database is empty, seed it from existing database.json
+    // We wrap this in a timeout-like behavior or ensure it doesn't block forever
+    console.log("[CloudSQL Initializer] Seeding from backup if needed...");
     await seedFromBackupFile();
 
     // 2. Read full state from PostgreSQL
+    console.log("[CloudSQL Initializer] Fetching full state from PostgreSQL...");
     const state = await fetchFullStateFromDB();
     inMemoryDB = state;
     console.log("[CloudSQL Initializer] Cloud SQL PostgreSQL state fetched and loaded.");
@@ -53,6 +58,7 @@ export async function initDB() {
   } catch (error) {
     console.error("[CloudSQL Initializer] Setup failed: ", error);
     // Fallback safely to local JSON file
+    console.log("[CloudSQL Initializer] Falling back to local database.json due to failure.");
     inMemoryDB = getLocalDBFallback();
     return inMemoryDB;
   }

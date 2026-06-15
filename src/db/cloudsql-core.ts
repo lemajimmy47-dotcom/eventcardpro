@@ -281,17 +281,30 @@ export async function seedFromBackupFile(): Promise<boolean> {
 // 2. State Reconstruction function
 export async function fetchFullStateFromDB(): Promise<any> {
   return await executeQuery("fetchFullStateFromDB", async () => {
-    // Load lists from PostgreSQL
-    const sqlEvents = await db.select().from(schema.events);
-    const sqlGuests = await db.select().from(schema.guests);
-    const sqlSaveTheDates = await db.select().from(schema.saveTheDates);
-    const sqlRecipients = await db.select().from(schema.saveTheDateRecipients);
-    const sqlTemplates = await db.select().from(schema.templateSettings);
-    const sqlSmsSettings = await db.select().from(schema.smsGatewaySettings);
-    const sqlCommitteeMembers = await db.select().from(schema.committeeMembers);
-    const sqlCommitteeRoles = await db.select().from(schema.committeeRoles);
-    const sqlAuditLogs = await db.select().from(schema.auditLogs);
-    const sqlUserAcc = await db.select().from(schema.userAccount);
+    // Load all tables in parallel to minimize total round-trip time and avoid sequential stall timeouts
+    const [
+      sqlEvents,
+      sqlGuests,
+      sqlSaveTheDates,
+      sqlRecipients,
+      sqlTemplates,
+      sqlSmsSettings,
+      sqlCommitteeMembers,
+      sqlCommitteeRoles,
+      sqlAuditLogs,
+      sqlUserAcc
+    ] = await Promise.all([
+      db.select().from(schema.events),
+      db.select().from(schema.guests),
+      db.select().from(schema.saveTheDates),
+      db.select().from(schema.saveTheDateRecipients),
+      db.select().from(schema.templateSettings),
+      db.select().from(schema.smsGatewaySettings),
+      db.select().from(schema.committeeMembers),
+      db.select().from(schema.committeeRoles),
+      db.select().from(schema.auditLogs),
+      db.select().from(schema.userAccount)
+    ]);
 
     // Reconstruct lists and nested formats
     const eventsList = sqlEvents.map(e => ({
@@ -471,11 +484,22 @@ export async function fetchFullStateFromDB(): Promise<any> {
 // 3. Robust Relational Upsert function
 export async function syncStateToRelationalDB(data: any): Promise<void> {
   await executeQuery("syncStateToRelationalDB", async () => {
-    // 3.1. Save events (from eventsList or single eventDetails)
+    // 3.1. Save events (from eventsList or single eventDetails) (BATCHED)
+    const eventsToSync: any[] = [];
     if (data.eventsList && Array.isArray(data.eventsList)) {
-      for (const ev of data.eventsList) {
-        if (!ev.id) continue;
-        await db.insert(schema.events).values({
+      eventsToSync.push(...data.eventsList);
+    }
+    if (data.eventDetails && data.eventDetails.id) {
+      // Add individual eventDetails if not redundant
+      if (!eventsToSync.some(ev => ev.id === data.eventDetails.id)) {
+        eventsToSync.push(data.eventDetails);
+      }
+    }
+
+    if (eventsToSync.length > 0) {
+      const values = eventsToSync
+        .filter((ev: any) => ev.id)
+        .map((ev: any) => ({
           id: String(ev.id),
           senderId: ev.senderId ? String(ev.senderId) : null,
           name: String(ev.name || "Sherehe"),
@@ -498,120 +522,51 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
           contributionsEnabled: ev.contributionsEnabled === true,
           fundraisingGoal: typeof ev.fundraisingGoal === "number" ? ev.fundraisingGoal : 0,
           autoRsvpRemindersEnabled: ev.autoRsvpRemindersEnabled === true,
-        }).onConflictDoUpdate({
+        }));
+
+      if (values.length > 0) {
+        await db.insert(schema.events).values(values).onConflictDoUpdate({
           target: schema.events.id,
           set: {
-            senderId: ev.senderId ? String(ev.senderId) : null,
-            name: String(ev.name || "Sherehe"),
-            date: ev.date ? String(ev.date) : null,
-            time: ev.time ? String(ev.time) : null,
-            period: ev.period ? String(ev.period) : null,
-            eventHallName: ev.eventHallName ? String(ev.eventHallName) : null,
-            coordinates: ev.coordinates ? String(ev.coordinates) : null,
-            hostName: ev.hostName ? String(ev.hostName) : null,
-            dressCode: ev.dressCode ? String(ev.dressCode) : null,
-            contact1: ev.contact1 ? String(ev.contact1) : null,
-            contact1Name: ev.contact1Name ? String(ev.contact1Name) : null,
-            contact2: ev.contact2 ? String(ev.contact2) : null,
-            contact2Name: ev.contact2Name ? String(ev.contact2Name) : null,
-            contact3: ev.contact3 ? String(ev.contact3) : null,
-            contact3Name: ev.contact3Name ? String(ev.contact3Name) : null,
-            mapsLink: ev.mapsLink ? String(ev.mapsLink) : null,
-            eventImgUrl: ev.eventImgUrl ? String(ev.eventImgUrl) : null,
-            messageLogs: ev.messageLogs || null,
-            contributionsEnabled: ev.contributionsEnabled === true,
-            fundraisingGoal: typeof ev.fundraisingGoal === "number" ? ev.fundraisingGoal : 0,
-            autoRsvpRemindersEnabled: ev.autoRsvpRemindersEnabled === true,
+            senderId: sql`EXCLUDED.sender_id`,
+            name: sql`EXCLUDED.name`,
+            date: sql`EXCLUDED.date`,
+            time: sql`EXCLUDED.time`,
+            period: sql`EXCLUDED.period`,
+            eventHallName: sql`EXCLUDED.event_hall_name`,
+            coordinates: sql`EXCLUDED.coordinates`,
+            hostName: sql`EXCLUDED.host_name`,
+            dressCode: sql`EXCLUDED.dress_code`,
+            contact1: sql`EXCLUDED.contact_1`,
+            contact1Name: sql`EXCLUDED.contact_1_name`,
+            contact2: sql`EXCLUDED.contact_2`,
+            contact2Name: sql`EXCLUDED.contact_2_name`,
+            contact3: sql`EXCLUDED.contact_3`,
+            contact3Name: sql`EXCLUDED.contact_3_name`,
+            mapsLink: sql`EXCLUDED.maps_link`,
+            eventImgUrl: sql`EXCLUDED.event_img_url`,
+            messageLogs: sql`EXCLUDED.message_logs`,
+            contributionsEnabled: sql`EXCLUDED.contributions_enabled`,
+            fundraisingGoal: sql`EXCLUDED.fundraising_goal`,
+            autoRsvpRemindersEnabled: sql`EXCLUDED.auto_rsvp_reminders_enabled`,
           },
         });
       }
     }
 
-    if (data.eventDetails && data.eventDetails.id) {
-      const ed = data.eventDetails;
-      await db.insert(schema.events).values({
-        id: String(ed.id),
-        senderId: ed.senderId ? String(ed.senderId) : null,
-        name: String(ed.name || "Sherehe"),
-        date: ed.date ? String(ed.date) : null,
-        time: ed.time ? String(ed.time) : null,
-        period: ed.period ? String(ed.period) : null,
-        eventHallName: ed.eventHallName ? String(ed.eventHallName) : null,
-        coordinates: ed.coordinates ? String(ed.coordinates) : null,
-        hostName: ed.hostName ? String(ed.hostName) : null,
-        dressCode: ed.dressCode ? String(ed.dressCode) : null,
-        contact1: ed.contact1 ? String(ed.contact1) : null,
-        contact1Name: ed.contact1Name ? String(ed.contact1Name) : null,
-        contact2: ed.contact2 ? String(ed.contact2) : null,
-        contact2Name: ed.contact2Name ? String(ed.contact2Name) : null,
-        contact3: ed.contact3 ? String(ed.contact3) : null,
-        contact3Name: ed.contact3Name ? String(ed.contact3Name) : null,
-        mapsLink: ed.mapsLink ? String(ed.mapsLink) : null,
-        eventImgUrl: ed.eventImgUrl ? String(ed.eventImgUrl) : null,
-        messageLogs: ed.messageLogs || null,
-        contributionsEnabled: ed.contributionsEnabled === true,
-        fundraisingGoal: typeof ed.fundraisingGoal === "number" ? ed.fundraisingGoal : 0,
-        autoRsvpRemindersEnabled: ed.autoRsvpRemindersEnabled === true,
-      }).onConflictDoUpdate({
-        target: schema.events.id,
-        set: {
-          senderId: ed.senderId ? String(ed.senderId) : null,
-          name: String(ed.name || "Sherehe"),
-          date: ed.date ? String(ed.date) : null,
-          time: ed.time ? String(ed.time) : null,
-          period: ed.period ? String(ed.period) : null,
-          eventHallName: ed.eventHallName ? String(ed.eventHallName) : null,
-          coordinates: ed.coordinates ? String(ed.coordinates) : null,
-          hostName: ed.hostName ? String(ed.hostName) : null,
-          dressCode: ed.dressCode ? String(ed.dressCode) : null,
-          contact1: ed.contact1 ? String(ed.contact1) : null,
-          contact1Name: ed.contact1Name ? String(ed.contact1Name) : null,
-          contact2: ed.contact2 ? String(ed.contact2) : null,
-          contact2Name: ed.contact2Name ? String(ed.contact2Name) : null,
-          contact3: ed.contact3 ? String(ed.contact3) : null,
-          contact3Name: ed.contact3Name ? String(ed.contact3Name) : null,
-          mapsLink: ed.mapsLink ? String(ed.mapsLink) : null,
-          eventImgUrl: ed.eventImgUrl ? String(ed.eventImgUrl) : null,
-          messageLogs: ed.messageLogs || null,
-          contributionsEnabled: ed.contributionsEnabled === true,
-          fundraisingGoal: typeof ed.fundraisingGoal === "number" ? ed.fundraisingGoal : 0,
-          autoRsvpRemindersEnabled: ed.autoRsvpRemindersEnabled === true,
-        },
-      });
-    }
+    // 3.2. Save Guests (BATCHED)
+    if (data.guests && Array.isArray(data.guests) && data.guests.length > 0) {
+      const guestChunks = [];
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < data.guests.length; i += CHUNK_SIZE) {
+        guestChunks.push(data.guests.slice(i, i + CHUNK_SIZE));
+      }
 
-    // 3.2. Save Guests
-    if (data.guests && Array.isArray(data.guests)) {
-      for (const g of data.guests) {
-        if (!g.id) continue;
-        await db.insert(schema.guests).values({
-          id: String(g.id),
-          eventId: g.eventId ? String(g.eventId) : null,
-          code: String(g.code || "REG"),
-          name: String(g.name || ""),
-          phone: String(g.phone || ""),
-          cardType: String(g.cardType || "UNCLASSIFIED"),
-          smsStatus: String(g.smsStatus || "Sijatuma"),
-          whatsappStatus: String(g.whatsappStatus || "Sijatuma"),
-          rsvpStatus: String(g.rsvpStatus || "Bado"),
-          rsvpGuestsCount: typeof g.rsvpGuestsCount === "number" ? g.rsvpGuestsCount : 0,
-          rsvpComment: g.rsvpComment ? String(g.rsvpComment) : null,
-          checkedIn: g.checkedIn === true,
-          checkedInTime: g.checkedInTime ? String(g.checkedInTime) : null,
-          photoUrl: g.photoUrl ? String(g.photoUrl) : null,
-          cardImageUrl: g.cardImageUrl ? String(g.cardImageUrl) : null,
-          smsCount: typeof g.smsCount === "number" ? g.smsCount : 0,
-          whatsappCount: typeof g.whatsappCount === "number" ? g.whatsappCount : 0,
-          category: g.category ? String(g.category) : null,
-          pledgeAmount: typeof g.pledgeAmount === "number" ? g.pledgeAmount : 0,
-          paidAmount: typeof g.paidAmount === "number" ? g.paidAmount : 0,
-          pledgeStatus: String(g.pledgeStatus || "No Pledge"),
-          payments: g.payments || null,
-          rsvpUpdatedAt: g.rsvpUpdatedAt ? String(g.rsvpUpdatedAt) : null,
-          rsvpSeen: g.rsvpSeen !== false,
-        }).onConflictDoUpdate({
-          target: schema.guests.id,
-          set: {
+      for (const chunk of guestChunks) {
+        const values = chunk
+          .filter((g: any) => g.id)
+          .map((g: any) => ({
+            id: String(g.id),
             eventId: g.eventId ? String(g.eventId) : null,
             code: String(g.code || "REG"),
             name: String(g.name || ""),
@@ -635,8 +590,38 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             payments: g.payments || null,
             rsvpUpdatedAt: g.rsvpUpdatedAt ? String(g.rsvpUpdatedAt) : null,
             rsvpSeen: g.rsvpSeen !== false,
-          },
-        });
+          }));
+
+        if (values.length > 0) {
+          await db.insert(schema.guests).values(values).onConflictDoUpdate({
+            target: schema.guests.id,
+            set: {
+              eventId: sql`EXCLUDED.event_id`,
+              code: sql`EXCLUDED.code`,
+              name: sql`EXCLUDED.name`,
+              phone: sql`EXCLUDED.phone`,
+              cardType: sql`EXCLUDED.card_type`,
+              smsStatus: sql`EXCLUDED.sms_status`,
+              whatsappStatus: sql`EXCLUDED.whatsapp_status`,
+              rsvpStatus: sql`EXCLUDED.rsvp_status`,
+              rsvpGuestsCount: sql`EXCLUDED.rsvp_guests_count`,
+              rsvpComment: sql`EXCLUDED.rsvp_comment`,
+              checkedIn: sql`EXCLUDED.checked_in`,
+              checkedInTime: sql`EXCLUDED.checked_in_time`,
+              photoUrl: sql`EXCLUDED.photo_url`,
+              cardImageUrl: sql`EXCLUDED.card_image_url`,
+              smsCount: sql`EXCLUDED.sms_count`,
+              whatsappCount: sql`EXCLUDED.whatsapp_count`,
+              category: sql`EXCLUDED.category`,
+              pledgeAmount: sql`EXCLUDED.pledge_amount`,
+              paidAmount: sql`EXCLUDED.paid_amount`,
+              pledgeStatus: sql`EXCLUDED.pledge_status`,
+              payments: sql`EXCLUDED.payments`,
+              rsvpUpdatedAt: sql`EXCLUDED.rsvp_updated_at`,
+              rsvpSeen: sql`EXCLUDED.rsvp_seen`,
+            },
+          });
+        }
       }
     }
 
@@ -652,49 +637,63 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
       }
     }
 
-    // 3.4. Save SaveTheDates
-    if (data.saveTheDates && Array.isArray(data.saveTheDates)) {
-      for (const s of data.saveTheDates) {
-        if (!s.id) continue;
-        await db.insert(schema.saveTheDates).values({
+    // 3.4. Save SaveTheDates (BATCHED)
+    if (data.saveTheDates && Array.isArray(data.saveTheDates) && data.saveTheDates.length > 0) {
+      const values = data.saveTheDates
+        .filter((s: any) => s.id)
+        .map((s: any) => ({
           id: String(s.id),
           eventId: s.event_id ? String(s.event_id) : null,
           title: String(s.title || ""),
           message: String(s.message || ""),
           imageUrl: s.image_url ? String(s.image_url) : null,
           createdAt: s.created_at ? String(s.created_at) : null,
-        }).onConflictDoUpdate({
+        }));
+
+      if (values.length > 0) {
+        await db.insert(schema.saveTheDates).values(values).onConflictDoUpdate({
           target: schema.saveTheDates.id,
           set: {
-            eventId: s.event_id ? String(s.event_id) : null,
-            title: String(s.title || ""),
-            message: String(s.message || ""),
-            imageUrl: s.image_url ? String(s.image_url) : null,
-            createdAt: s.created_at ? String(s.created_at) : null,
+            eventId: sql`EXCLUDED.event_id`,
+            title: sql`EXCLUDED.title`,
+            message: sql`EXCLUDED.message`,
+            imageUrl: sql`EXCLUDED.image_url`,
+            createdAt: sql`EXCLUDED.created_at`,
           },
         });
       }
     }
 
-    // 3.5. Save Recipients
-    if (data.saveTheDateRecipients && Array.isArray(data.saveTheDateRecipients)) {
-      for (const r of data.saveTheDateRecipients) {
-        if (!r.id) continue;
-        await db.insert(schema.saveTheDateRecipients).values({
-          id: String(r.id),
-          saveTheDateId: r.save_the_date_id ? String(r.save_the_date_id) : null,
-          guestId: r.guest_id ? String(r.guest_id) : null,
-          sentAt: r.sent_at ? String(r.sent_at) : null,
-          status: String(r.status || "Pending"),
-        }).onConflictDoUpdate({
-          target: schema.saveTheDateRecipients.id,
-          set: {
+    // 3.5. Save Recipients (BATCHED)
+    if (data.saveTheDateRecipients && Array.isArray(data.saveTheDateRecipients) && data.saveTheDateRecipients.length > 0) {
+      const recipientChunks = [];
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < data.saveTheDateRecipients.length; i += CHUNK_SIZE) {
+        recipientChunks.push(data.saveTheDateRecipients.slice(i, i + CHUNK_SIZE));
+      }
+
+      for (const chunk of recipientChunks) {
+        const values = chunk
+          .filter((r: any) => r.id)
+          .map((r: any) => ({
+            id: String(r.id),
             saveTheDateId: r.save_the_date_id ? String(r.save_the_date_id) : null,
             guestId: r.guest_id ? String(r.guest_id) : null,
             sentAt: r.sent_at ? String(r.sent_at) : null,
             status: String(r.status || "Pending"),
-          },
-        });
+          }));
+
+        if (values.length > 0) {
+          await db.insert(schema.saveTheDateRecipients).values(values).onConflictDoUpdate({
+            target: schema.saveTheDateRecipients.id,
+            set: {
+              saveTheDateId: sql`EXCLUDED.save_the_date_id`,
+              guestId: sql`EXCLUDED.guest_id`,
+              sentAt: sql`EXCLUDED.sent_at`,
+              status: sql`EXCLUDED.status`,
+            },
+          });
+        }
       }
     }
 
@@ -774,11 +773,11 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
       });
     }
 
-    // 3.8. Save Committee Members
-    if (data.committee_members && Array.isArray(data.committee_members)) {
-      for (const m of data.committee_members) {
-        if (!m.id) continue;
-        await db.insert(schema.committeeMembers).values({
+    // 3.8. Save Committee Members (BATCHED)
+    if (data.committee_members && Array.isArray(data.committee_members) && data.committee_members.length > 0) {
+      const values = data.committee_members
+        .filter((m: any) => m.id)
+        .map((m: any) => ({
           id: String(m.id),
           name: String(m.name || ""),
           phone: String(m.phone || ""),
@@ -786,16 +785,19 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
           position: m.position ? String(m.position) : "Committee Member",
           permissionLevel: m.permissionLevel ? String(m.permissionLevel) : "Summary Access",
           token: m.token ? String(m.token) : null,
-        }).onConflictDoUpdate({
+        }));
+
+      if (values.length > 0) {
+        await db.insert(schema.committeeMembers).values(values).onConflictDoUpdate({
           target: schema.committeeMembers.id,
           set: {
-            name: String(m.name || ""),
-            phone: String(m.phone || ""),
-            email: m.email ? String(m.email) : null,
-            position: m.position ? String(m.position) : "Committee Member",
-            permissionLevel: m.permissionLevel ? String(m.permissionLevel) : "Summary Access",
-            token: m.token ? String(m.token) : null,
-          }
+            name: sql`EXCLUDED.name`,
+            phone: sql`EXCLUDED.phone`,
+            email: sql`EXCLUDED.email`,
+            position: sql`EXCLUDED.position`,
+            permissionLevel: sql`EXCLUDED.permission_level`,
+            token: sql`EXCLUDED.token`,
+          },
         });
       }
     }
@@ -820,27 +822,38 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
       }
     }
 
-    // 3.10. Save Audit Logs
-    if (data.auditLogs && Array.isArray(data.auditLogs)) {
-      for (const l of data.auditLogs) {
-        if (!l.id) continue;
-        await db.insert(schema.auditLogs).values({
-          id: String(l.id),
-          timestamp: String(l.timestamp || new Date().toISOString()),
-          user: String(l.user || "System"),
-          action: String(l.action || ""),
-          details: String(l.details || ""),
-          ipAddress: l.ipAddress ? String(l.ipAddress) : null,
-        }).onConflictDoUpdate({
-          target: schema.auditLogs.id,
-          set: {
+    // 3.10. Save Audit Logs (BATCHED)
+    if (data.auditLogs && Array.isArray(data.auditLogs) && data.auditLogs.length > 0) {
+      const logChunks = [];
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < data.auditLogs.length; i += CHUNK_SIZE) {
+        logChunks.push(data.auditLogs.slice(i, i + CHUNK_SIZE));
+      }
+
+      for (const chunk of logChunks) {
+        const values = chunk
+          .filter((l: any) => l.id)
+          .map((l: any) => ({
+            id: String(l.id),
             timestamp: String(l.timestamp || new Date().toISOString()),
             user: String(l.user || "System"),
             action: String(l.action || ""),
             details: String(l.details || ""),
             ipAddress: l.ipAddress ? String(l.ipAddress) : null,
-          }
-        });
+          }));
+
+        if (values.length > 0) {
+          await db.insert(schema.auditLogs).values(values).onConflictDoUpdate({
+            target: schema.auditLogs.id,
+            set: {
+              timestamp: sql`EXCLUDED.timestamp`,
+              user: sql`EXCLUDED.user`,
+              action: sql`EXCLUDED.action`,
+              details: sql`EXCLUDED.details`,
+              ipAddress: sql`EXCLUDED.ip_address`,
+            },
+          });
+        }
       }
     }
 
