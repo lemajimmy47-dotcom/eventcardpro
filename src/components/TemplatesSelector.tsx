@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Sliders, Type, CheckCircle, Upload, Check, Trash2, ArrowRight } from 'lucide-react';
+import { Layout, Sliders, Type, CheckCircle, Upload, Check, Trash2, ArrowRight, QrCode } from 'lucide-react';
 import { EventDetails, TemplateSettings } from '../types';
 import { CARD_PRESETS, CardPreset } from '../data/presets';
 import { drawCardToCanvas } from '../utils/canvasHelper';
@@ -213,89 +213,270 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
 
           {/* Core position tab controllers */}
           <div className="space-y-4 border-t border-white/10 pt-5">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-300 text-[11px] uppercase tracking-wider font-mono">
-                {language === 'sw' ? '2. Badilisha Nafasi za Vipengele' : '2. Element Margin Positioning'}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className="font-bold text-slate-350 text-[11px] uppercase tracking-wider font-mono">
+                {language === 'sw' ? '2. Badilisha Nafasi za Vipengele' : '2. Element Positions & Alignment'}
               </h3>
-              <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full font-semibold">
-                {language === 'sw' ? 'Hariri Nafasi' : 'Adjust Placement'}
-              </span>
+              
+              {/* Responsive Sub-tab Selector */}
+              <div className="flex bg-slate-950/80 p-1 rounded-xl border border-white/10 self-start sm:self-auto shrink-0 shadow-inner">
+                <button
+                  type="button"
+                  id="tab-btn-name"
+                  onClick={() => setActiveTab('name')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
+                    activeTab === 'name' 
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {language === 'sw' ? 'Jina la Mgeni' : 'Guest Name'}
+                </button>
+                <button
+                  type="button"
+                  id="tab-btn-qr"
+                  onClick={() => setActiveTab('qr')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
+                    activeTab === 'qr' 
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {language === 'sw' ? 'QR Code' : 'QR Code'}
+                </button>
+                <button
+                  type="button"
+                  id="tab-btn-type"
+                  onClick={() => setActiveTab('type')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
+                    activeTab === 'type' 
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {language === 'sw' ? 'Aina ya Kadi' : 'Card Badge'}
+                </button>
+              </div>
             </div>
 
-            {/* Position Controls Details */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4">
-              <div className="space-y-4">
-                <h4 className="font-bold text-white text-xs">
-                  {language === 'sw' ? 'Marekebisho ya Jina la Mgeni' : 'Adjust Guest Name Layout'}
-                </h4>
-                
-                {/* Slider X */}
-                <div className="space-y-1 font-sans">
-                  <div className="flex justify-between font-mono text-[10px] text-slate-355">
-                    <span>{language === 'sw' ? 'Kushoto / Kulia (X Axis)' : 'Horizontal Alignment (X position)'}</span>
-                    <span>{localSettings.guestNameX}%</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="5" 
-                    max="95" 
-                    value={localSettings.guestNameX}
-                    onChange={(e) => setLocalSettings({ ...localSettings, guestNameX: parseInt(e.target.value) })}
-                    className="w-full accent-blue-500 cursor-pointer"
-                  />
-                </div>
-
-                {/* Slider Y */}
-                <div className="space-y-1">
-                  <div className="flex justify-between font-mono text-[10px] text-slate-355">
-                    <span>{language === 'sw' ? 'Juu / Chini (Y Axis)' : 'Vertical Alignment (Y position)'}</span>
-                    <span>{localSettings.guestNameY}%</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="10" 
-                    max="90" 
-                    value={localSettings.guestNameY}
-                    onChange={(e) => setLocalSettings({ ...localSettings, guestNameY: parseInt(e.target.value) })}
-                    className="w-full accent-blue-500 cursor-pointer"
-                  />
-                </div>
-
-                {/* Slider Size */}
-                <div className="space-y-1 font-sans">
-                  <div className="flex justify-between font-mono text-[10px] text-slate-355">
-                    <span>{language === 'sw' ? 'Ukubwa wa Jina (Font Size)' : 'Typography Font Size'}</span>
-                    <span>{localSettings.guestNameSize}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="12" 
-                    max="40" 
-                    value={localSettings.guestNameSize}
-                    onChange={(e) => setLocalSettings({ ...localSettings, guestNameSize: parseInt(e.target.value) })}
-                    className="w-full accent-blue-500 cursor-pointer"
-                  />
-                </div>
-
-                {/* Independent Guest Name Color Picker */}
-                <div className="space-y-2 border-t border-white/10 pt-3">
-                  <label className="font-bold text-slate-300 block text-[11px]" htmlFor="color-name-picker">
-                    {language === 'sw' ? 'Rangi ya Jina la Mgeni' : 'Guest Name Highlight Color'}
-                  </label>
-                  <div className="flex items-center space-x-2">
+            {/* Position Controls Details container */}
+            <div className="bg-[#0b1324]/50 border border-white/10 rounded-2xl p-4 space-y-4">
+              
+              {activeTab === 'name' && (
+                <div className="space-y-4">
+                  <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    <span>{language === 'sw' ? 'Uhariri wa eneo la Jina la Mgeni' : 'Adjust Guest Name Layout'}</span>
+                  </h4>
+                  
+                  {/* Slider X */}
+                  <div className="space-y-1 font-sans">
+                    <div className="flex justify-between font-mono text-[9.5px] text-slate-400">
+                      <span>{language === 'sw' ? 'Kushoto / Kulia (X Axis)' : 'Horizontal Align (Name X)'}</span>
+                      <span className="text-amber-400 font-bold">{localSettings.guestNameX}%</span>
+                    </div>
                     <input 
-                      id="color-name-picker"
-                      type="color" 
-                      value={localSettings.guestNameColor || localSettings.textColor} 
-                      onChange={(e) => setLocalSettings({ ...localSettings, guestNameColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg border border-white/20 cursor-pointer p-0 bg-transparent transition-transform hover:scale-105"
+                      type="range" 
+                      min="5" 
+                      max="95" 
+                      value={localSettings.guestNameX}
+                      onChange={(e) => setLocalSettings({ ...localSettings, guestNameX: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
-                    <span className="font-mono text-[10px] text-white bg-white/10 px-2 py-1 rounded border border-white/10 uppercase">
-                      {localSettings.guestNameColor || localSettings.textColor}
-                    </span>
+                  </div>
+
+                  {/* Slider Y */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between font-mono text-[9.5px] text-slate-400">
+                      <span>{language === 'sw' ? 'Juu / Chini (Y Axis)' : 'Vertical Align (Name Y)'}</span>
+                      <span className="text-amber-400 font-bold">{localSettings.guestNameY}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="90" 
+                      value={localSettings.guestNameY}
+                      onChange={(e) => setLocalSettings({ ...localSettings, guestNameY: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Slider Size */}
+                  <div className="space-y-1 font-sans">
+                    <div className="flex justify-between font-mono text-[9.5px] text-slate-400">
+                      <span>{language === 'sw' ? 'Ukubwa wa Jina (Font Size)' : 'Typography Font Size'}</span>
+                      <span className="text-amber-400 font-bold">{localSettings.guestNameSize}px</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="12" 
+                      max="40" 
+                      value={localSettings.guestNameSize}
+                      onChange={(e) => setLocalSettings({ ...localSettings, guestNameSize: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Independent Guest Name Color Picker */}
+                  <div className="space-y-2 border-t border-white/10 pt-3">
+                    <label className="font-bold text-slate-350 block text-[11px]" htmlFor="color-name-picker">
+                      {language === 'sw' ? 'Rangi ya Jina la Mgeni' : 'Guest Name Highlight Color'}
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input 
+                        id="color-name-picker"
+                        type="color" 
+                        value={localSettings.guestNameColor || localSettings.textColor} 
+                        onChange={(e) => setLocalSettings({ ...localSettings, guestNameColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg border border-white/20 cursor-pointer p-0 bg-transparent transition-transform hover:scale-105"
+                      />
+                      <span className="font-mono text-[10px] text-white bg-white/10 px-2 py-1 rounded border border-white/10 uppercase">
+                        {localSettings.guestNameColor || localSettings.textColor}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {activeTab === 'qr' && (
+                <div className="space-y-4">
+                  <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shrink-0" />
+                    <span>{language === 'sw' ? 'Uhariri wa eneo la Kisimbuzi cha QR (QR Code)' : 'Adjust QR Code Placement Coordinates'}</span>
+                  </h4>
+                  
+                  {/* Slider X */}
+                  <div className="space-y-1 font-sans">
+                    <div className="flex justify-between font-mono text-[10px] text-slate-355">
+                      <span>{language === 'sw' ? 'Msimamo wa Kushoto/Kulia (X Axis)' : 'Horizontal Alignment (X position)'}</span>
+                      <span className="text-blue-400 font-bold">{localSettings.qrCodeX}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="5" 
+                      max="95" 
+                      value={localSettings.qrCodeX}
+                      onChange={(e) => setLocalSettings({ ...localSettings, qrCodeX: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Slider Y */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between font-mono text-[10px] text-slate-355">
+                      <span>{language === 'sw' ? 'Msimamo wa Juu/Chini (Y Axis)' : 'Vertical Alignment (Y position)'}</span>
+                      <span className="text-blue-400 font-bold">{localSettings.qrCodeY}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="90" 
+                      value={localSettings.qrCodeY}
+                      onChange={(e) => setLocalSettings({ ...localSettings, qrCodeY: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Slider Size */}
+                  <div className="space-y-1 font-sans">
+                    <div className="flex justify-between font-mono text-[10px] text-slate-355">
+                      <span>{language === 'sw' ? 'Ukubwa wa QR Code Square (Size)' : 'Square Perimeter Size'}</span>
+                      <span className="text-blue-400 font-bold">{localSettings.qrCodeSize}px</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="30" 
+                      max="150" 
+                      value={localSettings.qrCodeSize}
+                      onChange={(e) => setLocalSettings({ ...localSettings, qrCodeSize: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Specific user requested notice about high-contrast solid black QR Code */}
+                  <div className="font-mono text-[9px] bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-blue-300 leading-normal">
+                    {language === 'sw' 
+                      ? '✓ Kisimbuzi cha QR kimewekewa rangi NYEUSI dhabiti juu ya mandhari nyeupe ili kuhakikisha usomaji wa papo hapo na usio na makosa kabisa mlangoni.'
+                      : '✓ The QR Code is locked in solid high-performance BLACK with a clean white baseline board to ensure error-free venue scanning.'}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'type' && (
+                <div className="space-y-4">
+                  <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse shrink-0" />
+                    <span>{language === 'sw' ? 'Uhariri wa eneo la Aina ya Kadi (Card Type Badge)' : 'Adjust Card Type Label Coordinates'}</span>
+                  </h4>
+                  
+                  {/* Slider X */}
+                  <div className="space-y-1 font-sans">
+                    <div className="flex justify-between font-mono text-[10px] text-slate-355">
+                      <span>{language === 'sw' ? 'Msimamo wa Kushoto/Kulia (X Axis)' : 'Horizontal Alignment (X position)'}</span>
+                      <span className="text-purple-400 font-bold">{localSettings.cardTypeX}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="5" 
+                      max="95" 
+                      value={localSettings.cardTypeX}
+                      onChange={(e) => setLocalSettings({ ...localSettings, cardTypeX: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Slider Y */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between font-mono text-[10px] text-slate-355">
+                      <span>{language === 'sw' ? 'Msimamo wa Juu/Chini (Y Axis)' : 'Vertical Alignment (Y position)'}</span>
+                      <span className="text-purple-400 font-bold">{localSettings.cardTypeY}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="90" 
+                      value={localSettings.cardTypeY}
+                      onChange={(e) => setLocalSettings({ ...localSettings, cardTypeY: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Slider Size */}
+                  <div className="space-y-1 font-sans">
+                    <div className="flex justify-between font-mono text-[10px] text-slate-355">
+                      <span>{language === 'sw' ? 'Ukubwa wa Font ya Aina ya Kadi (Font Size)' : 'Badge Font Size'}</span>
+                      <span className="text-purple-400 font-bold">{localSettings.cardTypeSize}px</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="35" 
+                      value={localSettings.cardTypeSize}
+                      onChange={(e) => setLocalSettings({ ...localSettings, cardTypeSize: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Independent Card Type Badge Color Picker */}
+                  <div className="space-y-2 border-t border-white/10 pt-3">
+                    <label className="font-bold text-slate-300 block text-[11px]" htmlFor="color-type-picker">
+                      {language === 'sw' ? 'Rangi ya Aina ya Kadi' : 'Badge Highlight Color'}
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input 
+                        id="color-type-picker"
+                        type="color" 
+                        value={localSettings.cardTypeColor || '#fbbf24'} 
+                        onChange={(e) => setLocalSettings({ ...localSettings, cardTypeColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg border border-white/20 cursor-pointer p-0 bg-transparent transition-transform hover:scale-105"
+                      />
+                      <span className="font-mono text-[10px] text-white bg-white/10 px-2 py-1 rounded border border-white/10 uppercase">
+                        {localSettings.cardTypeColor || '#fbbf24'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -13,13 +13,13 @@ export default function CardPreview({ event, onNextStep }: CardPreviewProps) {
   
   // Custom generated mock message that is fully reactive
   const mockMessage = `Habari {Jina la Mgeni},
-Familia ya ${event.hostName || "Ramadhani"} inakualika kwa furaha kushiriki katika sherehe ya ${event.name || "Harusi ya Ally & Aisha"}.
+Familia ya ${event.hostName || (language === 'sw' ? "[Jina la Mwenyeji]" : "[Host Name]")} inakualika kwa furaha kushiriki katika sherehe ya ${event.name || (language === 'sw' ? "[Jina la Sherehe / Harusi]" : "[Event Name]")}.
 
-Siku: Tarehe ${event.date || "2026-09-26"}
-Saa: ${event.time || "18:30"} ${event.period || "Jioni"}
-Ukumbi: ${event.eventHallName || "Best Choice Social Hall"}
-Mavazi (Dress Code): ${event.dressCode || "White & Gold"}
-Code ya Mwaliko: #IP-${event.id?.substring(0, 4)?.toUpperCase() || 'HARU20'}
+Siku: Tarehe ${event.date || (language === 'sw' ? "[Tarehe]" : "[Date]")}
+Saa: ${event.time || (language === 'sw' ? "[Saa]" : "[Time]")} ${event.period || ""}
+Ukumbi: ${event.eventHallName || (language === 'sw' ? "[Jina la Ukumbi]" : "[Venue Hall]")}
+Mavazi (Dress Code): ${event.dressCode || (language === 'sw' ? "[Mavazi ya Sherehe]" : "[Dress Code]")}
+Code ya Mwaliko: #IP-${event.id?.substring(0, 4)?.toUpperCase() || 'XXXX'}
 
 Pata Kadi yako maalum na ujibu mwaliko (RSVP) hapa haraka:
 👉 https://eventcard.co.tz/invite/{KADI_ID}`;

@@ -400,14 +400,36 @@ export default function App() {
       }
       setEventDetails(newActiveEvent);
     }
+
+    // Clean up event-specific templates from templateSettings state
+    let updatedTemplateSettings = templateSettings ? { ...templateSettings as any } : {};
+    delete updatedTemplateSettings[id];
+    delete updatedTemplateSettings[`contrib-${id}`];
+    setTemplateSettings(updatedTemplateSettings);
+
+    // Clean up local storage specifically to prevent residual carry-over of data
+    try {
+      localStorage.removeItem(`kadi_event_files_${id}`);
+      localStorage.removeItem(`kadi_std_sent_map_${id}`);
+      
+      const localStds = localStorage.getItem('kadi_save_the_dates');
+      if (localStds) {
+        const parsed = JSON.parse(localStds);
+        const filtered = parsed.filter((s: any) => s.event_id !== id);
+        safeLocalStorage.setItem('kadi_save_the_dates', JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.error('Error clearing local storage details during event deletion:', e);
+    }
     
     saveState({
       eventsList: updatedList,
       guests: updatedGuests,
       eventDetails: newActiveEvent,
+      templateSettings: updatedTemplateSettings,
       activeTab: newTab,
       forceDeleteMass: true
-    }, 'Amefuta tukio na wageni wake (Event Deleted)', `Tukio limefutwa kashitilizi.`);
+    }, 'Amefuta tukio na mialiko yake (Event Deleted)', `Tukio limefutwa kashitilizi.`);
 
     setEventToDelete(null);
   };
@@ -904,12 +926,9 @@ export default function App() {
           // Initialize brand new events with completely clean default layout settings to prevent leak/carry-over of templates & backdrops
           currentSettings = { ...DEFAULT_TEMPLATE_SETTINGS };
         }
-      } else if ((templateSettings as any)['default']) {
-        currentSettings = (templateSettings as any)['default'];
-      } else if ((templateSettings as any)['settings']) {
-        currentSettings = (templateSettings as any)['settings'];
-      } else if ('imageUrl' in templateSettings) {
-        currentSettings = templateSettings as any;
+      } else {
+        // Fallback when no active event exists to prevent leak
+        currentSettings = { ...DEFAULT_TEMPLATE_SETTINGS };
       }
     }
 
@@ -1698,51 +1717,71 @@ export default function App() {
           );
         }
       case 'event-details':
-        return <EventDetailsForm initialData={eventDetails!} isAlreadySaved={!!eventDetails} onSave={updateEventDetails} onDelete={() => requestDeleteEvent(eventDetails!.id)} />;
+        return (
+          <React.Fragment key={eventDetails?.id || 'event-details'}>
+            <EventDetailsForm initialData={eventDetails!} isAlreadySaved={!!eventDetails} onSave={updateEventDetails} onDelete={() => requestDeleteEvent(eventDetails!.id)} />
+          </React.Fragment>
+        );
       case 'preview':
-        return <CardPreview onNextStep={() => setActiveTab('templates')} event={eventDetails!} />;
+        return (
+          <React.Fragment key={eventDetails?.id || 'preview'}>
+            <CardPreview onNextStep={() => setActiveTab('templates')} event={eventDetails!} />
+          </React.Fragment>
+        );
       case 'templates':
         return (
-          <TemplatesSelector 
-            settings={currentSettings} 
-            onSave={updateTemplateSettings} 
-            onNext={() => setActiveTab('guests')}
-            event={eventDetails!}
-          />
+          <React.Fragment key={eventDetails?.id || 'templates'}>
+            <TemplatesSelector 
+              settings={currentSettings} 
+              onSave={updateTemplateSettings} 
+              onNext={() => setActiveTab('guests')}
+              event={eventDetails!}
+            />
+          </React.Fragment>
         );
       case 'guests':
         return (
-          <UploadGuests 
-            event={eventDetails!} 
-            settings={currentSettings} 
-            guests={activeGuests} 
-            onUpdateGuests={updateGuests} 
-            onNext={() => setActiveTab('send')}
-          />
+          <React.Fragment key={eventDetails?.id || 'guests'}>
+            <UploadGuests 
+              event={eventDetails!} 
+              settings={currentSettings} 
+              guests={activeGuests} 
+              onUpdateGuests={updateGuests} 
+              onNext={() => setActiveTab('send')}
+            />
+          </React.Fragment>
         );
       case 'send':
         return (
-          <SendMessages 
-            guests={activeGuests} 
-            event={eventDetails!} 
-            settings={currentSettings}
-            language={language}
-            onUpdateGuests={updateGuests}
-            onUpdateEvent={updateEventDetails}
-            onNext={() => setActiveTab('rsvp')}
-          />
+          <React.Fragment key={eventDetails?.id || 'send'}>
+            <SendMessages 
+              guests={activeGuests} 
+              event={eventDetails!} 
+              settings={currentSettings}
+              language={language}
+              onUpdateGuests={updateGuests}
+              onUpdateEvent={updateEventDetails}
+              onNext={() => setActiveTab('rsvp')}
+            />
+          </React.Fragment>
         );
       case 'rsvp':
         return (
-          <RSVPResponses 
-            guests={activeGuests} 
-            onUpdateGuests={updateGuests} 
-            event={eventDetails!} 
-            onNext={() => setActiveTab('scan')}
-          />
+          <React.Fragment key={eventDetails?.id || 'rsvp'}>
+            <RSVPResponses 
+              guests={activeGuests} 
+              onUpdateGuests={updateGuests} 
+              event={eventDetails!} 
+              onNext={() => setActiveTab('scan')}
+            />
+          </React.Fragment>
         );
       case 'scan':
-        return <QRScanner guests={activeGuests} onUpdateGuests={updateGuests} event={eventDetails!} />;
+        return (
+          <React.Fragment key={eventDetails?.id || 'scan'}>
+            <QRScanner guests={activeGuests} onUpdateGuests={updateGuests} event={eventDetails!} />
+          </React.Fragment>
+        );
       case 'settings':
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
@@ -1765,64 +1804,72 @@ export default function App() {
         return <AuditLogsPage language={language} />;
       case 'contributions':
         return (
-          <ContributionManager 
-            guests={activeGuests} 
-            event={eventDetails!} 
-            onUpdateGuests={updateGuests} 
-            onUpdateEvent={updateEventDetails}
-            eventsList={eventsList}
-            contribTemplate={templateSettings ? (templateSettings as any)[`contrib-${eventDetails?.id}`] : undefined}
-            onUpdateContribTemplate={(tmpl) => {
-              const currentSettings = templateSettings || {};
-              const updated = {
-                ...currentSettings,
-                [`contrib-${eventDetails?.id}`]: tmpl
-              };
-              setTemplateSettings(updated as any);
-              saveState({ templateSettings: updated }, 'Amesasisha kiolezo cha kadi ya mchango (Contribution Template Updated)', `Tukio: ${eventDetails?.name}`);
-            }}
-            onSelectEvent={(eventId) => {
-              const selected = eventsList.find(e => e.id === eventId);
-              if (selected) {
-                setEventDetails(selected);
-                saveState({ eventDetails: selected });
-              }
-            }}
-          />
+          <React.Fragment key={eventDetails?.id || 'contributions'}>
+            <ContributionManager 
+              guests={activeGuests} 
+              event={eventDetails!} 
+              onUpdateGuests={updateGuests} 
+              onUpdateEvent={updateEventDetails}
+              eventsList={eventsList}
+              contribTemplate={templateSettings ? (templateSettings as any)[`contrib-${eventDetails?.id}`] : undefined}
+              onUpdateContribTemplate={(tmpl) => {
+                const currentSettings = templateSettings || {};
+                const updated = {
+                  ...currentSettings,
+                  [`contrib-${eventDetails?.id}`]: tmpl
+                };
+                setTemplateSettings(updated as any);
+                saveState({ templateSettings: updated }, 'Amesasisha kiolezo cha kadi ya mchango (Contribution Template Updated)', `Tukio: ${eventDetails?.name}`);
+              }}
+              onSelectEvent={(eventId) => {
+                const selected = eventsList.find(e => e.id === eventId);
+                if (selected) {
+                  setEventDetails(selected);
+                  saveState({ eventDetails: selected });
+                }
+              }}
+            />
+          </React.Fragment>
         );
       case 'committee':
         return (
-          <CommitteeDashboard 
-            event={eventDetails!}
-            guests={activeGuests}
-            onUpdateGuests={updateGuests}
-            onUpdateEvent={updateEventDetails}
-          />
+          <React.Fragment key={eventDetails?.id || 'committee'}>
+            <CommitteeDashboard 
+              event={eventDetails!}
+              guests={activeGuests}
+              onUpdateGuests={updateGuests}
+              onUpdateEvent={updateEventDetails}
+            />
+          </React.Fragment>
         );
       case 'save-the-date':
         return (
-          <SaveTheDateManager 
-            eventDetails={eventDetails!} 
-            guests={activeGuests} 
-            eventsList={eventsList}
-            onSelectEvent={(eventId) => {
-              const selected = eventsList.find(e => e.id === eventId);
-              if (selected) {
-                setEventDetails(selected);
-                saveState({ eventDetails: selected });
-              }
-            }}
-            onUpdateEvent={updateEventDetails}
-          />
+          <React.Fragment key={eventDetails?.id || 'save-the-date'}>
+            <SaveTheDateManager 
+              eventDetails={eventDetails!} 
+              guests={activeGuests} 
+              eventsList={eventsList}
+              onSelectEvent={(eventId) => {
+                const selected = eventsList.find(e => e.id === eventId);
+                if (selected) {
+                  setEventDetails(selected);
+                  saveState({ eventDetails: selected });
+                }
+              }}
+              onUpdateEvent={updateEventDetails}
+            />
+          </React.Fragment>
         );
       case 'event-reports':
         return (
-          <EventReports
-            event={eventDetails!}
-            guests={activeGuests}
-            onUpdateGuests={updateGuests}
-            onUpdateEvent={updateEventDetails}
-          />
+          <React.Fragment key={eventDetails?.id || 'event-reports'}>
+            <EventReports
+              event={eventDetails!}
+              guests={activeGuests}
+              onUpdateGuests={updateGuests}
+              onUpdateEvent={updateEventDetails}
+            />
+          </React.Fragment>
         );
       default:
         return <div>Tab not found</div>;

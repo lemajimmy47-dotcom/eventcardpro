@@ -2,6 +2,31 @@ import { EventDetails, TemplateSettings } from '../types';
 import QRCode from 'qrcode';
 
 const imageCache = new Map<string, HTMLImageElement>();
+const qrCache = new Map<string, HTMLImageElement>();
+
+function getOrCreateQRImage(text: string, callback: (img: HTMLImageElement) => void) {
+  const cached = qrCache.get(text);
+  if (cached) {
+    callback(cached);
+    return;
+  }
+
+  QRCode.toDataURL(text, {
+    margin: 1,
+    color: {
+      dark: '#000000',
+      light: '#ffffff'
+    }
+  }, (err, url) => {
+    if (err || !url) return;
+    const img = new Image();
+    img.onload = () => {
+      qrCache.set(text, img);
+      callback(img);
+    };
+    img.src = url;
+  });
+}
 
 export function drawCardToCanvas(
   canvas: HTMLCanvasElement,
@@ -18,17 +43,93 @@ export function drawCardToCanvas(
   const w = canvas.width;
   const h = canvas.height;
 
-  // Render overlay items (Guest Name only)
+  // Render overlay items (Guest Name, QR Code, and Card Type Badge)
   const renderOverlays = () => {
-    // 8. Draw Dynamic Guest Name at relative percentage
+    // 1. Draw Dynamic Guest Name
     ctx.save();
     const nameX = (settings.guestNameX / 100) * w;
     const nameY = (settings.guestNameY / 100) * h;
     ctx.fillStyle = settings.guestNameColor || settings.textColor;
     ctx.font = `bold ${settings.guestNameSize}px "${settings.fontFamily || 'Inter'}", sans-serif`;
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(guestName || 'MGENI WA HESHIMA / GUEST NAME', nameX, nameY);
     ctx.restore();
+
+    // 2. Draw Dynamic Card Type Badge at relative coordinates
+    if (cardType) {
+      ctx.save();
+      const badgeX = (settings.cardTypeX / 100) * w;
+      const badgeY = (settings.cardTypeY / 100) * h;
+      
+      const badgeText = cardType.toUpperCase();
+      ctx.font = `bold ${settings.cardTypeSize || 13}px "${settings.fontFamily || 'Inter'}", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Calculate dimensions of the text for background pill
+      const textMetrics = ctx.measureText(badgeText);
+      const textWidth = textMetrics.width;
+      const paddingH = 12;
+      const paddingV = 6;
+      const rectW = textWidth + paddingH * 2;
+      const rectH = (settings.cardTypeSize || 13) + paddingV * 2;
+      
+      // Draw background pill
+      ctx.fillStyle = settings.cardTypeColor || settings.textColor || '#fbbf24';
+      const rx = badgeX - rectW / 2;
+      const ry = badgeY - rectH / 2;
+      const radius = rectH / 2;
+      
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(rx, ry, rectW, rectH, radius) : ctx.rect(rx, ry, rectW, rectH);
+      ctx.fill();
+      
+      // Draw text in a deep dark tone
+      ctx.fillStyle = '#060a13';
+      ctx.fillText(badgeText, badgeX, badgeY);
+      ctx.restore();
+    }
+
+    // 3. Draw QR Code at relative coordinates
+    const qrX = (settings.qrCodeX / 100) * w;
+    const qrY = (settings.qrCodeY / 100) * h;
+    const qrSize = settings.qrCodeSize || 100;
+
+    const cachedQR = qrCache.get(qrCodeText);
+    if (cachedQR) {
+      ctx.save();
+      // Draw a subtle border frame behind the QR to make it stand out on complex backgrounds
+      ctx.fillStyle = '#ffffff'; // Always white background for QR code scan longevity
+      ctx.beginPath();
+      // Round corners for the QR white board
+      const padding = 6;
+      ctx.roundRect ? ctx.roundRect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2, 8) : ctx.rect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2);
+      ctx.fill();
+      
+      // Draw the QR Image
+      ctx.drawImage(cachedQR, qrX - qrSize / 2, qrY - qrSize / 2, qrSize, qrSize);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      const padding = 6;
+      ctx.roundRect ? ctx.roundRect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2, 8) : ctx.rect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2);
+      ctx.fill();
+
+      // Placeholder text in black/gray
+      ctx.fillStyle = '#1e293b';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('SCAN PASS', qrX, qrY);
+      ctx.restore();
+
+      // Trigger asynchronous generation and cache it. Once loaded, it calls drawing again.
+      getOrCreateQRImage(qrCodeText, () => {
+        drawCardToCanvas(canvas, event, settings, guestName, cardType, qrCodeText, onImageLoaded);
+      });
+    }
   };
 
   // Check if image is a custom Base64 uploaded or dynamic web image URL
@@ -130,14 +231,14 @@ export function drawCardToCanvas(
     ctx.fillText("Inakukaribisha katika sherehe ya", w / 2, h * 0.38);
 
     ctx.font = `bold italic ${h * 0.046}px "${settings.fontFamily || 'Inter'}", sans-serif`;
-    ctx.fillText(event.name || "Harusi Yamu na Mwenza", w / 2, h * 0.44);
+    ctx.fillText(event.name || "[Jina la Sherehe / Event Name]", w / 2, h * 0.44);
 
     // 7. Event Meta Info Panel (Time, Date, Place)
     ctx.font = `bold ${h * 0.024}px "${settings.fontFamily || 'Inter'}", sans-serif`;
     ctx.fillStyle = settings.textColor;
-    ctx.fillText(`TAREHE: ${event.date || '26/11/2026'}`, w / 2, h * 0.52);
-    ctx.fillText(`SAA: ${event.time || '12:00'} ${event.period || 'Jioni'}`, w / 2, h * 0.56);
-    ctx.fillText(`UKUMBI: ${event.eventHallName || 'Isamuhyo Hall, Mbezi'}`, w / 2, h * 0.60);
+    ctx.fillText(`TAREHE: ${event.date || 'DD/MM/YYYY'}`, w / 2, h * 0.52);
+    ctx.fillText(`SAA: ${event.time || '12:00'} ${event.period || ''}`, w / 2, h * 0.56);
+    ctx.fillText(`UKUMBI: ${event.eventHallName || '[Jina la Ukumbi / Venue]'}`, w / 2, h * 0.60);
     
     if (event.dressCode) {
       ctx.font = `italic ${h * 0.022}px "${settings.fontFamily || 'Inter'}", sans-serif`;

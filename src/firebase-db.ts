@@ -5,6 +5,10 @@ import path from "path";
 const DB_PATH = path.join(process.cwd(), "database.json");
 let inMemoryDB: any = null;
 
+function hasSQLConfig() {
+  return !!(process.env.SQL_HOST || process.env.DATABASE_URL || process.env.SQL_DATABASE_URL);
+}
+
 function getLocalDBFallback() {
   if (fs.existsSync(DB_PATH)) {
     try {
@@ -26,18 +30,18 @@ function getLocalDBFallback() {
 }
 
 export async function fetchFromFirestore() {
-  if (!process.env.SQL_HOST) {
+  if (!hasSQLConfig()) {
     return getLocalDBFallback();
   }
   return await fetchFullStateFromDB();
 }
 
 export async function initDB() {
-  // If SQL_HOST is not set, bypass completely to avoid slow connection timeouts during server startup
-  const isCloudSQL = !!process.env.SQL_HOST;
+  // If database connection parameters are not set, bypass completely to avoid slow connection timeouts during server startup
+  const isCloudSQL = hasSQLConfig();
   
   if (!isCloudSQL) {
-    console.log("[SQL Bypass] SQL_HOST is not set. Operating directly on local JSON database store.");
+    console.log("[SQL Bypass] Database connection parameters are not set. Operating directly on local JSON database store.");
     inMemoryDB = getLocalDBFallback();
     return inMemoryDB;
   }
@@ -72,7 +76,7 @@ export function readDB() {
 }
 
 export async function readDBLatest() {
-  if (!process.env.SQL_HOST) {
+  if (!hasSQLConfig()) {
     if (!inMemoryDB) {
       inMemoryDB = getLocalDBFallback();
     }
@@ -129,7 +133,7 @@ export async function writeDB(data: any) {
   // Sync memory and disk snapshot
   updateMemoryAndLocalFileOnly(data);
 
-  if (!process.env.SQL_HOST) {
+  if (!hasSQLConfig()) {
     return;
   }
 
