@@ -265,8 +265,9 @@ export default function EventReports({
     let leftOffset = 15;
     if (systemLogoBase64) {
       try {
-        doc.addImage(systemLogoBase64, 'PNG', 14, 12, 16, 16);
-        leftOffset = 34;
+        // Use a landscape aspect ratio for the logo (e.g. 24x10) to prevent squishing
+        doc.addImage(systemLogoBase64, 'PNG', 14, 15, 24, 10);
+        leftOffset = 42;
       } catch (e) {
         console.error("Error adding system logo to PDF report:", e);
       }
@@ -705,8 +706,9 @@ export default function EventReports({
     let startTextX = 15;
     if (systemLogoBase64) {
       try {
-        doc.addImage(systemLogoBase64, 'PNG', 14, currentY + 3, 18, 18);
-        startTextX = 36;
+        // Wider aspect ratio (e.g. 28x12) to match the brand logo without squishing
+        doc.addImage(systemLogoBase64, 'PNG', 14, currentY + 6, 28, 12);
+        startTextX = 46;
       } catch (e) {
         console.error("Error adding system logo to executive summary:", e);
       }

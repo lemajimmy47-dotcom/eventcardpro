@@ -101,7 +101,7 @@ interface UploadGuestsProps {
   event: EventDetails;
   settings: TemplateSettings;
   guests: Guest[];
-  onUpdateGuests: (guests: Guest[], actionDesc?: string) => void;
+  onUpdateGuests: (guests: Guest[], actionDesc?: string, skipServerSave?: boolean) => void;
   onNext: () => void;
 }
 
@@ -125,6 +125,116 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
   // Manual & automatic save status tracking
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
   const isMountedForSave = useRef(false);
+
+  // Progress states for chunked/batched database uploads to Cloud SQL Postgres
+  const [chunkUploadProgress, setChunkUploadProgress] = useState<number | null>(null);
+  const [chunkUploadedCount, setChunkUploadedCount] = useState<{ current: number; total: number } | null>(null);
+  const [isChunkUploading, setIsChunkUploading] = useState(false);
+  const [chunkUploadError, setChunkUploadError] = useState<string | null>(null);
+  const [lastUploadedGuestName, setLastUploadedGuestName] = useState<string>('');
+
+  const handleUploadInBatches = async (newGuestsList: Guest[], actionDescText: string) => {
+    if (newGuestsList.length === 0) return;
+    
+    setIsChunkUploading(true);
+    setChunkUploadProgress(1); // Explicitly start counting from 1% as requested
+    setChunkUploadedCount({ current: 0, total: newGuestsList.length });
+    setChunkUploadError(null);
+    setLastUploadedGuestName('');
+    
+    // Dynamically adjust batch size to ensure a smooth visual countdown with percentages
+    let BATCH_SIZE = 15;
+    if (newGuestsList.length <= 10) {
+      BATCH_SIZE = 1; // 1 by 1 for small lists, elegant counting
+    } else if (newGuestsList.length <= 30) {
+      BATCH_SIZE = 3;
+    } else if (newGuestsList.length <= 100) {
+      BATCH_SIZE = 10;
+    } else if (newGuestsList.length <= 500) {
+      BATCH_SIZE = 25;
+    } else {
+      BATCH_SIZE = 50; // default for very large lists
+    }
+    
+    const totalToUpload = newGuestsList.length;
+    let currentMerged = [...guests];
+    
+    try {
+      let currentProgressVal = 1;
+      for (let i = 0; i < totalToUpload; i += BATCH_SIZE) {
+        const batch = newGuestsList.slice(i, i + BATCH_SIZE);
+        currentMerged = [...batch, ...currentMerged];
+        
+        // Show last guest being uploaded in this batch
+        if (batch.length > 0) {
+          setLastUploadedGuestName(batch[batch.length - 1].name || '');
+        }
+        
+        const payload = {
+          guests: batch.map(g => {
+            const { cardImageUrl, ...rest } = g;
+            return rest;
+          }),
+          auditLog: {
+            id: 'log-' + Date.now() + '-' + i,
+            timestamp: new Date().toISOString(),
+            user: 'Admin',
+            action: `${actionDescText}: Wageni ${i + 1} hadi ${Math.min(i + batch.length, totalToUpload)} kati ya ${totalToUpload}`,
+            details: `Kundi la wageni lilipakiwa na kusajiliwa salama kwenye PostgreSQL.`
+          }
+        };
+        
+        const response = await fetch('/api/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!response.ok) {
+          throw new Error(isEn 
+            ? `Failed to upload batch starting at ${i + 1}` 
+            : `Imeshindikana kupakia kundi kuanzia mgeni wa ${i + 1}`);
+        }
+        
+        const loadedCount = Math.min(i + BATCH_SIZE, totalToUpload);
+        const targetPercent = Math.min(Math.round((loadedCount / totalToUpload) * 100), 99);
+        
+        // Smoothly tick the visual progress with sequential counts
+        const stepDelay = Math.max(4, Math.min(35, 180 / (targetPercent - currentProgressVal || 1)));
+        for (let p = currentProgressVal; p <= targetPercent; p++) {
+          setChunkUploadProgress(p);
+          currentProgressVal = p;
+          await new Promise(resolve => setTimeout(resolve, stepDelay));
+        }
+        
+        setChunkUploadedCount({ current: loadedCount, total: totalToUpload });
+        // Tiny pacing delay to show name before proceeding to next batch
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      
+      // Smoothly roll from the current progress value up to 100%
+      for (let p = currentProgressVal; p <= 100; p++) {
+        setChunkUploadProgress(p);
+        await new Promise(resolve => setTimeout(resolve, 15));
+      }
+      
+      setChunkUploadedCount({ current: totalToUpload, total: totalToUpload });
+      await new Promise(resolve => setTimeout(resolve, 850));
+      
+      // Successfully uploaded everything! Now call the master state updates
+      // skipping repetitive heavy redunant server write commands
+      onUpdateGuests(currentMerged, `${actionDescText}: Jumla ya wageni wapya ${totalToUpload}`, true);
+      
+    } catch (err: any) {
+      console.error("Batch upload failed:", err);
+      setChunkUploadError(err.message || 'Error occurred during upload');
+    } finally {
+      setIsChunkUploading(false);
+      setChunkUploadProgress(null);
+      setChunkUploadedCount(null);
+      setLastUploadedGuestName('');
+    }
+  };
 
   useEffect(() => {
     if (!isMountedForSave.current) {
@@ -300,7 +410,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     });
 
     if (newGuestsList.length > 0) {
-      onUpdateGuests([...newGuestsList, ...guests]);
+      handleUploadInBatches(newGuestsList, "Pakia wageni kupitia CSV");
     }
 
     setIsBulkModalOpen(false);
@@ -420,15 +530,15 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     });
 
     if (newGuestsList.length > 0) {
-      onUpdateGuests([...newGuestsList, ...guests], `Ameongeza wageni wapya ${newGuestsList.length} kwa pamoja (Added ${newGuestsList.length} Bulk Guests)`);
+      handleUploadInBatches(newGuestsList, "Ameongeza wageni wapya kwa pamoja");
       if (duplicatesSkipped.length > 0) {
         alert(isEn 
-          ? `Successfully added ${newGuestsList.length} guests. ${duplicatesSkipped.length} duplicates with existing information were skipped.`
-          : `Imefanikiwa kuongeza wageni ${newGuestsList.length}. Wageni ${duplicatesSkipped.length} wenye taarifa za kufanana (duplicates) wamerukwa.`);
+          ? `Successfully started uploading ${newGuestsList.length} guests. ${duplicatesSkipped.length} duplicates with existing information were skipped.`
+          : `Inaanza kupakia wageni ${newGuestsList.length}. Wageni ${duplicatesSkipped.length} wenye taarifa za kufanana (duplicates) wamerukwa.`);
       } else {
         alert(isEn 
-          ? `Successfully added ${newGuestsList.length} guests!`
-          : `Imefanikiwa kuongeza wageni ${newGuestsList.length}!`);
+          ? `Successfully started uploading ${newGuestsList.length} guests!`
+          : `Inaanza kupakia wageni ${newGuestsList.length}!`);
       }
     } else {
       if (duplicatesSkipped.length > 0) {
@@ -806,6 +916,94 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
 
   return (
     <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-[1.75rem] p-6 sm:p-8 space-y-6 font-sans text-xs text-white" id="upload-guests-container">
+      
+      {/* Chunk progress overlay */}
+      {isChunkUploading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md">
+          <div className="bg-slate-900 border border-white/10 rounded-[2rem] p-8 max-w-md w-full mx-4 shadow-2xl text-center space-y-6">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              {/* Circular custom loader using SVG */}
+              <div className="relative w-28 h-28 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle
+                    cx="56"
+                    cy="56"
+                    r="48"
+                    className="stroke-slate-800"
+                    strokeWidth="6"
+                    fill="transparent"
+                  />
+                  <circle
+                    cx="56"
+                    cy="56"
+                    r="48"
+                    className="stroke-blue-500 transition-all duration-300"
+                    strokeWidth="6"
+                    strokeDasharray={301.6}
+                    strokeDashoffset={301.6 - (301.6 * (chunkUploadProgress || 0)) / 100}
+                    strokeLinecap="round"
+                    fill="transparent"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-2xl font-extrabold text-white">
+                    {chunkUploadProgress}%
+                  </span>
+                  <span className="text-[9px] text-blue-400 font-mono font-bold uppercase tracking-wider">
+                    Progress
+                  </span>
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Inapakia Wageni Kwenye Database...
+                </h3>
+                <p className="text-slate-400 text-xs font-mono pb-1">
+                  Uhakiki: wageni {chunkUploadedCount?.current} kati ya {chunkUploadedCount?.total}
+                </p>
+                {lastUploadedGuestName && (
+                  <p className="text-blue-400 text-[11px] font-mono font-medium animate-pulse bg-blue-500/10 py-1 px-3.5 rounded-lg border border-blue-500/10 inline-block max-w-full truncate">
+                    Mgeni anayesajiliwa: {lastUploadedGuestName}
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            {/* Horizontal progress bar too for rhythm */}
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden shadow-inner">
+              <div 
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-300"
+                style={{ width: `${chunkUploadProgress}%` }}
+              />
+            </div>
+            
+            <p className="text-[11px] text-slate-400 leading-relaxed font-sans sw-swahili italic p-3 bg-slate-950/40 rounded-xl border border-white/5">
+              Mfumo unasajili wageni kwa makundi madogo (batches) kwenye PostgreSQL ili kuhakikisha kila jina linaingia 100% salama bila kujifuta hata kivinjari kikiwa kizito. Tafadhali usifunge wala usisafishe ukurasa huu kwa sasa.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {chunkUploadError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-red-500/20 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl space-y-4">
+            <div className="flex items-start space-x-3 text-red-400">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-sm text-white">Itifaki Imefeli Kupakia!</h4>
+                <p className="text-[11px] text-slate-300 mt-1">{chunkUploadError}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setChunkUploadError(null)}
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors font-bold cursor-pointer"
+            >
+              Funga na Jaribu Tena
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Header Summary */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">

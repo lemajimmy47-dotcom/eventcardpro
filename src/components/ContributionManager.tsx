@@ -79,7 +79,7 @@ interface ContributionManagerProps {
   event: EventDetails;
   guests: Guest[];
   onUpdateEvent: (updated: EventDetails) => void;
-  onUpdateGuests: (updatedGuests: Guest[]) => void;
+  onUpdateGuests: (updatedGuests: Guest[], actionDesc?: string, skipServerSave?: boolean) => void;
   eventsList: EventDetails[];
   onSelectEvent: (eventId: string) => void;
   contribTemplate?: ContributionCardTemplate;
@@ -149,6 +149,13 @@ export default function ContributionManager({
   const [queueCardUrl, setQueueCardUrl] = useState('');
   const [queueCardLoaded, setQueueCardLoaded] = useState(false);
   const [waInteractiveSuccessPopup, setWaInteractiveSuccessPopup] = useState(false);
+
+  // Progress states for chunked/batched database uploads to Cloud SQL Postgres (contributions)
+  const [chunkUploadProgress, setChunkUploadProgress] = useState<number | null>(null);
+  const [chunkUploadedCount, setChunkUploadedCount] = useState<{ current: number; total: number } | null>(null);
+  const [isChunkUploading, setIsChunkUploading] = useState(false);
+  const [chunkUploadError, setChunkUploadError] = useState<string | null>(null);
+  const [lastUploadedGuestName, setLastUploadedGuestName] = useState<string>('');
 
   // Active individual send target states
   const [activeSendTarget, setActiveSendTarget] = useState<{ 
@@ -1932,7 +1939,7 @@ export default function ContributionManager({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split('\n');
       const newGuests: Guest[] = [];
@@ -1980,9 +1987,100 @@ export default function ContributionManager({
         }
       }
       
-      if (newGuests.length > 0) {
-        onUpdateGuests([...guests, ...newGuests]);
-        alert(isEn ? `Successfully added ${newGuests.length} guests.` : `Umefanikiwa kuongeza wageni ${newGuests.length}.`);
+      if (newGuests.length === 0) return;
+
+      setIsChunkUploading(true);
+      setChunkUploadProgress(1); // Explicitly start counting from 1% as requested
+      setChunkUploadedCount({ current: 0, total: newGuests.length });
+      setChunkUploadError(null);
+      setLastUploadedGuestName('');
+
+      // Adjust chunk sizes dynamically to feel super premium
+      let BATCH_SIZE = 15;
+      if (newGuests.length <= 10) {
+        BATCH_SIZE = 1; // 1 by 1 for small lists, elegant counting
+      } else if (newGuests.length <= 30) {
+        BATCH_SIZE = 3;
+      } else if (newGuests.length <= 100) {
+        BATCH_SIZE = 10;
+      } else if (newGuests.length <= 500) {
+        BATCH_SIZE = 25;
+      } else {
+        BATCH_SIZE = 50; // default for very large lists
+      }
+
+      const totalToUpload = newGuests.length;
+      let currentMerged = [...guests];
+      
+      try {
+        let currentProgressVal = 1;
+        for (let i = 0; i < totalToUpload; i += BATCH_SIZE) {
+          const batch = newGuests.slice(i, i + BATCH_SIZE);
+          currentMerged = [...batch, ...currentMerged];
+
+          if (batch.length > 0) {
+            setLastUploadedGuestName(batch[batch.length - 1].name || '');
+          }
+
+          const payload = {
+            guests: batch,
+            auditLog: {
+              id: 'log-' + Date.now() + '-' + i,
+              timestamp: new Date().toISOString(),
+              user: 'Admin',
+              action: `Upakiaji Mkubwa wa CSV: Wageni wapya ${i + 1} hadi ${Math.min(i + batch.length, totalToUpload)} kati ya ${totalToUpload}`,
+              details: `Kundi la mchango lilipakiwa na kusajiliwa salama kwenye PostgreSQL dpg.`
+            }
+          };
+
+          const response = await fetch('/api/state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            throw new Error(isEn 
+              ? `Failed to upload batch starting at ${i + 1}` 
+              : `Imeshindikana kupakia kundi kuanzia wa ${i + 1}`);
+          }
+
+          const loadedCount = Math.min(i + BATCH_SIZE, totalToUpload);
+          const targetPercent = Math.min(Math.round((loadedCount / totalToUpload) * 100), 99);
+
+          // Smoothly tick the visual progress with sequential counts
+          const stepDelay = Math.max(4, Math.min(35, 180 / (targetPercent - currentProgressVal || 1)));
+          for (let p = currentProgressVal; p <= targetPercent; p++) {
+            setChunkUploadProgress(p);
+            currentProgressVal = p;
+            await new Promise(resolve => setTimeout(resolve, stepDelay));
+          }
+
+          setChunkUploadedCount({ current: loadedCount, total: totalToUpload });
+          // Tiny pacing delay to show name before proceeding to next batch
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+
+        // Smoothly complete ticker to 100%
+        for (let p = currentProgressVal; p <= 100; p++) {
+          setChunkUploadProgress(p);
+          await new Promise(resolve => setTimeout(resolve, 15));
+        }
+
+        setChunkUploadedCount({ current: totalToUpload, total: totalToUpload });
+        await new Promise(resolve => setTimeout(resolve, 850));
+
+        // Trigger local updates
+        onUpdateGuests(currentMerged, `Mipakio Mkubwa CSV: Wageni ${totalToUpload} wakaandikishwa michango yao`, true);
+
+      } catch (err: any) {
+        console.error("Batch upload failed:", err);
+        setChunkUploadError(err.message || 'Error occurred during upload');
+      } finally {
+        setIsChunkUploading(false);
+        setChunkUploadProgress(null);
+        setChunkUploadedCount(null);
+        setLastUploadedGuestName('');
       }
     };
     reader.readAsText(file);
@@ -2192,6 +2290,76 @@ export default function ContributionManager({
 
   return (
     <>
+      {/* Chunk progress overlay */}
+      {isChunkUploading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md" id="contrib-upload-progress-overlay">
+          <div className="bg-slate-900 border border-white/10 rounded-[2rem] p-8 max-w-md w-full mx-4 shadow-2xl text-center space-y-6">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              {/* Circular custom loader using SVG */}
+              <div className="relative w-28 h-28 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle
+                    cx="56"
+                    cy="56"
+                    r="48"
+                    className="stroke-slate-800"
+                    strokeWidth="6"
+                    fill="transparent"
+                  />
+                  <circle
+                    cx="56"
+                    cy="56"
+                    r="48"
+                    className="stroke-blue-500 transition-all duration-300"
+                    strokeWidth="6"
+                    strokeDasharray={301.6}
+                    strokeDashoffset={301.6 - (301.6 * (chunkUploadProgress || 1)) / 100}
+                    strokeLinecap="round"
+                    fill="transparent"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-2xl font-extrabold text-white">
+                    {chunkUploadProgress}%
+                  </span>
+                  <span className="text-[9px] text-blue-400 font-mono font-bold uppercase tracking-wider">
+                    Progress
+                  </span>
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  {isEn ? "Uploading Contributions in Batches..." : "Inapakia Michango Kwenye Database..."}
+                </h3>
+                <p className="text-slate-400 text-xs font-mono pb-1">
+                  {isEn ? `Verifying: ${chunkUploadedCount?.current} of ${chunkUploadedCount?.total} guests` : `Uhakiki: wageni ${chunkUploadedCount?.current} kati ya ${chunkUploadedCount?.total}`}
+                </p>
+                {lastUploadedGuestName && (
+                  <p className="text-blue-400 text-[11px] font-mono font-medium animate-pulse bg-blue-500/10 py-1 px-3.5 rounded-lg border border-blue-500/10 inline-block max-w-full truncate">
+                    {isEn ? "Syncing Record:" : "Mgeni anayesajiliwa:"} {lastUploadedGuestName}
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            {/* Horizontal progress bar for secondary feedback */}
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden shadow-inner">
+              <div 
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-300"
+                style={{ width: `${chunkUploadProgress}%` }}
+              />
+            </div>
+            
+            <p className="text-[11px] text-slate-400 leading-relaxed font-sans italic p-3 bg-slate-950/40 rounded-xl border border-white/5">
+              {isEn 
+                ? "The system is entering each contributor into PostgreSQL safely. Please keep this browser window open." 
+                : "Mfumo unasajili michango yote mikubwa kwenye PostgreSQL. Tafadhali usifunge ukurasa wa kivinjari kwa sasa."}
+            </p>
+          </div>
+        </div>
+      )}
+
     <div className="space-y-6 animate-fade-in print:hidden" id="contributions-dashboard-root">
       
       {/* Header of Content */}

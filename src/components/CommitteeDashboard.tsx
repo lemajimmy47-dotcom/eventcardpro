@@ -569,28 +569,264 @@ export default function CommitteeDashboard({
   const downloadReportPDF = () => {
     addActivityLog(`${activeRole} View`, `Amepakua Ripoti ya PDF rasmi: ${selectedReport}`);
     
-    const doc = new jsPDF();
+    const doc = new jsPDF(selectedReport === 'Summary' ? 'l' : 'p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
+
+    const now = new Date();
+    const weekdayEn = now.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateEn = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const timeEn = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    
+    // Custom exact-match layout for "Summary Ledger"
+    if (selectedReport === 'Summary') {
+      const printedDateStr = `${weekdayEn}, ${dateEn} at ${timeEn}`;
+      
+      const logoEl = document.querySelector('img[alt="EventCard Logo"]') as HTMLImageElement;
+      let logoHeight = 0;
+      let ratio = 1;
+      if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+        // Preserve aspect ratio
+        ratio = logoEl.naturalWidth / logoEl.naturalHeight;
+        logoHeight = 16;
+        const targetWidth = logoHeight * ratio;
+        doc.addImage(logoEl, 'PNG', 12, 10.5, targetWidth, logoHeight);
+      } else {
+        // Event Card Logo mockup fallback
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bolditalic");
+        doc.setTextColor(6, 182, 212); // Cyan 500
+        doc.text("Event", 12, 18);
+        doc.setTextColor(168, 85, 247); // Purple 500
+        doc.text("Card", 27, 18);
+        doc.setFont("helvetica", "normal"); // reset
+      }
+
+      // Header: AUDIT MASTER badge
+      let badgeX = 42;
+      if (logoHeight > 0) {
+        badgeX = 12 + (logoHeight * ratio) + 8;
+      }
+      doc.setDrawColor(203, 213, 225); // Slate 300
+      doc.setFillColor(243, 244, 246); // Slate 100
+      doc.roundedRect(badgeX, 13, 30, 7, 1, 1, 'FD');
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(51, 65, 85);    // Slate 700
+      doc.text("AUDIT MASTER", badgeX + 15, 17.5, { align: "center" });
+
+      // Printed Date Header right
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139); // Slate 500
+      doc.text("EXPORTED/PRINTED DATE:", pageWidth - 12, 14.5, { align: 'right' });
+      doc.setTextColor(30, 41, 59);    // Slate 800
+      doc.text(printedDateStr, pageWidth - 12, 18, { align: 'right' });
+
+      // Title Heading
+      doc.setFontSize(18);
+      doc.setTextColor(15, 23, 42);    // Slate 900
+      doc.text("OFFICIAL CONTRIBUTIONS REPORT", 12, 32);
+      
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 23, 42);
+      const eventNameTxt = `WEDDING OF ${event.name || "CHRISTIAN & HERIETH"}`.toUpperCase();
+      doc.text(eventNameTxt, 12, 38);
+      const wName = doc.getTextWidth(eventNameTxt);
+      
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text("  •  ", 12 + wName, 38);
+      const wDot = doc.getTextWidth("  •  ");
+      
+      doc.setTextColor(100, 116, 139);
+      doc.text("EVENT DATE: ", 12 + wName + wDot, 38);
+      const wLabel = doc.getTextWidth("EVENT DATE: ");
+      
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${event.date || '2026-09-26'}`, 12 + wName + wDot + wLabel, 38);
+
+      // Separator Line
+      doc.setDrawColor(15, 23, 42); // Black accent
+      doc.setLineWidth(0.8);
+      doc.line(12, 42, pageWidth - 12, 42);
+
+      // Summary Cards (4 Cards)
+      const outstandingBal = metrics.totalPledgedAmount - metrics.totalPaidAmount;
+      const cardY = 48;
+      const cardWidth = (pageWidth - 24 - 12) / 4; // 4 cards, total 12 margin gaps
+      const cardHeight = 24;
+
+      const cards = [
+        { label: "TARGET BUDGET", value: `${fundraisingTarget.toLocaleString()} TZS`, bgColor: [59, 130, 246] },    // Blue 500
+        { label: "TOTAL PLEDGED", value: `${metrics.totalPledgedAmount.toLocaleString()} TZS`, bgColor: [245, 158, 11] }, // Amber 500
+        { label: "CASH COLLECTED", value: `${metrics.totalPaidAmount.toLocaleString()} TZS`, bgColor: [16, 185, 129] },  // Emerald 500
+        { label: "OUTSTANDING BAL", value: `${outstandingBal.toLocaleString()} TZS`, bgColor: [225, 29, 72] }      // Rose 600
+      ];
+
+      cards.forEach((card, i) => {
+        const x = 12 + i * (cardWidth + 4);
+        doc.setFillColor(card.bgColor[0], card.bgColor[1], card.bgColor[2]);
+        doc.roundedRect(x, cardY, cardWidth, cardHeight, 3, 3, 'F');
+        
+        doc.setFontSize(7.5);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.text(card.label, x + cardWidth / 2, cardY + 8, { align: 'center', letterSpacing: 0.5 } as any);
+        
+        doc.setFontSize(14);
+        doc.text(card.value, x + cardWidth / 2, cardY + 17, { align: 'center' });
+      });
+
+      // Group Summaries Section
+      const groupY = cardY + 32;
+      doc.setFillColor(241, 245, 249); // Slate 100
+      doc.roundedRect(12, groupY, pageWidth - 24, 8, 1, 1, 'F');
+      
+      doc.setFontSize(9);
+      doc.setTextColor(15, 23, 42);
+      doc.text("GROUP LEVEL SUMMARIES", 15, groupY + 5.5);
+
+      const groupData = groupSummaries.list.map(data => [
+        data.name.toUpperCase(),
+        data.count,
+        data.pledged.toLocaleString(),
+        data.collected.toLocaleString(),
+        data.balances.toLocaleString()
+      ]);
+      groupData.push([
+        'TOTALS',
+        groupSummaries.totals.count,
+        groupSummaries.totals.pledged.toLocaleString(),
+        groupSummaries.totals.collected.toLocaleString(),
+        groupSummaries.totals.balances.toLocaleString()
+      ]);
+
+      autoTable(doc, {
+        startY: groupY + 10,
+        head: [['CAMPAIGN GROUP', 'COUNT', 'TOTAL PLEDGED', 'COLLECTED CASH', 'BALANCES']],
+        body: groupData,
+        theme: 'grid',
+        headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontSize: 8.5, fontStyle: 'bold', lineColor: [226, 232, 240], lineWidth: 0.1 },
+        bodyStyles: { textColor: [51, 65, 85], fontSize: 8.5, lineColor: [226, 232, 240] },
+        styles: { cellPadding: 4, halign: 'center' },
+        columnStyles: {
+          0: { halign: 'left', fontStyle: 'bold' } // Campaign group
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+             if (data.row.index === groupData.length - 1) { // TOTALS row
+               data.cell.styles.fontStyle = 'bold';
+               data.cell.styles.fillColor = [248, 250, 252];
+               data.cell.styles.textColor = [15, 23, 42];
+             }
+             if (data.column.index === 2) { // Total Pledged
+                data.cell.styles.textColor = [180, 83, 9]; // Amber 700 / nice orange
+                data.cell.styles.fontStyle = 'bold';
+             }
+             if (data.column.index === 3) { // Cash Collected
+                data.cell.styles.textColor = [21, 128, 61]; // Green 600
+                data.cell.styles.fontStyle = 'bold';
+             }
+             if (data.column.index === 4) { // Balances
+                data.cell.styles.textColor = [220, 38, 38]; // Red 600
+                data.cell.styles.fontStyle = 'bold';
+             }
+          }
+        }
+      });
+
+      // Master Database Section
+      let tableY = (doc as any).lastAutoTable.finalY + 14;
+
+      // if page space is running out, add a new page
+      if (tableY > doc.internal.pageSize.getHeight() - 40) {
+        doc.addPage();
+        tableY = 15;
+      }
+
+      doc.setFillColor(241, 245, 249); // Slate 100
+      doc.roundedRect(12, tableY, pageWidth - 24, 8, 1, 1, 'F');
+      
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text("MASTER GUEST REVENUE DATABASE", 15, tableY + 5.5);
+      
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${guests.length} GUESTS TOTAL`, pageWidth - 15, tableY + 5.5, { align: 'right' });
+
+      let snCounter = 1;
+      const guestData = masterGuestList.map(g => [
+        snCounter++,
+        g.name.toUpperCase(),
+        g.phone,
+        (g.category || '').toUpperCase(),
+        g.pledge.toLocaleString(),
+        g.paid.toLocaleString(),
+        g.balance.toLocaleString(),
+        (g.clearance || 'PENDING').toUpperCase()
+      ]);
+
+      autoTable(doc, {
+        startY: tableY + 10,
+        head: [['S/N', 'GUEST FULL NAME', 'MOBILE', 'CATEGORY', 'PLEDGE', 'PAID AMT', 'BALANCE', 'CLEARANCE']],
+        body: guestData,
+        theme: 'grid',
+        headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontSize: 8, fontStyle: 'bold', lineColor: [226, 232, 240], lineWidth: 0.1 },
+        bodyStyles: { textColor: [51, 65, 85], fontSize: 8, lineColor: [226, 232, 240] },
+        styles: { cellPadding: 4, halign: 'center' },
+        columnStyles: {
+          1: { halign: 'left', fontStyle: 'bold' } // Guest name
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            if (data.column.index === 4) { // Pledge
+              data.cell.styles.fontStyle = 'bold';
+            }
+            if (data.column.index === 5) { // Paid Amt
+              data.cell.styles.textColor = [21, 128, 61]; // Green
+              data.cell.styles.fontStyle = 'bold';
+            }
+            if (data.column.index === 6) { // Balance
+              data.cell.styles.textColor = [220, 38, 38]; // Red
+              data.cell.styles.fontStyle = 'bold';
+            }
+            if (data.column.index === 7) { // Clearance
+              if (data.cell.raw === 'COMPLETED') {
+                data.cell.styles.textColor = [21, 128, 61];
+                data.cell.styles.fontStyle = 'bold';
+              } else {
+                data.cell.styles.textColor = [15, 23, 42];
+                data.cell.styles.fontStyle = 'bold';
+              }
+            }
+          }
+        }
+      });
+
+      doc.save(`Official_${selectedReport}_Report_${(event.name || "SHEREHE").replace(/\s+/g, '_')}.pdf`);
+      return;
+    }
+
+    // --- Legacy Generator For Other Reports ---
+    const pageWidthOld = doc.internal.pageSize.getWidth();
 
     // 1. Header Box
     doc.setFillColor(15, 23, 42); // Navy Slate-900 header block
-    doc.rect(10, 10, pageWidth - 20, 20, 'F');
+    doc.rect(10, 10, pageWidthOld - 20, 20, 'F');
     
     doc.setFontSize(7.5);
     doc.setTextColor(243, 244, 246);
     doc.setFont("helvetica", "bold");
     doc.text(`EVENTCARD REPORT ENGINE`, 15, 17);
 
-    const now = new Date();
-    const weekday = now.toLocaleDateString('sw-TZ', { weekday: 'long' });
-    const dateFormatted = now.toLocaleDateString('sw-TZ', { year: 'numeric', month: 'long', day: 'numeric' });
-    const timeFormatted = now.toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-    const printedDateTime = `${dateFormatted} saa ${timeFormatted}`;
+    const weekdaySw = now.toLocaleDateString('sw-TZ', { weekday: 'long' });
+    const dateFormattedSw = now.toLocaleDateString('sw-TZ', { year: 'numeric', month: 'long', day: 'numeric' });
+    const timeFormattedSw = now.toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const printedDateTime = `${dateFormattedSw} saa ${timeFormattedSw}`;
     
     doc.setFontSize(7);
     doc.setTextColor(148, 163, 184); // Slate-400
     doc.setFont("helvetica", "normal");
-    doc.text(`Imetolewa: ${printedDateTime}`, pageWidth - 15, 17, { align: 'right' });
+    doc.text(`Imetolewa: ${printedDateTime}`, pageWidthOld - 15, 17, { align: 'right' });
 
     // Report title inside header box
     let reportTitle = "";
@@ -2064,9 +2300,14 @@ export default function CommitteeDashboard({
                   {/* 1. HEADER BAR */}
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div className="space-y-4">
-                      {/* Badge / Label Box */}
-                      <div className="inline-block border border-slate-300 px-2.5 py-0.5 rounded text-[10px] font-extrabold text-slate-700 uppercase tracking-widest print-border-gray">
-                        EVENTCARD AUDIT MASTER
+                      {/* Logo & Badge / Label Box */}
+                      <div className="flex items-center gap-4">
+                        <img src="/logo.png" alt="EventCard Logo" className="h-14 w-auto object-contain" />
+                        <div className="inline-flex items-center border border-slate-300 px-3 py-1.5 rounded print-border-gray bg-slate-900/5">
+                          <span className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                            AUDIT MASTER
+                          </span>
+                        </div>
                       </div>
                     </div>
                     

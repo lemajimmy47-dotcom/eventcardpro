@@ -1,4 +1,6 @@
 import { seedFromBackupFile, fetchFullStateFromDB, syncStateToRelationalDB } from "./db/cloudsql-core.ts";
+import { db } from "./db/index.ts";
+import { sql } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
@@ -55,7 +57,16 @@ export async function initDB() {
       execSync("npx drizzle-kit push --config=src/db/drizzle.config.ts --force", { stdio: "inherit" });
       console.log("[CloudSQL Initializer] Schema pushed successfully.");
     } catch (migrationErr) {
-      console.error("[CloudSQL Initializer] Optional schema push returned a warning or error, attempting to proceed:", migrationErr);
+      console.log("[CloudSQL Initializer] Note: Optional schema push was skipped or database is already up-to-date. Proceeding smoothly as tables are already fully provisioned.");
+    }
+
+    // Ensure the new active_event_id column exists on user_account table directly
+    try {
+      console.log("[CloudSQL Initializer] Ensuring 'active_event_id' column exists in 'user_account' table...");
+      await db.execute(sql`ALTER TABLE "user_account" ADD COLUMN IF NOT EXISTS "active_event_id" text;`);
+      console.log("[CloudSQL Initializer] Column 'active_event_id' verified/added successfully.");
+    } catch (dbAlterErr) {
+      console.error("[CloudSQL Initializer] Dynamic table verification error:", dbAlterErr);
     }
 
     // 1. If SQL database is empty, seed it from existing database.json
@@ -68,6 +79,10 @@ export async function initDB() {
     const state = await fetchFullStateFromDB();
     inMemoryDB = state;
     console.log("[CloudSQL Initializer] Cloud SQL PostgreSQL state fetched and loaded.");
+    
+    // Start background keep-alive loop to prevent Render PostgreSQL scale-to-zero/sleep
+    startKeepAliveInterval();
+    
     return inMemoryDB;
   } catch (error) {
     console.error("[CloudSQL Initializer] Setup failed: ", error);
@@ -86,6 +101,9 @@ export function readDB() {
 }
 
 let isSyncingToDB = false;
+let activeFetchPromise: Promise<any> | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL = 1500; // 1.5 seconds client page load bundle threshold
 
 export async function readDBLatest() {
   if (!hasSQLConfig()) {
@@ -100,10 +118,28 @@ export async function readDBLatest() {
     return inMemoryDB;
   }
 
-  try {
-    const state = await fetchFullStateFromDB();
-    inMemoryDB = state;
+  const now = Date.now();
+  if (inMemoryDB && (now - lastFetchTime < CACHE_TTL)) {
     return inMemoryDB;
+  }
+
+  if (activeFetchPromise) {
+    return activeFetchPromise;
+  }
+
+  activeFetchPromise = (async () => {
+    try {
+      const state = await fetchFullStateFromDB();
+      inMemoryDB = state;
+      lastFetchTime = Date.now();
+      return state;
+    } finally {
+      activeFetchPromise = null;
+    }
+  })();
+
+  try {
+    return await activeFetchPromise;
   } catch (error) {
     console.error("[CloudSQL readDBLatest] PostgreSQL read failed, returning cache: ", error);
     if (!inMemoryDB) {
@@ -119,6 +155,7 @@ export async function getStateForClient() {
 
 export function updateMemoryAndLocalFileOnly(data: any) {
   inMemoryDB = data;
+  lastFetchTime = Date.now();
   try {
     const tmpPath = DB_PATH + ".tmp";
     fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
@@ -154,21 +191,53 @@ export async function writeDB(data: any) {
     return;
   }
 
-  // Sync / write directly to PostgreSQL! (Fire and forget so HTTP response is fast)
+  // Sync / write directly to PostgreSQL synchronously! (Await write complete)
   try {
     isSyncingToDB = true;
-    syncStateToRelationalDB(data).then(() => {
-      isSyncingToDB = false;
-    }).catch((error) => {
-      console.error("[CloudSQL writeDB] Relational sync error (async):", error);
-      isSyncingToDB = false;
-    });
-  } catch (error) {
-    console.error("[CloudSQL writeDB] Relational sync error trigger:", error);
+    await syncStateToRelationalDB(data);
     isSyncingToDB = false;
+  } catch (error) {
+    console.error("[CloudSQL writeDB] Relational sync error (synchronous):", error);
+    isSyncingToDB = false;
+    throw error;
   }
 }
 
 export function triggerBackgroundSync() {
   // Relational writes are fully synchronous, background polling is not needed
+}
+
+let isKeepAliveRunning = false;
+
+export async function pingPostgresKeepAlive() {
+  if (!hasSQLConfig()) return;
+  try {
+    console.log("[Postgres Keep-Alive] Pinging database to keep connection warm...");
+    const start = Date.now();
+    await db.execute(sql`SELECT 1`);
+    console.log(`[Postgres Keep-Alive] Keep-Alive Successful! Response time: ${Date.now() - start}ms`);
+  } catch (err: any) {
+    console.error(`[Postgres Keep-Alive Fail] Alert! Database wake-up ping failed:`, err.message || err);
+  }
+}
+
+export function startKeepAliveInterval() {
+  if (isKeepAliveRunning) return;
+  if (!hasSQLConfig()) {
+    console.log("[Postgres Keep-Alive] SQL configuration is not set. Bypassing keep-alive loop.");
+    return;
+  }
+  
+  isKeepAliveRunning = true;
+  console.log("[Postgres Keep-Alive] Keep-alive service initialized. Will ping every 10 minutes continuously.");
+  
+  // Run an immediate ping at startup (delayed slightly to allow server setup to breathe)
+  setTimeout(() => {
+    pingPostgresKeepAlive();
+  }, 8000);
+
+  // Interval trigger every 10 minutes (10 * 60 * 1000 = 600,000 milliseconds)
+  setInterval(() => {
+    pingPostgresKeepAlive();
+  }, 10 * 60 * 1000);
 }

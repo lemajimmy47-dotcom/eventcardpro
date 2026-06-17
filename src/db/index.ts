@@ -33,13 +33,14 @@ export const createPool = () => {
 
   return new Pool({
     host,
+    port: 5432,
     user,
     password,
     database: database || "postgres",
     ssl: isUnixSocket ? false : (host ? { rejectUnauthorized: false } : false),
-    connectionTimeoutMillis: 15000,
-    idleTimeoutMillis: 10000,
-    max: 10,
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000,
+    max: 15,
     keepAlive: true,
   });
 };

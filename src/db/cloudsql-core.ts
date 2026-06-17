@@ -303,6 +303,7 @@ export async function seedFromBackupFile(): Promise<boolean> {
         email: u.email ? String(u.email) : null,
         walletBalance: typeof u.walletBalance === "number" ? u.walletBalance : 0,
         transactions: u.transactions || null,
+        activeEventId: u.activeEventId ? String(u.activeEventId) : null,
       }).onConflictDoNothing();
     }
 
@@ -477,12 +478,14 @@ export async function fetchFullStateFromDB(): Promise<any> {
       email: rawAcc.email || "",
       walletBalance: rawAcc.walletBalance || 0,
       transactions: rawAcc.transactions || [],
+      activeEventId: rawAcc.activeEventId || "",
     } : {
       username: "",
       phone: "",
       email: "",
       walletBalance: 0,
       transactions: [],
+      activeEventId: "",
     };
 
     return {
@@ -888,6 +891,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
         email: u.email ? String(u.email) : null,
         walletBalance: typeof u.walletBalance === "number" ? u.walletBalance : 0,
         transactions: u.transactions || null,
+        activeEventId: u.activeEventId ? String(u.activeEventId) : null,
       }).onConflictDoUpdate({
         target: schema.userAccount.id,
         set: {
@@ -896,6 +900,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
           email: u.email ? String(u.email) : null,
           walletBalance: typeof u.walletBalance === "number" ? u.walletBalance : 0,
           transactions: u.transactions || null,
+          activeEventId: u.activeEventId ? String(u.activeEventId) : null,
         }
       });
     }

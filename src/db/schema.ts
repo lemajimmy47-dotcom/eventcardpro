@@ -135,4 +135,5 @@ export const userAccount = pgTable("user_account", {
   email: text("email"),
   walletBalance: integer("wallet_balance").default(0),
   transactions: jsonb("transactions"),
+  activeEventId: text("active_event_id"),
 });

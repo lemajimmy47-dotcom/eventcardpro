@@ -45,6 +45,7 @@ import SendMessages from './components/SendMessages';
 import RSVPResponses from './components/RSVPResponses';
 import QRScanner from './components/QRScanner';
 import SMSGatewayConfig from './components/SMSGatewayConfig';
+import GitHubSyncConfig from './components/GitHubSyncConfig';
 import BackupManager from './components/BackupManager';
 import ContributionManager from './components/ContributionManager';
 import CommitteeDashboard from './components/CommitteeDashboard';
@@ -242,8 +243,8 @@ export default function App() {
       }
 
 
-      // Check if we have a persisted event ID in local storage to prevent resetting on page reload
-      const savedEvId = localStorage.getItem('kadi_active_event_id');
+      // Check if we have a persisted event ID in backend userAccount or local storage to prevent resetting on page reload
+      const savedEvId = data.userAccount?.activeEventId || localStorage.getItem('kadi_active_event_id');
       let targetEvent = currentEventDetails;
       if (savedEvId && currentEvents.length > 0) {
         const found = currentEvents.find((e: any) => e.id === savedEvId);
@@ -309,6 +310,25 @@ export default function App() {
       // Strip out huge cardImageUrl base64 string from guest payload before sending to backend to stay way below Firestore limits 
       let sanitizedUpdates = { ...updates };
       
+      if (updates.eventDetails && updates.eventDetails.id) {
+        // Also update local storage fallback
+        safeLocalStorage.setItem('kadi_active_event_id', updates.eventDetails.id);
+        
+        // Update userAccount state and append to sanitizedUpdates
+        const updatedAccount = userAccount ? {
+          ...userAccount,
+          activeEventId: updates.eventDetails.id
+        } : {
+          id: "account",
+          username: user?.username || 'Admin',
+          activeEventId: updates.eventDetails.id,
+          walletBalance: 0,
+          transactions: []
+        };
+        setUserAccount(updatedAccount as any);
+        sanitizedUpdates.userAccount = updatedAccount;
+      }
+      
       if (actionDesc) {
         sanitizedUpdates.auditLog = {
           id: 'log-' + Date.now(),
@@ -355,12 +375,14 @@ export default function App() {
     }
   };
 
-  const updateGuests = (updatedActiveGuests: Guest[], actionDesc?: string) => {
+  const updateGuests = (updatedActiveGuests: Guest[], actionDesc?: string, skipServerSave = false) => {
     if (!eventDetails) return;
     const otherGuests = guests.filter(g => g.eventId !== eventDetails.id && (g.eventId || eventDetails.id !== 'event-starter'));
     const merged = [...otherGuests, ...updatedActiveGuests];
     setGuests(merged);
-    saveState({ guests: merged }, actionDesc || 'Amesasisha orodha ya wageni (Guests Updated)', `Tukio: ${eventDetails.name}`);
+    if (!skipServerSave) {
+      saveState({ guests: merged }, actionDesc || 'Amesasisha orodha ya wageni (Guests Updated)', `Tukio: ${eventDetails.name}`);
+    }
   };
 
   const updateEventDetails = (details: EventDetails, oldId?: string) => {
@@ -1800,13 +1822,16 @@ export default function App() {
         );
       case 'settings':
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <SMSGatewayConfig />
-            <BackupManager 
-              eventDetails={eventDetails}
-              eventsList={eventsList}
-              guests={guests}
-            />
+            <GitHubSyncConfig />
+            <div className="lg:col-span-2 max-w-xl">
+              <BackupManager 
+                eventDetails={eventDetails}
+                eventsList={eventsList}
+                guests={guests}
+              />
+            </div>
           </div>
         );
       case 'wallet':
