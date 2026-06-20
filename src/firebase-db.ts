@@ -16,7 +16,8 @@ function getLocalDBFallback() {
   if (fs.existsSync(DB_PATH)) {
     try {
       const raw = fs.readFileSync(DB_PATH, "utf-8");
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      return parsed;
     } catch (err) {
       console.error("[Fallback Local DB] Read failed:", err);
     }

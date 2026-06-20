@@ -2302,7 +2302,7 @@ export default function CommitteeDashboard({
                     <div className="space-y-4">
                       {/* Logo & Badge / Label Box */}
                       <div className="flex items-center gap-4">
-                        <img src="/logo.png" alt="EventCard Logo" className="h-14 w-auto object-contain" />
+                        <img src="/logo.png" alt="EventCard Logo" className="h-20 w-auto object-contain" />
                         <div className="inline-flex items-center border border-slate-300 px-3 py-1.5 rounded print-border-gray bg-slate-900/5">
                           <span className="text-xs font-black text-slate-700 uppercase tracking-widest">
                             AUDIT MASTER

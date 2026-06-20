@@ -539,21 +539,6 @@ export default function App() {
 
   // --- Auth Handlers ---
 
-  const handleLogin = (username: string) => {
-    try {
-      let mappedUsername = username.trim();
-      if (mappedUsername.toLowerCase() === 'admin') {
-        mappedUsername = 'Jimson';
-      }
-      const newUser = { username: mappedUsername, role: 'admin' };
-      setUser(newUser);
-      safeLocalStorage.setItem('kadi_user', JSON.stringify(newUser));
-    } catch (e) {
-      console.error('Failed to save user in handleLogin', e);
-    }
-    setShowLanding(false);
-  };
-
   const handleLoginSuccess = () => {
     try {
       const isScanOnly = localStorage.getItem('eventcard_scanner_mode') === 'true';
@@ -818,7 +803,11 @@ export default function App() {
             </div>
 
             <button
-              onClick={handleLogout}
+              onClick={() => {
+                localStorage.removeItem('eventcard_scanner_mode');
+                localStorage.removeItem('eventcard_scanner_event_id');
+                window.location.reload();
+              }}
               className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-350 border border-rose-500/20 text-[10px] font-bold uppercase transition flex items-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -1114,7 +1103,7 @@ export default function App() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="dashboard-header-row">
                 <div className="space-y-1 text-left">
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight" id="greeting-title">
-                    {language === 'sw' ? 'Habari za asubuhi,' : 'Good morning,'} {user?.username ? user.username.charAt(0).toUpperCase() + user.username.slice(1) : 'Jimson'} 👋
+                    {language === 'sw' ? 'Habari,' : 'Hello,'} Msimamizi 👋
                   </h1>
                   <p className="text-slate-400 text-xs sm:text-sm" id="greeting-subtitle">
                     {language === 'sw' 
@@ -2005,10 +1994,10 @@ export default function App() {
         <div className="p-6 flex items-center justify-between">
           {isSidebarOpen ? (
             <div className="flex items-center space-x-2">
-              <img src="/logo.png" alt="Event Card Logo" className="h-8 w-auto object-contain" />
+              <img src="/logo.png" alt="Event Card Logo" className="h-20 w-auto object-contain" />
             </div>
           ) : (
-            <img src="/logo.png" alt="Event Card Icon" className="h-8 w-8 object-contain mx-auto" />
+            <img src="/logo.png" alt="Event Card Icon" className="h-16 w-16 object-contain mx-auto" />
           )}
         </div>
 

@@ -279,7 +279,7 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
             {/* Feature 5 */}
             <div className="backdrop-blur-xl bg-white/5 hover:bg-white/10 transition border border-white/10 rounded-2xl p-6 space-y-4">
               <div className="w-12 h-12 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-xl flex items-center justify-center">
-                <Heart className="w-6 h-6" />
+                <Heart className="w-6 h-6 animate-pulse" />
               </div>
               <h4 className="text-lg font-bold text-white font-sans">{t('feature.5.title')}</h4>
               <p className="text-slate-300 text-sm leading-relaxed">
