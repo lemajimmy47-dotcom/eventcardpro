@@ -1103,7 +1103,7 @@ export default function App() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="dashboard-header-row">
                 <div className="space-y-1 text-left">
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight" id="greeting-title">
-                    {language === 'sw' ? 'Habari,' : 'Hello,'} Msimamizi 👋
+                    {language === 'sw' ? 'Habari,' : 'Hello,'} {user?.username || 'Jimson'} 👋
                   </h1>
                   <p className="text-slate-400 text-xs sm:text-sm" id="greeting-subtitle">
                     {language === 'sw' 
