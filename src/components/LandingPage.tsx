@@ -386,9 +386,27 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                  ? 'Mfumo Rasmi uliosajiliwa kwa ajili ya usimamizi na uratibu wa matukio, kadi za kidijitali za mwaliko kwa njia ya WhatsApp na SMS dhabiti.' 
                  : 'Official registered platform for digital event management, smart invitations, and seamless WhatsApp & SMS-driven RSVP coordination.'}
               </p>
-              <div className="text-slate-500 text-xs font-sans space-y-1">
-                <p><strong>HQ:</strong> Mlimani Tower, Floor 5, Sam Nujoma Road, Dar es Salaam, Tanzania</p>
-                <p><strong>Reg No:</strong> Tanzanian Business Registration No. 493012-B</p>
+              <div className="bg-slate-900/60 p-4 border border-white/10 rounded-xl space-y-1 text-xs max-w-md">
+                <p className="text-slate-300 font-sans">
+                  <strong>{language === 'sw' ? 'Miliki Rasmi ya Kisheria (Legal Entity):' : 'Legal Entity Owner:'}</strong>{' '}
+                  <span className="text-white font-bold">EVENT CARD</span>
+                </p>
+                <p className="text-slate-400">
+                  <strong>{language === 'sw' ? 'Namba ya Usajili (BRELA):' : 'BRELA Registration No:'}</strong>{' '}
+                  <span className="text-blue-400 font-mono">705371</span>
+                </p>
+                <p className="text-slate-400">
+                  <strong>{language === 'sw' ? 'Namba ya Mlipakodi (TRA TIN):' : 'Taxpayer Identification Number (TIN):'}</strong>{' '}
+                  <span className="text-amber-400 font-mono">138-950-557</span>
+                </p>
+                <p className="text-slate-400">
+                  <strong>{language === 'sw' ? 'Mlipakodi Aliyesajiliwa:' : 'Registered Taxpayer:'}</strong>{' '}
+                  <span className="text-white font-medium">JIMSON FANUEL LEMA</span>
+                </p>
+                <p className="text-slate-400">
+                  <strong>{language === 'sw' ? 'Sheria na Nchi:' : 'Act & Jurisdiction:'}</strong>{' '}
+                  <span>The Business Names Act (Cap 213), Tanzania</span>
+                </p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-6 text-xs font-mono">
@@ -424,7 +442,14 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
             <span>{language === 'sw' ? 'Mkataba wa Huduma (Terms)' : 'Terms of Service'}</span>
           </button>
         </div>
-        <p className="text-slate-500">{t('landing.rights')}</p>
+        <div className="space-y-1.5 max-w-2xl mx-auto px-4">
+          <p className="text-slate-500">{t('landing.rights')}</p>
+          <p className="text-[11px] text-slate-400 leading-normal font-sans">
+            {language === 'sw'
+              ? 'EVENTCARD ni jukwaa la kiteknolojia linalomilikiwa na EVENT CARD (Namba ya Usajili BRELA: 705371), Dar es Salaam, Jamhuri ya Muungano wa Tanzania.'
+              : 'EVENTCARD is a digital technology platform operated by EVENT CARD (BRELA Registration No: 705371), Dar es Salaam, United Republic of Tanzania.'}
+          </p>
+        </div>
         <p className="text-[10px] text-slate-600 max-w-2xl mx-auto px-4 leading-relaxed">
           Disclaimer: WhatsApp is a registered trademark of Meta Platforms, Inc. This application uses the official Meta Cloud API strictly to send customized invitations and RSVP checks with positive opt-in consent from our users.
         </p>
@@ -440,7 +465,7 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                 {activePolicyTab === 'privacy' ? <Shield className="w-5 h-5 text-emerald-400" /> : <FileText className="w-5 h-5 text-blue-400" />}
                 <h3 className="text-lg font-bold font-sans">
                   {activePolicyTab === 'privacy' 
-                    ? (language === 'sw' ? 'Sera ya Faragha - EVENTCARD' : 'Privacy & Data Protection Policy') 
+                    ? (language === 'sw' ? 'Sera ya Faragha - EVENT CARD' : 'Privacy & Data Protection Policy') 
                     : (language === 'sw' ? 'Masharti na Mkataba wa Huduma' : 'Terms of Service & API Agreement')}
                 </h3>
               </div>
@@ -460,10 +485,10 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                   <div>
                     <h4 className="font-bold text-white text-base mb-2">1. Utangulizi / Introduction</h4>
                     <p className="mb-2">
-                      <strong>Swahili:</strong> EVENTCARD inajitolea kulinda faragha ya data zako zote. Sera hii inaeleza jinsi tunavyokusanya, kutumia, kuhifadhi, na kulinda orodha ya wageni (majina na namba za simu) unapojiandikisha kwenye mfumo wetu kutuma kadi za mialiko na kupata RSVP kupitia WhatsApp Business API.
+                      <strong>Swahili:</strong> Jukwaa la EVENTCARD linaendeshwa na <strong>EVENT CARD</strong> (Namba ya Usajili: 705371). Tunajitolea kulinda faragha ya data zako zote. Sera hii inaeleza jinsi tunavyokusanya, kutumia, kuhifadhi, na kulinda orodha ya wageni (majina na namba za simu) unapojiandikisha kwenye mfumo wetu kutuma kadi za mialiko na kupata RSVP kupitia WhatsApp Business API.
                     </p>
                     <p>
-                      <strong>English:</strong> EVENTCARD is strictly committed to protecting user privacy. This policy details how we collect, process, store, and safeguard guest contact information (names and telephone numbers) when you utilize our digital system to dispatch invitation cards and obtain real-time RSVP responses using the Meta WhatsApp Business API.
+                      <strong>English:</strong> The EVENTCARD platform is operated by <strong>EVENT CARD</strong> (BRELA Registration No: 705371). We are strictly committed to protecting user privacy. This policy details how we collect, process, store, and safeguard guest contact information (names and telephone numbers) when you utilize our digital system to dispatch invitation cards and obtain real-time RSVP responses using the Meta WhatsApp Business API.
                     </p>
                   </div>
 
@@ -498,10 +523,23 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                   </div>
 
                   <div>
-                    <h4 className="font-bold text-white text-base mb-2">5. Mawasiliano na Maswali (Contact Information)</h4>
-                    <p className="mb-1">Tanzanian Business Administration Office:</p>
+                    <h4 className="font-bold text-white text-base mb-2">{language === 'sw' ? '5. Mawasiliano na Maswali' : '5. Contact Information'}</h4>
+                    <p className="mb-2 text-slate-400">
+                      {language === 'sw' 
+                        ? 'Idara ya Utawala na Faragha ya Data - Miliki ya Kisheria:'
+                        : 'Administrative & Data Privacy Department - Legal Owner:'}
+                    </p>
+                    <p className="font-black text-white text-sm">EVENT CARD</p>
+                    <p className="text-xs text-slate-400 mb-0.5">
+                      {language === 'sw' ? 'Namba ya Sajili BRELA: 705371' : 'Tanzanian BRELA Registration No: 705371'}
+                    </p>
+                    <p className="text-xs text-slate-400 mb-0.5">
+                      {language === 'sw' ? 'TIN ya Mlipakodi: 138-950-557' : 'Taxpayer Identification Number (TIN): 138-950-557'} (JIMSON FANUEL LEMA)
+                    </p>
+                    <p className="text-xs text-slate-400 mb-2">
+                      {language === 'sw' ? 'Anwani ya Ofisi: Plot 00, Block 00, Kilungule B, Kinondoni, Dar es Salaam, Tanzania' : 'Physical Address: Plot 00, Block 00, Kilungule B, Kinondoni, Dar es Salaam, Tanzania'}
+                    </p>
                     <p>📧 Email: privacy@eventcard.co.tz</p>
-                    <p>📍 Mlimani Tower, Floor 5, Sam Nujoma Road, Dar es Salaam, Tanzania</p>
                   </div>
                 </>
               ) : (
@@ -510,10 +548,10 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                   <div>
                     <h4 className="font-bold text-white text-base mb-2">1. Kukubaliana na Masharti (Acceptance of Terms)</h4>
                     <p className="mb-2">
-                      <strong>Swahili:</strong> Kwa kusajili harusi au tukio lolote ndani ya EVENTCARD, unakubali kufuata kanuni na sheria zote za nchi yetu (Sheria ya Ulinzi wa Data ya Kibinafsi, 2022) na Sheria za Biashara za Meta WhatsApp.
+                      <strong>Swahili:</strong> Kwa kusajili harusi au tukio lolote ndani ya jukwaa la EVENTCARD, unakubali kufuata kanuni na sheria zote za nchi yetu (Sheria ya Ulinzi wa Data ya Kibinafsi, 2022) na Sheria za Biashara za Meta WhatsApp. Huduma hizi zinaendeshwa kisheria na <strong>EVENT CARD</strong> (Namba ya Usajili 705371).
                     </p>
                     <p>
-                      <strong>English:</strong> By registering a ceremony, wedding, or gala inside the EVENTCARD dashboard, you fully agree to meet Tanzanian national digital provisions (Personal Data Protection Act, 2022) and standard Meta Platforms Business policies for automated notifications.
+                      <strong>English:</strong> By registering a ceremony, wedding, or gala inside the EVENTCARD dashboard, you fully agree to meet Tanzanian national digital provisions (Personal Data Protection Act, 2022) and standard Meta Platforms Business policies for automated notifications. These services are officially operated by <strong>EVENT CARD</strong> (BRELA Registration No. 705371).
                     </p>
                   </div>
 
@@ -530,20 +568,20 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                   <div>
                     <h4 className="font-bold text-white text-base mb-2">3. Gharama za API & Upatikanaji (API Conditions & Service Outages)</h4>
                     <p className="mb-2">
-                      <strong>Swahili:</strong> Uwasilishaji wa ujumbe wa WhatsApp huendeshwa kupitia miundombinu thabiti ya Meta Business API. Wakati mwingine matatizo ya mtandao duniani yanaweza kusababisha ucheleweshaji mdogo wa ujumbe unaotumwa. EVENTCARD inajitahidi kutoa asilimia 99.9 ya uhakika wa utendaji wa mfumo.
+                      <strong>Swahili:</strong> Uwasilishaji wa ujumbe wa WhatsApp huendeshwa kupitia miundombinu thabiti ya Meta Business API. Wakati mwingine matatizo ya mtandao duniani yanaweza kusababisha ucheleweshaji mdogo wa ujumbe unaotumwa. <strong>EVENT CARD</strong> inajitahidi kutoa asilimia 99.9 ya uhakika wa utendaji wa mfumo.
                     </p>
                     <p>
-                      <strong>English:</strong> WhatsApp dispatching is serviced by the official Meta Business Cloud API framework. In rare moments of trans-network failures, delivery latency might fluctuate. EVENTCARD guarantees a 99.9% system uptime commitment for backend API services.
+                      <strong>English:</strong> WhatsApp dispatching is serviced by the official Meta Business Cloud API framework. In rare moments of trans-network failures, delivery latency might fluctuate. <strong>EVENT CARD</strong> guarantees a 99.9% system uptime commitment for backend API services.
                     </p>
                   </div>
 
                   <div>
                     <h4 className="font-bold text-white text-base mb-2">4. Ukomeshaji wa Akaunti (Account Suspension Actions)</h4>
                     <p className="mb-2">
-                      <strong>Swahili:</strong> Akaunti yoyote inayoripotiwa kutuma mwaliko wenye namba zenye mashaka au isiyo na ridhaa itafungwa haraka ili kulinda taswira ya namba zetu za API na usalama wa wateja wengine.
+                      <strong>Swahili:</strong> Akaunti yoyote inayoripotiwa kutuma mwaliko wenye namba zenye mashaka au isiyo na ridhaa itafungwa haraka ili kulinda taswira ya namba zetu za API na usalama wa wateja wengine. Mabadiliko ya usimamizi yanaendeshwa na timu yetu ya usalama ya <strong>EVENT CARD</strong>.
                     </p>
                     <p>
-                      <strong>English:</strong> Any user profile flagged for outbound transmission of spam or non-consensual telephone import directories will undergo instant administrative review and termination to protect overall API deliverability standards.
+                      <strong>English:</strong> Any user profile flagged for outbound transmission of spam or non-consensual telephone import directories will undergo instant administrative review and termination to protect overall API deliverability standards. Compliance actions are governed securely by the <strong>EVENT CARD</strong> security desk.
                     </p>
                   </div>
                 </>
