@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, CheckCircle, MessageSquare, Phone, Users, Heart, Sparkles, Send, QrCode, X, Shield, FileText } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -182,7 +182,7 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                       <div className="w-12 h-12 bg-white flex items-center justify-center p-1 rounded-lg border border-white/20">
                         <QrCode className="w-10 h-10 text-slate-900" />
                       </div>
-                      <span className="text-[7px] text-slate-400 mt-1 uppercase font-mono">GUEST QR-982</span>
+                      <span className="text-[7px] text-slate-450 mt-1 uppercase font-mono">GUEST QR-982</span>
                     </div>
 
                     {/* Interactive Simulated RSVP Option */}

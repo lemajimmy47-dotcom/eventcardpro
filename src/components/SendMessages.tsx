@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Eye, RefreshCw, CheckCircle, MessageCircle, AlertCircle, PlayCircle, ArrowRight, X, Clipboard, Check, ExternalLink, Settings, Key, HelpCircle } from 'lucide-react';
 import { EventDetails, Guest, TemplateSettings } from '../types';
@@ -14,6 +15,10 @@ interface SendMessagesProps {
   onUpdateGuests: (guests: Guest[]) => void;
   onNext: () => void;
 }
+
+const PortalModal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return createPortal(children, document.body);
+};
 
 export default function SendMessages({ event, settings, guests, language, onUpdateEvent, onUpdateGuests, onNext }: SendMessagesProps) {
   const isEn = language === 'en';
@@ -1164,81 +1169,93 @@ Karibu sana.
                       </td>
 
                       {/* SMS STATUS BADGE */}
-                    <td className="px-5 py-3 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                          guest.smsStatus === 'Imetumia' 
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                            : 'bg-white/5 text-slate-400 border-white/10'
-                        }`}>
-                          {guest.smsStatus}
-                        </span>
-                        {guest.smsStatus === 'Imetumia' && (
-                          <span className="text-[10px] text-slate-400 font-mono font-normal">
-                            Zilizotumwa: <strong className="text-emerald-400 font-bold">{guest.smsCount || 1}</strong>
+                      <td className="px-5 py-3 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                            guest.smsStatus === 'Imetumia' 
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                              : 'bg-white/5 text-slate-400 border-white/10'
+                          }`}>
+                            {guest.smsStatus}
                           </span>
-                        )}
-                      </div>
-                    </td>
+                          {guest.smsStatus === 'Imetumia' && (
+                            <span className="text-[10px] text-slate-400 font-mono font-normal">
+                              Zilizotumwa: <strong className="text-emerald-400 font-bold">{guest.smsCount || 1}</strong>
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* WHATSAPP STATUS BADGE */}
-                    <td className="px-5 py-3 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                          guest.whatsappStatus === 'Imetumia' 
-                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
-                            : 'bg-white/5 text-slate-400 border-white/10'
-                        }`}>
-                          {guest.whatsappStatus}
-                        </span>
-                        {guest.whatsappStatus === 'Imetumia' && (
-                          <span className="text-[10px] text-slate-400 font-mono font-normal">
-                            Zilizotumwa: <strong className="text-blue-400 font-bold">{guest.whatsappCount || 1}</strong>
+                      {/* WHATSAPP STATUS BADGE */}
+                      <td className="px-5 py-3 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                            guest.whatsappStatus === 'Imetumia' 
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                              : 'bg-white/5 text-slate-400 border-white/10'
+                          }`}>
+                            {guest.whatsappStatus}
                           </span>
-                        )}
-                      </div>
-                    </td>
+                          {guest.whatsappStatus === 'Imetumia' && (
+                            <span className="text-[10px] text-slate-400 font-mono font-normal">
+                              Zilizotumwa: <strong className="text-blue-400 font-bold">{guest.whatsappCount || 1}</strong>
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    {/* Actions */}
-                    <td className="px-5 py-3 text-right space-x-1.5 flex justify-end items-center font-bold">
-                      {/* Edit information button */}
-                      <button
-                        onClick={() => handleStartEdit(guest)}
-                        className="p-1 px-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded-lg transition cursor-pointer text-[10px]"
-                        title="Hariri Taarifa za Mgeni"
-                      >
-                        Hariri (Edit)
-                      </button>
-
-                      {/* Reset Status button */}
-                      {(guest.smsStatus === 'Imetumia' || guest.whatsappStatus === 'Imetumia') && (
+                      {/* Actions */}
+                      <td className="px-5 py-3 text-right space-x-1.5 flex justify-end items-center font-bold">
+                        {/* Edit information button */}
                         <button
-                          onClick={() => handleResetSingleGuest(guest.id)}
-                          className="p-1 px-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-lg transition cursor-pointer text-[10px]"
-                          title="Futa Hali ya Kutuma"
+                          onClick={() => handleStartEdit(guest)}
+                          className={`p-1 px-2 border transition rounded-lg text-[10px] cursor-pointer ${
+                            editingGuest?.id === guest.id 
+                              ? 'bg-blue-500 text-white border-blue-400' 
+                              : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-transparent'
+                          }`}
+                          title="Hariri Taarifa za Mgeni"
                         >
-                          Reset Hali
+                          Hariri (Edit)
                         </button>
-                      )}
 
-                      <button
-                        onClick={() => handleSendSingle(guest.id, 'sms')}
-                        disabled={guest.smsStatus === 'Imetumia' || isSendingAll}
-                        className="px-2 py-1.5 bg-white/5 hover:bg-white/10 text-emerald-400 hover:text-emerald-300 border border-white/10 rounded-lg font-bold transition disabled:bg-white/5 disabled:text-slate-600 disabled:border-transparent text-[11px] cursor-pointer"
-                      >
-                        SMS
-                      </button>
-                      <button
-                        onClick={() => handleSendSingle(guest.id, 'whatsapp')}
-                        disabled={guest.whatsappStatus === 'Imetumia' || isSendingAll}
-                        className="px-2 py-1.5 bg-white/5 hover:bg-white/10 text-blue-450 hover:text-blue-305 border border-white/10 rounded-lg font-bold transition disabled:bg-white/5 disabled:text-slate-600 disabled:border-transparent text-[11px] cursor-pointer"
-                      >
-                        WA
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
+                        {/* Reset Status button */}
+                        {(guest.smsStatus === 'Imetumia' || guest.whatsappStatus === 'Imetumia') && (
+                          <button
+                            onClick={() => handleResetSingleGuest(guest.id)}
+                            className="p-1 px-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-lg transition cursor-pointer text-[10px]"
+                            title="Futa Hali ya Kutuma"
+                          >
+                            Reset Hali
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleSendSingle(guest.id, 'sms')}
+                          disabled={guest.smsStatus === 'Imetumia' || isSendingAll}
+                          className={`px-2 py-1.5 border rounded-lg font-bold transition text-[11px] cursor-pointer ${
+                            activeSendTarget?.guest.id === guest.id && activeSendTarget.channel === 'sms'
+                              ? 'bg-emerald-500 text-white border-emerald-400'
+                              : 'bg-white/5 hover:bg-white/10 text-emerald-400 hover:text-emerald-300 border-white/10 disabled:bg-white/5 disabled:text-slate-600 disabled:border-transparent'
+                          }`}
+                        >
+                          SMS
+                        </button>
+                        <button
+                          onClick={() => handleSendSingle(guest.id, 'whatsapp')}
+                          disabled={guest.whatsappStatus === 'Imetumia' || isSendingAll}
+                          className={`px-2 py-1.5 border rounded-lg font-bold transition text-[11px] cursor-pointer ${
+                            activeSendTarget?.guest.id === guest.id && activeSendTarget.channel === 'whatsapp'
+                              ? 'bg-blue-500 text-white border-blue-400'
+                              : 'bg-white/5 hover:bg-white/10 text-blue-450 hover:text-blue-305 border-white/10 disabled:bg-white/5 disabled:text-slate-600 disabled:border-transparent'
+                          }`}
+                        >
+                          WA
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
             </tbody>
           </table>
           </div>
@@ -1276,33 +1293,182 @@ Karibu sana.
         </button>
       </div>
 
-      {/* Custom Sending Modal overlay (bridges simulation with real WhatsApp & SMS send utility) */}
+      {/* Reset Confirmation Modal */}
+      <AnimatePresence>
+        {showResetConfirm && (
+          <PortalModal key="reset-confirm-portal">
+            <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md z-[9999]" id="reset-template-modal">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#0f172a] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4 font-sans text-xs text-white animate-fade-in"
+              >
+                <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/35 flex items-center justify-center text-amber-500 mx-auto">
+                  <svg className="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H19" />
+                  </svg>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-base font-bold text-white">
+                    Kurudisha Kiolezo Msingi?
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-normal">
+                    Je, una uhakika unataka kurudisha muundo wa ujumbe wa msingi (Default Template)? Kitendo hiki kitafuta mabadiliko yoyote uliyofanya kwenye ujumbe huu kwa sasa.
+                  </p>
+                </div>
+                <div className="flex space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetConfirm(false)}
+                    className="flex-grow py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-slate-355 transition cursor-pointer"
+                  >
+                    Ghairi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      executeResetTemplate();
+                      setShowResetConfirm(false);
+                    }}
+                    className="flex-grow py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 hover:shadow-[0_0_15px_rgba(245,158,11,0.30)] text-xs font-bold text-white transition cursor-pointer"
+                  >
+                    Ndiyo, Rudisha
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </PortalModal>
+        )}
+      </AnimatePresence>
+
+      {/* 2. Modal: Edit Guest */}
+      <AnimatePresence>
+        {editingGuest && (
+          <PortalModal key="edit-guest-portal">
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="backdrop-blur-xl bg-[#090f1d] rounded-3xl p-6 sm:p-8 max-w-md w-full border border-white/15 shadow-2xl space-y-5 text-xs font-sans relative text-white text-left"
+              >
+                <button 
+                  onClick={() => setEditingGuest(null)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-white transition cursor-pointer"
+                  type="button"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <h3 className="text-base font-bold text-white pr-8">
+                  {isEn ? 'Edit Guest Information' : 'Hariri Taarifa za Mgeni'}
+                </h3>
+                
+                <form onSubmit={handleSaveEditGuest} className="space-y-4 text-xs font-sans">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="edit-send-mgeni-name">
+                      {isEn ? 'GUEST NAME *' : 'JINA LA MGENI *'}
+                    </label>
+                    <input 
+                      id="edit-send-mgeni-name"
+                      type="text" 
+                      required 
+                      placeholder="Weka jina la mgeni..."
+                      value={editGuestName}
+                      onChange={(e) => setEditGuestName(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="edit-send-mgeni-phone">
+                      {isEn ? 'PHONE NUMBER *' : 'NAMBA YA SIMU *'}
+                    </label>
+                    <input 
+                      id="edit-send-mgeni-phone"
+                      type="tel" 
+                      required 
+                      placeholder="e.g. 0714786751"
+                      value={editGuestPhone}
+                      onChange={(e) => setEditGuestPhone(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="edit-send-mgeni-type">
+                      {isEn ? 'CARD / TABLE TYPE *' : 'KUNDI / AINA YA KADI *'}
+                    </label>
+                    <select
+                      id="edit-send-mgeni-type"
+                      value={editGuestType}
+                      onChange={(e) => setEditGuestType(e.target.value)}
+                      className="w-full bg-[#050b18] border border-white/15 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold cursor-pointer"
+                    >
+                      <option value="SINGLE">SINGLE</option>
+                      <option value="DOUBLE">DOUBLE</option>
+                      <option value="UNCLASSIFIED">UNCLASSIFIED</option>
+                    </select>
+                  </div>
+
+                  <div className="flex space-x-2 pt-2 border-t border-white/5">
+                    <button 
+                      type="button"
+                      onClick={() => setEditingGuest(null)}
+                      className="flex-grow py-3 bg-white/10 hover:bg-white/15 text-white font-bold rounded-xl transition cursor-pointer text-center"
+                    >
+                      {isEn ? 'Cancel' : 'Ghairi'}
+                    </button>
+                    <button 
+                      type="submit"
+                      className="flex-grow py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] text-white font-bold rounded-xl transition shadow-md cursor-pointer text-center"
+                    >
+                      {isEn ? 'Save Changes ✓' : 'Hifadhi ✓'}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          </PortalModal>
+        )}
+      </AnimatePresence>
+
+      {/* 3. Modal: Active Send Target / Card Dispatch Modals */}
       <AnimatePresence>
         {activeSendTarget && (
-          <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md z-[1000]" id="individual-dispatch-modal">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-[#0f172a] border border-white/10 rounded-2xl p-5 sm:p-6 max-w-lg w-full shadow-2xl space-y-4 text-left font-sans"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <PortalModal key="active-send-portal">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in" id="send-dispatch-overlay-modal">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="bg-[#0f172a] border border-white/10 rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl space-y-4 text-left font-sans text-white relative"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-white/5 pb-3">
                 <div className="flex items-center space-x-2">
                   <div className={`p-2 rounded-xl ${activeSendTarget.channel === 'whatsapp' ? 'bg-teal-500/10 text-teal-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
                     <MessageCircle className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="text-sm font-extrabold text-white">
-                      Tuma kwa {activeSendTarget.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}
+                      {isEn 
+                        ? `Send via ${activeSendTarget.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}` 
+                        : `Tuma kwa ${activeSendTarget.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}`}
                     </h3>
-                    <p className="text-[10px] text-slate-450 font-medium">Mgeni: <span className="text-white font-bold">{activeSendTarget.guest.name}</span> ({activeSendTarget.guest.phone})</p>
+                    <p className="text-[10px] text-slate-455 font-medium font-sans">
+                      {isEn ? 'Guest:' : 'Mgeni:'} <span className="text-white font-bold">{activeSendTarget.guest.name}</span> ({activeSendTarget.guest.phone})
+                    </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setActiveSendTarget(null)}
-                  className="p-1 px-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+                  className="p-1 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition cursor-pointer absolute top-4 right-4"
+                  type="button"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1311,17 +1477,20 @@ Karibu sana.
               {/* Message Body Box */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-450 font-mono catalog tracking-wider">MAUDHUI YA UJUMBE TRADITIONAL</span>
+                  <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider">
+                    {isEn ? 'MESSAGE CONTENT' : 'MAUDHUI YA UJUMBE'}
+                  </span>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(getGuestMessageText(activeSendTarget.guest));
+                      navigator.clipboard.writeText(getGuestMessageText(activeSendTarget.guest, activeSendTarget.channel === 'sms'));
                       setCopySuccess(true);
                       setTimeout(() => setCopySuccess(false), 2000);
                     }}
                     className="flex items-center space-x-1 text-[10px] font-bold text-blue-400 hover:text-blue-300 transition cursor-pointer"
+                    type="button"
                   >
                     {copySuccess ? <Check className="w-3 h-3 text-emerald-400" /> : <Clipboard className="w-3.5 h-3.5" />}
-                    <span>{copySuccess ? 'Imenakiliwa!' : 'Copy Ujumbe'}</span>
+                    <span>{copySuccess ? (isEn ? 'Copied!' : 'Imenakiliwa!') : (isEn ? 'Copy Ujumbe' : 'Copy Ujumbe')}</span>
                   </button>
                 </div>
                 
@@ -1333,20 +1502,20 @@ Karibu sana.
               {/* Visual Card Preview and Secure Local Downloader */}
               <div className="flex flex-col items-center justify-center p-3.5 bg-slate-950/60 rounded-xl border border-white/5 space-y-2.5">
                 <span className="text-[10px] font-bold text-slate-400 self-start font-mono uppercase tracking-wider">
-                  MUONEKANO WA KADI YA MWALIKO (INVITATION CARD)
+                  {isEn ? 'INVITATION CARD PREVIEW' : 'MUONEKANO WA KADI YA MWALIKO (INVITATION CARD)'}
                 </span>
                 
-                <div className="relative group overflow-hidden rounded-lg border border-white/10 shadow-lg min-h-[150px] w-full flex items-center justify-center">
+                <div className="relative group overflow-hidden rounded-lg border border-white/10 shadow-lg min-h-[150px] w-full flex items-center justify-center bg-[#070b13]">
                   {!modalImageLoaded ? (
                     <div className="flex flex-col items-center justify-center p-6 space-y-2 text-slate-400">
                       <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                      <p className="text-[10px]">Inatengeneza muonekano wa kadi...</p>
+                      <p className="text-[10px]">{isEn ? 'Generating card preview...' : 'Inatengeneza muonekano wa kadi...'}</p>
                     </div>
                   ) : (
                     <img 
                       src={modalCardUrl} 
                       alt="Muonekano wa Kadi" 
-                      className="w-40 sm:w-44 h-auto rounded-lg transition duration-300 group-hover:scale-[1.03]" 
+                      className="w-40 sm:w-44 h-auto rounded-lg transition duration-200 group-hover:scale-[1.01]" 
                       referrerPolicy="no-referrer"
                     />
                   )}
@@ -1358,17 +1527,17 @@ Karibu sana.
                       type="button"
                       onClick={handleCopyImageToClipboard}
                       className="py-2.5 px-3 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/20 rounded-xl text-xs font-bold text-blue-300 transition flex items-center justify-center space-x-1.5 cursor-pointer hover:text-blue-200 text-center"
-                      title="Nakili picha hii moja kwa moja ili uweze kubandika (Paste) kwenye soga ya WhatsApp"
+                      title={isEn ? 'Copy invitation card image directly to clipboard' : 'Nakili picha hii moja kwa moja ili uweze kubandika (Paste) kwenye soga'}
                     >
                       {copyImageSuccess ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
-                          <span>Picha Imenakiliwa!</span>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>{isEn ? 'Copied!' : 'Picha Imenakiliwa!'}</span>
                         </>
                       ) : (
                         <>
                           <Clipboard className="w-3.5 h-3.5 text-blue-400" />
-                          <span>📋 COPY PICHA YA KADI</span>
+                          <span>📋 {isEn ? 'COPY CARD IMAGE' : 'COPY PICHA YA KADI'}</span>
                         </>
                       )}
                     </button>
@@ -1377,35 +1546,38 @@ Karibu sana.
                       href={modalCardUrl}
                       download={`Mwaliko_${activeSendTarget.guest.name.trim().replace(/\s+/g, '_')}.jpg`}
                       className="py-2.5 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-300 transition flex items-center justify-center space-x-1.5 cursor-pointer hover:text-emerald-200 text-center"
-                      title="Pakua picha hii kwa ajili ya kuituma kwenye WhatsApp"
                     >
-                      <span>📥 PAKUA PICHA YA KADI</span>
+                      <span>📥 {isEn ? 'DOWNLOAD CARD' : 'PAKUA PICHA YA KADI'}</span>
                     </a>
                   </div>
                 )}
               </div>
 
               {/* Guide/Instruction section */}
-              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-xl text-[10.5px] text-slate-300 leading-relaxed space-y-2">
+              <div className="bg-white/[0.01]/10 border border-white/5 p-4 rounded-xl text-[10.5px] text-slate-300 leading-normal space-y-1">
                 <p className="font-bold text-white flex items-center space-x-1 text-[11px]">
                   <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <span>Njia Rahisi ya Kutuma vyote pamoja (Picha + Ujumbe):</span>
+                  <span>{isEn ? 'Quick Messaging Guide (Copy-Paste) :' : 'Mbinu wepesi ya Kutuma Ujumbe (Copy-Paste) :'}</span>
                 </p>
                 {activeSendTarget.channel === 'whatsapp' ? (
-                  <div className="space-y-1.5 text-slate-400 text-left">
+                  <div className="text-slate-400 text-left space-y-1.5">
                     <p className="border-l-2 border-emerald-500 pl-2">
-                      <span className="text-emerald-400 font-bold block">🚀 NJIA RAHISI (Bila Kupakua):</span>
-                      1. Bonyeza kitufe cha bluu cha <b>"📋 COPY PICHA YA KADI"</b> hapo juu. <br />
-                      2. Bonyeza kitufe cha <b>"Copy Ujumbe"</b> upande wa juu wa ujumbe. <br />
-                      3. Bonyeza <b>"Fungua WhatsApp"</b> chini. Soga ikifunguka, <b>Bandika (Paste / Ctrl+V)</b> picha, kisha bandika yale maandishi kama maelezo ya picha (caption) na utume! ✓
+                       <span className="text-emerald-400 font-bold block">🚀 NJIA RAHISI (Bila Kupakua):</span>
+                       1. Bonyeza kitufe cha bluu cha <b>"📋 COPY PICHA YA KADI"</b> hapo juu. <br />
+                       2. Bonyeza kitufe cha <b>"Copy Ujumbe"</b> upande wa juu wa ujumbe. <br />
+                       3. Bonyeza <b>"Fungua WhatsApp"</b> chini. Soga ikifunguka, <b>Bandika (Paste / Ctrl+V)</b> picha, kisha bandika yale maandishi kama maelezo ya picha (caption) na utume! ✓
                     </p>
                     <p className="border-l-2 border-blue-500 pl-2 mt-1">
-                      <span className="text-blue-400 font-bold block">💾 NJIA MBADALA (Kwa Kupakua):</span>
-                      Kama kitufe cha copy kisipokubali kivinjari chako: Pakua picha kwa kubonyeza <b>"📥 PAKUA PICHA YA KADI"</b>, kisha pakia kama faili la picha kwenye soga ya mgeni na uweke ujumbe uliounakili kama caption.
+                       <span className="text-blue-400 font-bold block">💾 NJIA MBADALA (Kwa Kupakua):</span>
+                       Kama kitufe cha copy kisizae katika kivinjari chako: Pakua picha kwa kubonyeza <b>"📥 PAKUA PICHA YA KADI"</b>, kisha pakia kama faili la picha kwenye soga ya mgeni na uweke ujumbe uliounakili kama caption.
                     </p>
                   </div>
                 ) : (
-                  <p>Pakua au nakili picha ya kadi, kisha kabla ya kutuma mwaliko nakili ujumbe, na uutumie pamoja na picha kupitia mbinu ya SMS/MMS au mtandao wa simu yako, kisha uweke alama ya kukamilisha.</p>
+                  <p className="text-slate-400">
+                    {isEn 
+                      ? 'Copy the invitation message and download the card, then send to your guest via SMS/MMS.'
+                      : 'Soma maelekezo ya kadi, kisha kabla ya kutuma mwaliko nakili ujumbe na uutumie pamoja na picha uliyopakua kwa njia ya SMS ili kuruhusu mratibu kuendelea naye.'}
+                  </p>
                 )}
               </div>
 
@@ -1414,9 +1586,9 @@ Karibu sana.
                 <button
                   type="button"
                   onClick={() => setActiveSendTarget(null)}
-                  className="flex-1 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-slate-300 transition cursor-pointer"
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-slate-300 transition cursor-pointer"
                 >
-                  Ghairi
+                  {isEn ? 'Cancel' : 'Ghairi'}
                 </button>
                 
                 {activeSendTarget.channel === 'whatsapp' ? (
@@ -1428,7 +1600,7 @@ Karibu sana.
                     className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
                   >
                     <ExternalLink className="w-4 h-4" />
-                    <span>{isDispatching ? 'Inachakata...' : 'Fungua WhatsApp'}</span>
+                    <span>{isDispatching ? (isEn ? 'Processing...' : 'Inachakata...') : (isEn ? 'Open WhatsApp' : 'Fungua WhatsApp')}</span>
                   </a>
                 ) : (
                   <button
@@ -1437,145 +1609,13 @@ Karibu sana.
                     onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'sms')}
                     className={`flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.30)] text-xs font-extrabold text-white transition cursor-pointer text-center ${isDispatching ? 'opacity-70 grayscale' : ''}`}
                   >
-                    <span>{isDispatching ? 'Inatuma...' : 'Kamilisha (Mark Sent)'}</span>
+                    <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Mark Sent ✓' : 'Kamilisha (Mark Sent) ✓')}</span>
                   </button>
                 )}
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* 2. Modal: Edit Guest */}
-      <AnimatePresence>
-        {editingGuest && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="backdrop-blur-xl bg-[#090f1d] rounded-3xl p-6 sm:p-8 max-w-md w-full border border-white/15 shadow-2xl space-y-5 text-xs font-sans relative text-white"
-            >
-              <button 
-                onClick={() => setEditingGuest(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white"
-                type="button"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <h3 className="text-base font-bold text-white pr-8">Hariri Taarifa za Mgeni (Edit Guest Information)</h3>
-              
-              <form onSubmit={handleSaveEditGuest} className="space-y-4 text-xs font-sans">
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-355 block" htmlFor="edit-send-mgeni-name">JINA LA MGENI *</label>
-                  <input 
-                    id="edit-send-mgeni-name"
-                    type="text" 
-                    required 
-                    placeholder="Weka jina la mgeni..."
-                    value={editGuestName}
-                    onChange={(e) => setEditGuestName(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-355 block" htmlFor="edit-send-mgeni-phone">NAMBA YA SIMU *</label>
-                  <input 
-                    id="edit-send-mgeni-phone"
-                    type="tel" 
-                    required 
-                    placeholder="e.g. 0714786751"
-                    value={editGuestPhone}
-                    onChange={(e) => setEditGuestPhone(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-355 block" htmlFor="edit-send-mgeni-type">KUNDI / AINA YA KADI *</label>
-                  <select
-                    id="edit-send-mgeni-type"
-                    value={editGuestType}
-                    onChange={(e) => setEditGuestType(e.target.value)}
-                    className="w-full bg-[#050b18] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none font-bold cursor-pointer"
-                  >
-                    <option value="SINGLE">SINGLE</option>
-                    <option value="DOUBLE">DOUBLE</option>
-                    <option value="UNCLASSIFIED">UNCLASSIFIED</option>
-                  </select>
-                </div>
-
-                {/* Custom category input block removed */}
-
-                <div className="flex space-x-2 pt-2">
-                  <button 
-                    type="button"
-                    onClick={() => setEditingGuest(null)}
-                    className="flex-1 py-3 bg-white/10 hover:bg-white/15 text-white font-bold rounded-xl transition cursor-pointer text-center"
-                  >
-                    Ghairi
-                  </button>
-                  <button 
-                    type="submit"
-                    id="save-edit-send-guest-btn"
-                    className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] text-white font-bold rounded-xl transition shadow-md cursor-pointer text-center"
-                  >
-                    Hifadhi Tofauti ✓
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Gateway modal removed, handled in SMSGatewayConfig globally */}
-      <AnimatePresence>
-        {showResetConfirm && (
-          <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md z-[9999]" id="reset-template-modal">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-[#0f172a] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4 font-sans text-xs text-white animate-fade-in"
-            >
-              <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/35 flex items-center justify-center text-amber-500 mx-auto">
-                <svg className="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15H19" />
-                </svg>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-base font-bold text-white">
-                  Kurudisha Kiolezo Msingi?
-                </h3>
-                <p className="text-xs text-slate-400 leading-normal">
-                  Je, una uhakika unataka kurudisha muundo wa ujumbe wa msingi (Default Template)? Kitendo hiki kitafuta mabadiliko yoyote uliyofanya kwenye ujumbe huu kwa sasa.
-                </p>
-              </div>
-              <div className="flex space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowResetConfirm(false)}
-                  className="flex-grow py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-slate-355 transition cursor-pointer"
-                >
-                  Ghairi
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    executeResetTemplate();
-                    setShowResetConfirm(false);
-                  }}
-                  className="flex-grow py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 hover:shadow-[0_0_15px_rgba(245,158,11,0.30)] text-xs font-bold text-white transition cursor-pointer"
-                >
-                  Ndiyo, Rudisha
-                </button>
-              </div>
-            </motion.div>
-          </div>
+          </PortalModal>
         )}
       </AnimatePresence>
 
