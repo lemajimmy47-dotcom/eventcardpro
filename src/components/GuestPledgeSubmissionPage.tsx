@@ -16,12 +16,26 @@ export default function GuestPledgeSubmissionPage({
   template,
   onPledgeSubmit
 }: GuestPledgeSubmissionPageProps) {
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const isEn = language === 'en';
+  const displayGuestName = guest?.name || 'Jimson';
   const [pledgeAmount, setPledgeAmount] = useState<string>('');
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Check URL query parameters for override language
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlLang = params.get('lang')?.toLowerCase();
+      if (urlLang === 'sw' || urlLang === 'en') {
+        setLanguage(urlLang as any);
+      }
+    } catch (e) {
+      console.warn('Failed to parse URL lang parameter', e);
+    }
+  }, [setLanguage]);
 
   // Set default coordinates if template is not complete
   const defaults: ContributionCardTemplate = {
@@ -246,7 +260,7 @@ export default function GuestPledgeSubmissionPage({
 
       // 2. Render Guest Name
       if (activeTemplate.showGuestName !== false) {
-        const gpName = guest.name || (isEn ? 'Dear Guest' : 'Mgeni Mpendwa');
+        const gpName = displayGuestName;
         ctx.fillStyle = activeTemplate.guestNameColor || '#FFFFFF';
         ctx.font = `italic bold ${activeTemplate.guestNameSize * 1.5}px "Inter", sans-serif`;
         const nameX = (activeTemplate.guestNameX / 100) * canvas.width;
@@ -374,7 +388,7 @@ export default function GuestPledgeSubmissionPage({
             {event.name || (isEn ? 'Submit Pledge Contribution' : 'Wasilisha Ahadi ya Mchango')}
           </h1>
           <p className="text-xs font-mono tracking-widest uppercase">
-            <span className="text-white font-bold text-[12px] uppercase">{guest.name}</span>
+            <span className="text-white font-bold text-[12px] uppercase">{displayGuestName}</span>
           </p>
         </div>
 
@@ -410,7 +424,7 @@ export default function GuestPledgeSubmissionPage({
           {/* Form / Success Info Side */}
           <div className="md:col-span-5 flex flex-col justify-center">
             {!isSubmitted ? (
-              <div className="backdrop-blur-md bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl relative">
+               <div className="backdrop-blur-md bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl relative">
                 <div className="absolute top-0 right-0 p-3 text-[10px] font-mono text-amber-400 font-extrabold flex items-center gap-1 bg-amber-500/10 rounded-bl-xl border-l border-b border-white/5">
                   <Landmark className="w-3.5 h-3.5" /> {isEn ? 'Official Pledge' : 'Ahadi Rasmi'}
                 </div>
@@ -418,16 +432,16 @@ export default function GuestPledgeSubmissionPage({
                 <div className="space-y-2 pt-2">
                   <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
                     <Gift className="w-4 h-4 text-rose-400" />
-                    {isEn ? 'New Pledge Contribution' : 'Ahadi Mpya ya Mchango'}
+                    {isEn ? 'New Pledge Contribution' : 'MCHANGO MPYA WA AHADI'}
                   </h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     {isEn ? (
                       <>
-                        Dear <strong>{guest.name}</strong>, you are welcome to enter your pledge contribution to support this event. Your pledge will be instantly prepared on your personalized card.
+                        Dear <strong>{displayGuestName}</strong>, you are welcome to enter your pledge contribution to support this event. Your pledge will be instantly prepared on your personalized card.
                       </>
                     ) : (
                       <>
-                        Ndugu mpendwa <strong>{guest.name}</strong>, karibu kuweka kiasi cha ahadi ya mchango wako kwa ajili ya kufanikisha sherehe hii. Ahadi yako itatayarishwa hapo hapo kwenye Kadi yako binafsi.
+                        Ndugu <strong>{displayGuestName}</strong>, unakaribishwa kuweka ahadi yako ya mchango ili kuunga mkono shughuli hii. Ahadi yako itawekwa mara moja kwenye kadi yako maalum.
                       </>
                     )}
                   </p>
@@ -447,7 +461,7 @@ export default function GuestPledgeSubmissionPage({
                         type="text" 
                         value={pledgeAmount ? parseInt(pledgeAmount).toLocaleString('en-US') : ''}
                         onChange={handleAmountChange}
-                        placeholder={isEn ? 'e.g. 500,000' : 'e.g. 500,000'}
+                        placeholder={isEn ? 'e.g. 500,000' : 'mfano: 500,000'}
                         className="w-full bg-slate-900/60 py-3.5 pl-14 pr-4 text-white text-base font-extrabold font-mono focus:outline-none"
                         required
                         disabled={loading}
@@ -480,7 +494,7 @@ export default function GuestPledgeSubmissionPage({
                 {/* Secure footer trust badge */}
                 <div className="flex items-center gap-1.5 justify-center pt-2 text-[9.5px] text-slate-500 font-mono">
                   <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>{isEn ? 'Secure encryption & data privacy enabled' : 'Ulinzi thabiti wa siri na data umewezeshwa'}</span>
+                  <span>{isEn ? 'Secure encryption & data privacy enabled' : 'Usimbaji fiche salama na faragha ya data imewezeshwa'}</span>
                 </div>
               </div>
             ) : (
@@ -494,11 +508,11 @@ export default function GuestPledgeSubmissionPage({
                 <p className="text-xs text-slate-300 leading-relaxed">
                   {isEn ? (
                     <>
-                      Thank you very much dear <strong>{guest.name}</strong>. Your pledge of <strong className="text-emerald-450 font-mono">{formatCurrency(pledgeAmount)}</strong> has been successfully registered to support our ceremony.
+                      Thank you very much dear <strong>{displayGuestName}</strong>. Your pledge of <strong className="text-emerald-450 font-mono">{formatCurrency(pledgeAmount)}</strong> has been successfully registered to support our ceremony.
                     </>
                   ) : (
                     <>
-                      Ahsante sana ndugu yetu, <strong>{guest.name}</strong>. Kiasi cha ahadi yako chenye thamani ya <strong className="text-emerald-400 font-mono">{formatCurrency(pledgeAmount)}</strong> kimesajiliwa kwa usahihi kwa ajili ya kufanikisha sherehe yetu.
+                      Ahsante sana ndugu yetu, <strong>{displayGuestName}</strong>. Kiasi cha ahadi yako chenye thamani ya <strong className="text-emerald-400 font-mono">{formatCurrency(pledgeAmount)}</strong> kimesajiliwa kwa usahihi kwa ajili ya kufanikisha sherehe yetu.
                     </>
                   )}
                 </p>
@@ -506,7 +520,7 @@ export default function GuestPledgeSubmissionPage({
                 <div className="bg-black/30 p-4 rounded-xl border border-white/5 text-left space-y-2">
                   <div className="flex justify-between text-[11px] font-mono">
                     <span className="text-slate-400 uppercase">{isEn ? 'Name:' : 'Jina:'}</span>
-                    <span className="text-white font-bold">{guest.name}</span>
+                    <span className="text-white font-bold">{displayGuestName}</span>
                   </div>
                   <div className="flex justify-between text-[11px] font-mono">
                     <span className="text-slate-400 uppercase">{isEn ? 'Pledge:' : 'Mchango:'}</span>

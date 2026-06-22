@@ -3171,17 +3171,19 @@ export default function ContributionManager({
                 <>
                   {cardTemplate.showGuestName !== false && (
                     <div 
-                      className="absolute italic whitespace-nowrap -translate-x-1/2 pointer-events-none select-none border border-blue-500/20 px-1 backdrop-blur-[1px] z-20 font-sans"
+                      className="absolute italic whitespace-nowrap -translate-x-1/2 pointer-events-none select-none z-20 font-sans"
                       style={{ 
                       left: `${cardTemplate.guestNameX}%`,
                       top: `${cardTemplate.guestNameY}%`, 
                       color: cardTemplate.guestNameColor,
-                      fontSize: `${cardTemplate.guestNameSize / 2.2}px`,
+                      // Scaled precisely to match 420px preview container width vs 450px canvas width
+                      fontSize: `${(cardTemplate.guestNameSize || 22) * 0.93}px`,
                       fontWeight: '900',
                       textShadow: '0 2px 4px rgba(0,0,0,0.3)'
                       }}
                     >
-                      {isEn ? 'DEAR GUEST' : 'MGENI MPENDWA'}
+                      {/* Use Jimson for coordinates preview adjustments */}
+                      JIMSON
                     </div>
                   )}
                 </>
