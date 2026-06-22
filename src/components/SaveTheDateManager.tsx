@@ -283,7 +283,7 @@ Karibu sana!`);
       const guestName = isString ? guest : (guest.name || 'Mgeni');
       const guestCodeOrId = isString ? encodeURIComponent(guest) : (guest.code || guest.id || 'std');
       const guestCleanName = String(guestName).toUpperCase();
-      const guestLink = `${window.location.origin}/?invite=${guestCodeOrId}&std=true&eventId=${eventDetails.id}`;
+      const guestLink = `${window.location.origin}/?invite=${guestCodeOrId}&std=true&eventId=${eventDetails.id}&lang=${language}`;
       
       const template = stdTemplate || '';
       const contacts = [eventDetails.contact1, eventDetails.contact2, eventDetails.contact3].filter(Boolean).join('\n');
@@ -779,8 +779,8 @@ Karibu sana!`);
         ) : (
           <div className="flex flex-col gap-3 overflow-y-auto max-h-[650px] pr-1">
             {activeFilteredGuests.map((g, idx) => {
-              const stdLink = `${window.location.origin}/?invite=${g.code || g.id}&std=true&eventId=${eventDetails.id}`;
-              const inviteLink = `${window.location.origin}/?invite=${g.code || g.id}&eventId=${eventDetails.id}`;
+              const stdLink = `${window.location.origin}/?invite=${g.code || g.id}&std=true&eventId=${eventDetails.id}&lang=${language}`;
+              const inviteLink = `${window.location.origin}/?invite=${g.code || g.id}&eventId=${eventDetails.id}&lang=${language}`;
 
               return (
                 <div 

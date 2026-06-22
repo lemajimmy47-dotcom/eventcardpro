@@ -1140,7 +1140,7 @@ export default function ContributionManager({
     channel?: string
   ) => {
     const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://eventcard.app';
-    const link = `${currentOrigin}/?invite=${g.code || g.id}&pledge=true&eventId=${event.id}`; // Removed tpl, backend handles it
+    const link = `${currentOrigin}/?invite=${g.code || g.id}&pledge=true&eventId=${event.id}&lang=${language}`; // Removed tpl, backend handles it
     let text = '';
     if (type === 'Pledge') {
       text = pledgeRequestTemplates[messageTemplateIndex].text(g.name, event.name || 'Sherehe', link);

@@ -455,7 +455,7 @@ Karibu sana.
 
   const getGuestMessageText = (g: Guest, stripLink: boolean = false) => {
     // Generate the real link for this specific guest in the current running environment
-    const appUrl = `${window.location.origin}/?invite=${g.code || g.id}&eventId=${event.id}`;
+    const appUrl = `${window.location.origin}/?invite=${g.code || g.id}&eventId=${event.id}&lang=${language}`;
 
     let text = language === 'en' ? invitationTemplateEn : invitationTemplateSw;
 
@@ -567,7 +567,7 @@ Karibu sana.
 
       // If it was SMS, also send the link separately if enabled
       if (channel === 'sms' && sendSmsLink) {
-        const appUrl = `${window.location.origin}/?invite=${target.code || target.id}&eventId=${event.id}`;
+        const appUrl = `${window.location.origin}/?invite=${target.code || target.id}&eventId=${event.id}&lang=${language}`;
         // Short delay between messages
         await new Promise(resolve => setTimeout(resolve, 500));
         await fetch('/api/send-sms', {
@@ -718,7 +718,7 @@ Karibu sana.
 
       try {
         const mainText = getGuestMessageText(guest, true); // Strip link from main text
-        const appUrl = `${window.location.origin}/?invite=${guest.code || guest.id}&eventId=${event.id}`;
+        const appUrl = `${window.location.origin}/?invite=${guest.code || guest.id}&eventId=${event.id}&lang=${language}`;
         
         // 1. Send Main Message
         const res = await fetch('/api/send-sms', {

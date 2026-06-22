@@ -176,6 +176,11 @@ export default function App() {
       const scanParam = params.get('scan_mode') === 'true' || params.get('scan') === 'true';
       const usernameParam = params.get('username') || params.get('user');
       const passwordParam = params.get('password') || params.get('pass');
+      const langParam = params.get('lang')?.toLowerCase();
+
+      if (langParam === 'sw' || langParam === 'en') {
+        setLanguage(langParam as any);
+      }
 
       const savedScannerMode = localStorage.getItem('eventcard_scanner_mode') === 'true';
       if (usernameParam === 'scanner' && passwordParam) {
