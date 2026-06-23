@@ -380,6 +380,17 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     if (isAuthError) {
       throw new Error(`Kifunguo chako cha API kimeisha muda au ni batili (Invalid or Expired Meseji Token). Tafadhali ingia kwenye akaunti yako ya Meseji.co.tz, thibitisha salio la SMS (Credits), na utengeneze token mpya chini ya API Settings, kisha uisasishe kwenye ukurasa wa 'Kutuma Mialiko/Ujumbe' > 'Alama ya Mipangilio' (Settings). [Jibu la Gateway: ${responseContent}]`);
     }
+
+    const isSenderIdError = response.status === 403 || 
+      responseContent.toLowerCase().includes("sender id") ||
+      responseContent.toLowerCase().includes("sender_id") ||
+      responseContent.toLowerCase().includes("senderaddr") ||
+      responseContent.toLowerCase().includes("not approved");
+
+    if (isSenderIdError) {
+      throw new Error(`Jina la Aliyetuma (Sender ID) uliyoweka hapa ("${senderId}") haijaidhinishwa (is not approved) kwenye akaunti yako ya ${settings.provider === "meseji" ? "Meseji.co.tz" : "SMS Gateway"}. 
+Tafadhali ingia kwenye akaunti yako ya ${settings.provider === "meseji" ? "Meseji.co.tz" : "SMS Gateway"} chini ya Sender ID na uombe uidhinishiwe jina hili, au badilisha 'Sender ID' kwenye Alama ya Mipangilio (Settings) ya app hii ili ilingane na ile ambayo tayari imekubaliwa kwenye akaunti yako (kama vile mtoa huduma anavyoelekeza). [Jibu la Gateway: ${responseContent}]`);
+    }
     
     throw new Error(`Gateway Error (${response.status}): ${responseContent}`);
   }
