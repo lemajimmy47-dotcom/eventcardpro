@@ -304,7 +304,7 @@ export default function EventReports({
     switch (selectedReport) {
       case 'Overall':
         titleText = "OVERALL EVENT REGISTER & ATTENDANCE SUMMARY";
-        subTitleText = "Ripoti ya Jumla na Muhtasari wa Mahudhurio ya Kadi";
+        subTitleText = isEn ? "General Report and Card Attendance Summary" : "Ripoti ya Jumla na Muhtasari wa Mahudhurio ya Kadi";
         break;
       case 'Attendance_Only':
         titleText = "GUESTS CHECK-IN & ARRIVAL REGISTER";
@@ -312,11 +312,11 @@ export default function EventReports({
         break;
       case 'RSVP_Only':
         titleText = "CONFIRMED RSVP RESPONSES LOG";
-        subTitleText = "Orodha Kamili ya Wageni Waliothibitisha Majibu";
+        subTitleText = isEn ? "Complete List of Guests with Confirmed RSVP" : "Orodha Kamili ya Wageni Waliothibitisha Majibu";
         break;
       case 'RSVP_Pending':
         titleText = "PENDING RSVP - UNRESPONDED CAMPAIGN";
-        subTitleText = "Wageni Ambapo RSVP Bado haijajibiwa";
+        subTitleText = isEn ? "Guests with Pending RSVP Responses" : "Wageni Ambapo RSVP Bado haijajibiwa";
         break;
       case 'Outstanding':
         titleText = "DUE BALANCES & OUTSTANDING REGISTER";
@@ -324,15 +324,15 @@ export default function EventReports({
         break;
       case 'FullyPaid':
         titleText = "FULLY PAID CONTRIBUTIONS LEDGER";
-        subTitleText = "Waliolipa Ahadi Kikamilifu";
+        subTitleText = isEn ? "Fully Paid Members" : "Waliolipa Ahadi Kikamilifu";
         break;
       case 'Pledges':
         titleText = "ACTIVE COMMITMENTS & PLEDGES REGISTER";
-        subTitleText = "Orodha ya Wageni Waliosajili Ahadi za Michango";
+        subTitleText = isEn ? "List of Guests with Registered Contribution Pledges" : "Orodha ya Wageni Waliosajili Ahadi za Michango";
         break;
       case 'NoPledge':
         titleText = "GUESTS WITH NO RECORDED PLEDGES";
-        subTitleText = "Wasioonyesha Ahadi au Mapokezi ya Mchango";
+        subTitleText = isEn ? "Guests Without Pledges or Received Contributions" : "Wasioonyesha Ahadi au Mapokezi ya Mchango";
         break;
       default:
         titleText = "EVENT DETAIL REPORT";
@@ -361,7 +361,7 @@ export default function EventReports({
     const wEventName = doc.getTextWidth(eventNameUpper);
 
     doc.setFont("helvetica", "normal");
-    const dateLabel = " • Tarehe: ";
+    const dateLabel = isEn ? " • Date: " : " • Tarehe: ";
     doc.text(dateLabel, 10 + wEventLabel + wEventName, 36);
     const wDateLabel = doc.getTextWidth(dateLabel);
 
@@ -483,7 +483,7 @@ export default function EventReports({
 
       autoTable(doc, {
         startY: 44,
-        head: [['S/N', 'Muda (Time Arrived)', 'Mgeni (Guest Full Name)', 'Simu / Mobile', 'Aina ya Kadi', 'Scan Status', 'SMS', 'WA']],
+        head: [['S/N', isEn ? 'Time Arrived' : 'Muda (Time Arrived)', isEn ? 'Guest Full Name' : 'Mgeni (Guest Full Name)', isEn ? 'Mobile' : 'Simu / Mobile', isEn ? 'Card Type' : 'Aina ya Kadi', 'Scan Status', 'SMS', 'WA']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [243, 244, 246], textColor: [15, 23, 42], fontSize: 7, fontStyle: 'bold' },
@@ -1293,7 +1293,7 @@ export default function EventReports({
 
               <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black tracking-widest text-emerald-400 uppercase font-mono">2. Walioitikia RSVP</span>
+                  <span className="text-[10px] font-black tracking-widest text-emerald-400 uppercase font-mono">{isEn ? "2. RSVP Responded" : "2. Walioitikia RSVP"}</span>
                   <CheckCircle className="w-4 h-4 text-emerald-400" />
                 </div>
                 <p className="text-2xl font-mono font-black text-emerald-300 mt-1">{attendingCount} Kadi ({totalRsvpPax} Watu)</p>
@@ -1305,10 +1305,10 @@ export default function EventReports({
 
               <div className="bg-blue-500/5 border border-blue-500/10 p-4 rounded-2xl">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black tracking-widest text-blue-400 uppercase font-mono">3. Waliofika / Checked In</span>
+                  <span className="text-[10px] font-black tracking-widest text-blue-400 uppercase font-mono">{isEn ? "3. Arrived / Checked In" : "3. Waliofika / Checked In"}</span>
                   <Activity className="w-4 h-4 text-blue-400" />
                 </div>
-                <p className="text-2xl font-mono font-black text-blue-300 mt-1">{checkedInCount} Wageni ({arivedPercent()}% Ratio)</p>
+                <p className="text-2xl font-mono font-black text-blue-300 mt-1">{checkedInCount} {isEn ? "Guests" : "Wageni"} ({arivedPercent()}% Ratio)</p>
                 <div className="flex justify-between text-[10px] text-slate-500 mt-2 font-mono">
                   <span>Check In: {checkedInCount}</span>
                   <span>Expected: {attendingCount}</span>
@@ -1342,7 +1342,7 @@ export default function EventReports({
                 ></div>
               </div>
               <div className="flex flex-wrap justify-between items-center text-[10px] text-slate-500 font-mono pt-1">
-                <span>Waliofika / Arrived: <strong className="text-slate-300 font-bold">{checkedInCount}</strong></span>
+                <span>{isEn ? "Arrived:" : "Waliofika / Arrived:"} <strong className="text-slate-300 font-bold">{checkedInCount}</strong></span>
                 <span>Thibitisha Kufika: <strong className="text-slate-300 font-bold">{attendingCount} kadi</strong> ({totalRsvpPax} watu)</span>
                 <span>Bado Kufika (Expected but Absent): <strong className="text-amber-500 font-bold">{expectedButNotArrived}</strong></span>
               </div>
@@ -1371,13 +1371,13 @@ export default function EventReports({
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10 text-slate-400 font-mono text-[9px] uppercase tracking-wider">
                     <th className="py-3 px-3 font-black text-center">S/N</th>
-                    <th className="py-3 px-3 font-black">Mgeni (Guest Full Name)</th>
+                    <th className="py-3 px-3 font-black">{isEn ? "Guest Full Name" : "Mgeni (Guest Full Name)"}</th>
                     <th className="py-3 px-3 font-black">Simu</th>
                     <th className="py-3 px-3 font-black text-center">Aina ya Kadi</th>
                     <th className="py-3 px-3 font-black text-center">RSVP Jibu</th>
                     <th className="py-3 px-3 font-black text-center">Pax RSVP</th>
                     <th className="py-3 px-3 font-black text-center">Skani / Check-In</th>
-                    <th className="py-3 px-3 font-black text-center">Muda wa Kufika</th>
+                    <th className="py-3 px-3 font-black text-center">{isEn ? "Arrival Time" : "Muda wa Kufika"}</th>
                     <th className="py-3 px-3 font-black text-center">SMS</th>
                     <th className="py-3 px-3 font-black text-center">WA</th>
                   </tr>

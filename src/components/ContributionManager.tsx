@@ -2218,7 +2218,7 @@ export default function ContributionManager({
   const downloadReportCSV = (listName: string, listData: Guest[]) => {
     let csv = isEn
       ? 'Guest Name,Phone Number,Pledges,Amount Paid,Outstanding Balance,Pledge Status\n'
-      : 'Jina la Mgeni,Idadi ya Simu,Mchango ulioahidiwa,Kiasi Kilicholipwa,Salio linalodaiwa,Hali ya Ahadi\n';
+      : isEn ? 'Guest Name,Phone Number,Pledged Amount,Amount Paid,Balance Due,Pledge Status\n' : 'Jina la Mgeni,Idadi ya Simu,Mchango ulioahidiwa,Kiasi Kilicholipwa,Salio linalodaiwa,Hali ya Ahadi\n';
     listData.forEach(g => {
       const pledge = g.pledgeAmount || 0;
       const paid = g.paidAmount || 0;
@@ -2292,7 +2292,7 @@ export default function ContributionManager({
 
       const headers = isEn 
         ? [['Guest Name', 'Phone', 'Category', 'Pledge (TZS)', 'Paid (TZS)', 'Balance (TZS)', 'Status']]
-        : [['Jina la Mgeni', 'Simu', 'Kundi', 'Ahadi (TZS)', 'Malipo (TZS)', 'Deni (TZS)', 'Hali']];
+        : isEn ? [['Guest Name', 'Phone', 'Category', 'Pledged (TZS)', 'Paid (TZS)', 'Balance (TZS)', 'Status']] : [['Jina la Mgeni', 'Simu', 'Kundi', 'Ahadi (TZS)', 'Malipo (TZS)', 'Deni (TZS)', 'Hali']];
 
       autoTable(doc, {
         head: headers,
@@ -3285,7 +3285,7 @@ export default function ContributionManager({
                     </div>
 
                     <div className="text-center pb-2 select-none pointer-events-none z-10 text-[9px] opacity-40 italic mt-auto">
-                      Kamati ya Maandalizi: {event.hostName || "Ndugu na Marafiki"}
+                      {isEn ? 'Organizing Committee:' : 'Kamati ya Maandalizi:'} {event.hostName || (isEn ? 'Family and Friends' : 'Ndugu na Marafiki')}
                     </div>
                   </div>
                 )}
@@ -3549,7 +3549,7 @@ export default function ContributionManager({
 
           {/* Logs */}
           <div className="flex flex-col space-y-3">
-            <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">Miamala na Kumbukumbu ya Kutuma (Logs)</h4>
+            <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">{isEn ? 'Transactions and Send Logs' : 'Miamala na Kumbukumbu ya Kutuma (Logs)'}</h4>
             <div className="flex-grow bg-slate-950/60 rounded-2xl p-4 font-mono text-[9px] h-[300px] overflow-y-auto border border-white/10 space-y-1.5 leading-relaxed antialiased">
               {sendLogs.length === 0 ? (
                 <p className="text-slate-600 italic">Maelezo ya kutuma yatatokea hapa...</p>
@@ -3790,7 +3790,7 @@ export default function ContributionManager({
 
           {/* Logs */}
           <div className="flex flex-col space-y-3">
-            <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">Miamala na Kumbukumbu ya Kutuma (Logs)</h4>
+            <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">{isEn ? 'Transactions and Send Logs' : 'Miamala na Kumbukumbu ya Kutuma (Logs)'}</h4>
             <div className="flex-grow bg-slate-950/60 rounded-2xl p-4 font-mono text-[9px] h-[300px] overflow-y-auto border border-white/10 space-y-1.5 leading-relaxed antialiased">
               {sendLogs.length === 0 ? (
                 <p className="text-slate-600 italic">Maelezo ya kutuma yatatokea hapa...</p>
@@ -4031,7 +4031,7 @@ export default function ContributionManager({
 
           {/* Logs */}
           <div className="flex flex-col space-y-3">
-            <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">Miamala na Kumbukumbu ya Kutuma (Logs)</h4>
+            <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">{isEn ? 'Transactions and Send Logs' : 'Miamala na Kumbukumbu ya Kutuma (Logs)'}</h4>
             <div className="flex-grow bg-slate-950/60 rounded-2xl p-4 font-mono text-[9px] h-[300px] overflow-y-auto border border-white/10 space-y-1.5 leading-relaxed antialiased">
               {sendLogs.length === 0 ? (
                 <p className="text-slate-600 italic">Maelezo ya kutuma yatatokea hapa...</p>

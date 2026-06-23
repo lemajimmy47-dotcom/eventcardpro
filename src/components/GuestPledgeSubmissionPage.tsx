@@ -441,7 +441,7 @@ export default function GuestPledgeSubmissionPage({
                       </>
                     ) : (
                       <>
-                        Ndugu <strong>{displayGuestName}</strong>, unakaribishwa kuweka ahadi yako ya mchango ili kuunga mkono shughuli hii. Ahadi yako itawekwa mara moja kwenye kadi yako maalum.
+                        {isEn ? <>Dear <strong>{displayGuestName}</strong>, you are welcome to make your contribution pledge to support this event. Your pledge will be immediately recorded on your special card.</> : <>Ndugu <strong>{displayGuestName}</strong>, unakaribishwa kuweka ahadi yako ya mchango ili kuunga mkono shughuli hii. Ahadi yako itawekwa mara moja kwenye kadi yako maalum.</>}
                       </>
                     )}
                   </p>

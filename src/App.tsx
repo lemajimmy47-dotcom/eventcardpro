@@ -248,16 +248,23 @@ export default function App() {
       }
 
 
-      // Check if we have a persisted event ID in backend userAccount or local storage to prevent resetting on page reload
-      const savedEvId = data.userAccount?.activeEventId || localStorage.getItem('kadi_active_event_id');
-      let targetEvent = currentEventDetails;
-      if (savedEvId && currentEvents.length > 0) {
-        const found = currentEvents.find((e: any) => e.id === savedEvId);
-        if (found) {
-          targetEvent = found;
+      setEventDetails((prev) => {
+        let targetEvent = currentEventDetails;
+        
+        // If we already have an active event in memory, and it still exists on the server, KEEP IT active!
+        if (prev) {
+          const foundPrev = currentEvents.find((e: any) => e.id === prev.id);
+          if (foundPrev) return foundPrev;
         }
-      }
-      setEventDetails(targetEvent);
+
+        // Fallback to persisted event ID
+        const savedEvId = data.userAccount?.activeEventId || localStorage.getItem('kadi_active_event_id');
+        if (savedEvId && currentEvents.length > 0) {
+          const found = currentEvents.find((e: any) => e.id === savedEvId);
+          if (found) targetEvent = found;
+        }
+        return targetEvent;
+      });
       setEventsList(currentEvents);
       setGuests(prevGuests => {
         return currentGuests.map((cg: any) => {

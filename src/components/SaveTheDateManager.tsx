@@ -268,7 +268,7 @@ Karibu sana!`);
     try {
       const isString = typeof guest === 'string';
       const guestObj = isString ? null : guest;
-      const guestName = isString ? guest : (guest.name || 'Mgeni');
+      const guestName = isString ? guest : (guest.name || (isEn ? 'Guest' : 'Mgeni'));
       const guestCodeOrId = isString ? encodeURIComponent(guest) : (guest.code || guest.id || 'std');
       const guestCleanName = String(guestName).toUpperCase();
       const guestLink = `${window.location.origin}/?invite=${guestCodeOrId}&std=true&eventId=${eventDetails.id}&lang=${language}`;
@@ -317,7 +317,7 @@ Karibu sana!`);
       if (isDirty) {
         const proceed = await showConfirm(
           "⚠️ Taarifa Haijahifadhiwa",
-          "Kumbuka: Una mabadiliko kwenye picha au template ambayo haujahifadhi. Wageni wataona picha ya zamani iliyopo kwenye database. Je, unataka kuendelea kutuma?"
+          isEn ? 'Note: You have unsaved changes to the image or template. Guests will see the old picture saved in the database. Do you want to continue sending?' : "Kumbuka: Una mabadiliko kwenye picha au template ambayo haujahifadhi. Wageni wataona picha ya zamani iliyopo kwenye database. Je, unataka kuendelea kutuma?"
         );
         if (!proceed) return;
       }
@@ -395,7 +395,7 @@ Karibu sana!`);
   const handleSendToAllFiltered = async () => {
     try {
       if (activeFilteredGuests.length === 0) {
-        showToast("Hakuna wageni kwenye orodha hii ya kutumiwa ujumbe!", "info");
+        showToast(isEn ? 'No guests in this list to send messages to!' : "Hakuna wageni kwenye orodha hii ya kutumiwa ujumbe!", "info");
         return;
       }
 
@@ -405,8 +405,8 @@ Karibu sana!`);
       }
 
       const filterText = rsvpFilter === 'all' ? 'WOTE' :
-                         rsvpFilter === 'confirmed' ? 'Waliodhibiti RSVP' :
-                         rsvpFilter === 'pending' ? 'Bado hawajathibitisha' : 'Waliokataa';
+                         rsvpFilter === 'confirmed' ? (isEn ? 'Confirmed RSVP' : 'Waliodhibiti RSVP') :
+                         rsvpFilter === 'pending' ? (isEn ? 'Pending' : 'Bado hawajathibitisha') : (isEn ? 'Declined' : 'Waliokataa');
 
       const proceed = await showConfirm(
         "Kutuma kwa Kikundi Hiki",
@@ -500,16 +500,16 @@ Karibu sana!`);
           <div>
             <h2 className="text-base font-extrabold text-[#f1f5f9] tracking-tight uppercase flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-rose-450" />
-              <span>Sanidi Save The Date</span>
+              <span>{isEn ? 'Configure Save The Date' : 'Sanidi Save The Date'}</span>
             </h2>
-            <p className="text-slate-400 text-[11px] mt-0.5">Andaa jina la tukio, fanya uchaguzi wa aina ya tukio, na andika ujumbe wako rasmi.</p>
+            <p className="text-slate-400 text-[11px] mt-0.5">{isEn ? 'Set up the event name, select the event type, and write your official message.' : 'Andaa jina la tukio, fanya uchaguzi wa aina ya tukio, na andika ujumbe wako rasmi.'}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
           {/* CHAGUA TUKIO */}
           <div className="space-y-1">
-            <label className="font-bold text-slate-300 block">Chagua Tukio (Event)</label>
+            <label className="font-bold text-slate-300 block">{isEn ? 'Select Event' : 'Chagua Tukio (Event)'}</label>
             <select 
               value={eventDetails.id}
               onChange={(e) => onSelectEvent(e.target.value)}
@@ -530,13 +530,13 @@ Karibu sana!`);
         <div className="lg:col-span-7 backdrop-blur-xl bg-white/5 border border-white/10 p-6 rounded-[1.75rem] space-y-4">
           <h3 className="text-sm font-extrabold text-white tracking-wide uppercase flex items-center gap-2">
             <Paperclip className="w-4 h-4 text-emerald-400" />
-            <span>Pakia Kadi & Andika Template ya Ujumbe</span>
+            <span>{isEn ? 'Upload Card & Write Message Template' : 'Pakia Kadi & Andika Template ya Ujumbe'}</span>
           </h3>
 
           <div className="space-y-3">
             {/* Title */}
             <div className="space-y-1">
-              <label className="font-bold text-slate-400 block">Kichwa cha Ujumbe (Save The Date Title)</label>
+              <label className="font-bold text-slate-400 block">{isEn ? 'Save The Date Title' : 'Kichwa cha Ujumbe (Save The Date Title)'}</label>
               <input 
                 type="text" 
                 value={stdTitle}
@@ -545,20 +545,20 @@ Karibu sana!`);
                   setIsDirty(true);
                 }}
                 className="w-full bg-slate-900 border border-white/10 p-3 rounded-xl text-xs outline-none text-slate-205"
-                placeholder="Save The Date - Harusi Maalum"
+                placeholder={isEn ? "Save The Date - Special Wedding" : "Save The Date - Harusi Maalum"}
               />
             </div>
 
             {/* UP LOAD YA PICHA / kadi yenye aspect ratio thabiti */}
             <div className="space-y-1">
-              <label className="font-bold text-slate-400 block">Pakia Picha ya Kadi ya Save The Date (Aspect Ratio: 9:13)</label>
+              <label className="font-bold text-slate-400 block">{isEn ? 'Upload Save The Date Card Image (Aspect Ratio: 9:13)' : 'Pakia Picha ya Kadi ya Save The Date (Aspect Ratio: 9:13)'}</label>
               
               <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-rose-550/50 p-6 rounded-2xl cursor-pointer hover:bg-slate-900/60 transition group relative">
                 <Upload className="w-8 h-8 text-slate-450 mb-2 group-hover:text-rose-400 transition" />
                 <span className="text-xs text-slate-350 font-bold group-hover:text-white transition">
-                  {selectedFile ? '✓ Picha ya Save The Date Imepakiwa' : 'Chagua / Drag Picha ya Save The Date (JPEG, PNG)'}
+                  {selectedFile ? (isEn ? '✓ Image Uploaded' : '✓ Picha ya Save The Date Imepakiwa') : (isEn ? 'Choose / Drag Image (JPEG, PNG)' : 'Chagua / Drag Picha ya Save The Date (JPEG, PNG)')}
                 </span>
-                <span className="text-[10px] text-slate-500 font-medium mt-1">Aspect ratio italinganishwa otomatiki na Kadi kuu</span>
+                <span className="text-[10px] text-slate-500 font-medium mt-1">{isEn ? 'Aspect ratio will be automatically matched' : 'Aspect ratio italinganishwa otomatiki na Kadi kuu'}</span>
                 <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
               </label>
             </div>
@@ -566,7 +566,7 @@ Karibu sana!`);
             {/* Template input with placeholder tags */}
             <div className="space-y-1">
               <div className="flex justify-between items-center">
-                <label className="font-bold text-slate-400 block">Template ya Maneno ya Ujumbe</label>
+                <label className="font-bold text-slate-400 block">{isEn ? 'Message Text Template' : 'Template ya Maneno ya Ujumbe'}</label>
                 <div className="flex gap-1">
                   <span className="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded-md font-mono">{"{name}"}</span>
                   <span className="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded-md font-mono">{"{link}"}</span>
@@ -601,8 +601,8 @@ Karibu sana!`);
                 <div className="bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 rounded-2xl p-4 flex items-start gap-3 text-[11px] leading-relaxed font-sans">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5 animate-pulse" />
                   <div>
-                    <span className="font-extrabold uppercase block text-emerald-300">✓ Kila Kitu Kimehifadhiwa</span>
-                    Kadi na Picha ya Save The Date imeandikwa kikamilifu kwenye database ya kudumu na ipo tayari kwa matumizi.
+                    <span className="font-extrabold uppercase block text-emerald-300">{isEn ? '✓ Everything is Saved' : '✓ Kila Kitu Kimehifadhiwa'}</span>
+                    {isEn ? 'The Save The Date card and image have been successfully saved to the database and are ready for use.' : 'Kadi na Picha ya Save The Date imeandikwa kikamilifu kwenye database ya kudumu na ipo tayari kwa matumizi.'}
                   </div>
                 </div>
               )}
@@ -613,7 +613,7 @@ Karibu sana!`);
               className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:shadow-[0_0_15px_rgba(16,185,129,0.25)] text-white font-extrabold rounded-xl transition cursor-pointer flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-5 h-5" />
-              <span>Hifadhi Taarifa za Save The Date</span>
+              <span>{isEn ? 'Save The Date Information' : 'Hifadhi Taarifa za Save The Date'}</span>
             </button>
           </div>
         </div>
@@ -622,7 +622,7 @@ Karibu sana!`);
         <div className="lg:col-span-5 flex flex-col items-center space-y-4">
           <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono self-start flex items-center gap-1.5">
             <Globe className="w-4 h-4 text-rose-455" />
-            <span>Kadi Yetu ya Save The Date</span>
+            <span>{isEn ? 'Our Save The Date Card' : 'Kadi Yetu ya Save The Date'}</span>
           </h3>
 
           {/* Matches exactly physical aspect ratio 450:650 inside a luxurious preview box */}
@@ -640,8 +640,8 @@ Karibu sana!`);
                   <Heart className="w-6 h-6 text-rose-400 fill-rose-500" />
                 </div>
                 <div>
-                  <p className="text-white font-bold text-sm">Bila Picha ya Kadi</p>
-                  <p className="text-slate-400 text-[10px] mt-1">Pakia picha ya kadi yako ya mwaliko / nukuu kushoto ili ionekane hapa na vipimo thabiti!</p>
+                  <p className="text-white font-bold text-sm">{isEn ? 'No Card Image' : 'Bila Picha ya Kadi'}</p>
+                  <p className="text-slate-400 text-[10px] mt-1">{isEn ? 'Upload your invitation image on the left to see it here.' : 'Pakia picha ya kadi yako ya mwaliko / nukuu kushoto ili ionekane hapa na vipimo thabiti!'}</p>
                 </div>
               </div>
             )}
@@ -658,7 +658,7 @@ Karibu sana!`);
           <div className="w-full bg-[#0c141a] border border-white/15 p-4 rounded-2xl space-y-1">
             <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest font-mono flex items-center gap-1.5">
               <MessageSquare className="w-3.5 h-3.5" />
-              <span>Mfano wa Ujumbe wa Kutuma</span>
+              <span>{isEn ? 'Message Preview' : 'Mfano wa Ujumbe wa Kutuma'}</span>
             </p>
             <p className="text-[10.5px] text-slate-300 font-mono leading-relaxed whitespace-pre-wrap select-all bg-black/30 p-2.5 rounded-lg border border-white/5">
               {previewMessage}
@@ -676,10 +676,10 @@ Karibu sana!`);
           <div>
             <h3 className="text-sm font-extrabold text-white tracking-widest uppercase flex items-center gap-2">
               <Users className="w-5 h-5 text-emerald-450" />
-              <span>Orodha ya Wageni Watakaotumiwa ({activeFilteredGuests.length} Kwenye Orodha)</span>
+              <span>{isEn ? `Recipients List (${activeFilteredGuests.length} In List)` : `Orodha ya Wageni Watakaotumiwa (${activeFilteredGuests.length} Kwenye Orodha)`}</span>
             </h3>
             <p className="text-slate-400 text-[11px] mt-0.5">
-              Makisio ya RSVP yanatolewa moja kwa moja kutoka kwenye moduli kuu ya RSVP ili kupanga vyema utumaji wa Save The Date.
+              {isEn ? 'RSVP estimates are synced directly from the main RSVP module.' : 'Makisio ya RSVP yanatolewa moja kwa moja kutoka kwenye moduli kuu ya RSVP ili kupanga vyema utumaji wa Save The Date.'}
             </p>
           </div>
 
@@ -707,7 +707,7 @@ Karibu sana!`);
               className="px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl transition shadow hover:shadow-[0_0_12px_rgba(244,63,94,0.3)] flex items-center gap-1.5 disabled:opacity-50 disabled:hover:shadow-none disabled:cursor-not-allowed cursor-pointer disabled:bg-white/10"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>{sendingAll ? 'Inatuma...' : 'Tuma kwa Kikundi Hiki'}</span>
+              <span>{sendingAll ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Send to this Group' : 'Tuma kwa Kikundi Hiki')}</span>
             </button>
           </div>
         </div>
@@ -718,28 +718,28 @@ Karibu sana!`);
             onClick={() => setRsvpFilter('all')}
             className={`px-3 py-1.5 rounded-lg transition-all font-bold uppercase cursor-pointer ${rsvpFilter === 'all' ? 'bg-slate-800 text-white border border-white/10' : 'text-slate-400 hover:text-slate-200'}`}
           >
-            Wote ({guests.filter(g => g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')).length})
+            {isEn ? 'All' : 'Wote'} ({guests.filter(g => g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')).length})
           </button>
           <button
             onClick={() => setRsvpFilter('confirmed')}
             className={`px-3 py-1.5 rounded-lg transition-all font-bold uppercase cursor-pointer flex items-center gap-1 ${rsvpFilter === 'confirmed' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            Waliodhibitisha RSVP ({guests.filter(g => (g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')) && g.rsvpStatus === 'Atahudhuria').length})
+            {isEn ? 'Confirmed RSVP' : 'Waliodhibitisha RSVP'} ({guests.filter(g => (g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')) && g.rsvpStatus === 'Atahudhuria').length})
           </button>
           <button
             onClick={() => setRsvpFilter('pending')}
             className={`px-3 py-1.5 rounded-lg transition-all font-bold uppercase cursor-pointer flex items-center gap-1 ${rsvpFilter === 'pending' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            Bado Hawajajibu ({guests.filter(g => (g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')) && (!g.rsvpStatus || g.rsvpStatus === 'Bado')).length})
+            {isEn ? 'Pending RSVP' : 'Bado Hawajajibu'} ({guests.filter(g => (g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')) && (!g.rsvpStatus || g.rsvpStatus === 'Bado')).length})
           </button>
           <button
             onClick={() => setRsvpFilter('declined')}
             className={`px-3 py-1.5 rounded-lg transition-all font-bold uppercase cursor-pointer flex items-center gap-1 ${rsvpFilter === 'declined' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-rose-450"></span>
-            Waliokataa ({guests.filter(g => (g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')) && g.rsvpStatus === 'Hatahudhuria').length})
+            {isEn ? 'Declined' : 'Waliokataa'} ({guests.filter(g => (g.eventId === eventDetails.id || (!g.eventId && eventDetails.id === 'event-starter')) && g.rsvpStatus === 'Hatahudhuria').length})
           </button>
         </div>
 
@@ -768,9 +768,9 @@ Karibu sana!`);
               <AlertCircle className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <p className="font-extrabold text-white text-xs">Bado Hakuna Hageni Kwenye Kikundi Hiki!</p>
+              <p className="font-extrabold text-white text-xs">{isEn ? 'No Guests Found in this Group!' : 'Bado Hakuna Hageni Kwenye Kikundi Hiki!'}</p>
               <p className="text-slate-400 text-[10.5px] leading-relaxed max-w-sm mx-auto mt-1">
-                Hakuna wageni walioainishwa hapa kwa kutumia chujio cha sasa. Unaweza kubadilisha chujio ili kuangalia makundi mengine.
+                {isEn ? 'No guests were found using the current filter. Try changing the filter to view other groups.' : 'Hakuna wageni walioainishwa hapa kwa kutumia chujio cha sasa. Unaweza kubadilisha chujio ili kuangalia makundi mengine.'}
               </p>
             </div>
           </div>
@@ -793,7 +793,7 @@ Karibu sana!`);
                       </span>
                       {sentGuestsMap[g.id] && (
                         <span className="inline-flex bg-rose-500/20 text-rose-400 border border-rose-500/20 text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold items-center gap-0.5">
-                          <Check className="w-2.5 h-2.5 shrink-0"/> Imetumwa
+                          <Check className="w-2.5 h-2.5 shrink-0"/> {isEn ? 'Sent' : 'Imetumwa'}
                         </span>
                       )}
                       <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-bold font-mono border whitespace-nowrap ${
@@ -802,13 +802,13 @@ Karibu sana!`);
                         g.rsvpStatus === 'Labda' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
                         'bg-slate-500/15 border-slate-500/30 text-slate-400'
                       }`}>
-                        {g.rsvpStatus === 'Bado' || !g.rsvpStatus ? 'Bado Jibu' : g.rsvpStatus}
+                        {g.rsvpStatus === 'Bado' || !g.rsvpStatus ? (isEn ? 'Pending' : 'Bado Jibu') : (isEn ? (g.rsvpStatus === 'Atahudhuria' ? 'Attending' : g.rsvpStatus === 'Hatahudhuria' ? 'Declined' : 'Maybe') : g.rsvpStatus)}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono">
-                      <span>{g.phone || 'Bila Namba'}</span>
+                      <span>{g.phone || (isEn ? 'No Phone' : 'Bila Namba')}</span>
                       <span className="w-1 h-1 rounded-full bg-white/20 hidden sm:block"></span>
-                      <span className="hidden sm:inline">CODE: {g.code || 'Bila'}</span>
+                      <span className="hidden sm:inline">CODE: {g.code || (isEn ? 'None' : 'Bila')}</span>
                     </div>
                   </div>
 
@@ -824,10 +824,10 @@ Karibu sana!`);
                     <button
                       onClick={() => setViewGuestStd(g)}
                       className="px-2 py-1.5 bg-white/5 hover:bg-rose-500/10 hover:text-rose-455 text-slate-400 border border-white/5 rounded-lg text-[9px] font-bold flex items-center gap-1 cursor-pointer transition-all leading-none"
-                      title="View Save the Date ya mgeni huyu"
+                      title={isEn ? "View Save the Date for this guest" : "View Save the Date ya mgeni huyu"}
                     >
                       <Eye className="w-3.5 h-3.5 text-rose-400" />
-                      <span className="hidden lg:inline">Kadi</span>
+                      <span className="hidden lg:inline">{isEn ? 'Card' : 'Kadi'}</span>
                     </button>
 
                     <button 
@@ -891,7 +891,7 @@ Karibu sana!`);
 
         {/* Right simulated cloud logger (4 Cols) */}
         <div className="lg:col-span-4 flex flex-col space-y-3">
-          <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">Miamala na Kumbukumbu ya Kutuma (Logs)</h4>
+          <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">{isEn ? 'Transactions and Send Logs' : 'Miamala na Kumbukumbu ya Kutuma (Logs)'}</h4>
           <div className="flex-grow bg-slate-950/60 rounded-2xl p-4 font-mono text-[9px] h-[300px] overflow-y-auto border border-white/10 space-y-1.5 leading-relaxed antialiased">
             {sendLogs.length === 0 ? (
               <p className="text-slate-600 italic">Kubonyeza "Tuma kwa Kikundi Hiki" au kutuma kadi moja mmoja kutaorodhesha taarifa za kadi hapa...</p>
@@ -932,7 +932,7 @@ Karibu sana!`);
                   <Heart className="w-2.5 h-2.5 fill-rose-500 animate-pulse" />
                   <span>PREVIEW KADI YA SAVE THE DATE</span>
                 </span>
-                <h4 className="text-xs text-slate-400 italic">Mgeni: <span className="font-extrabold text-white not-italic uppercase">{viewGuestStd.name}</span></h4>
+                <h4 className="text-xs text-slate-400 italic">{isEn ? 'Guest' : 'Mgeni'}: <span className="font-extrabold text-white not-italic uppercase">{viewGuestStd.name}</span></h4>
               </div>
 
               {/* Aspect Ratio 9:13 Card Display */}
@@ -964,7 +964,7 @@ Karibu sana!`);
               <div className="bg-[#0c141a] border border-white/10 p-3.5 rounded-xl w-full text-left space-y-1">
                 <span className="text-[9px] font-bold text-rose-455 uppercase tracking-widest font-mono flex items-center gap-1.5 leading-none">
                   <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Ujumbe wa Mgeni Huyu ({viewGuestStd.phone})</span>
+                  <span>{isEn ? 'Message for this Guest' : 'Ujumbe wa Mgeni Huyu'} ({viewGuestStd.phone})</span>
                 </span>
                 <p className="text-[10px] text-slate-300 font-mono leading-relaxed whitespace-pre-wrap max-h-24 overflow-y-auto select-all">
                   {getCompiledMessage(viewGuestStd)}

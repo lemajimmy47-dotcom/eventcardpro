@@ -1,0 +1,208 @@
+  const isEn = language === 'en';
+  const [treasuryNotes, setTreasuryNotes] = useState<string>(isEn ? 'Direct collection' : 'Makusanyo ya kamati');
+      setUploadError(isEn ? "File is too large (max 20MB)" : "Faili ni kubwa kupita kiasi (max 20MB)");
+      alert(isEn ? "All guests have active pledges!" : "Wageni wote tayari wana ahadi!");
+        head: [isEn ? ['S/N', 'Payer (Guest Name)', 'Phone', 'Amount (TZS)', 'Date', 'Ref', 'SMS', 'WA'] : ['S/N', 'Mlipaji (Guest Name)', 'Simu', 'Kiasi (TZS)', 'Tarehe', 'Ref', 'SMS', 'WA']],
+        isEn ? 'GRAND TOTAL OUTSTANDING' : 'JUMLA INAYODAIWA',
+        head: [isEn 
+        isEn ? 'GRAND TOTAL PAID' : 'JUMLA WALIOLIPA',
+        head: [isEn 
+        isEn ? 'GRAND TOTAL PLEDGES' : 'JUMLA YA AHADI',
+        head: [isEn 
+        isEn ? 'TOTAL NO PLEDGE' : 'JUMLA WASIOAHIDI',
+        `${unpledgedList.length} ${isEn ? 'Guests' : 'Wageni'}`,
+        head: [isEn 
+        isEn ? 'TOTAL CHECKED IN' : 'JUMLA YA WALIOINGIA',
+        `${list.length} ${isEn ? 'Cards' : 'Kadi'}`,
+        head: [isEn 
+        isEn ? 'GRAND TOTAL' : 'JUMLA KUU',
+        isEn ? `${sumRSVPPeople} Attending Guests` : `${sumRSVPPeople} Watu Watakaohudhuria`,
+        head: [isEn 
+    csvContent += isEn 
+      setPinError(isEn ? 'Incorrect PIN code' : 'Nywila sio sahihi. Namba za kujaribu: 1234, 2222, 3333, au 4444');
+          {isEn ? "Committee Module Secured" : "Bodi ya Kamati Imefungwa"}
+          {isEn 
+              placeholder={isEn ? "Enter PIN" : "Weka PIN"}
+            {isEn ? "Unlock Dashboard" : "Fungua Mfumo"}
+          <span>{isEn ? "End-to-End Encrypted Access" : "Mfumo umelindwa kikamilifu (AES-256)"}</span>
+              {isEn ? "Role-Based Permissions Sandbox" : "Pitia Majukumu ya Wanakamati (Simulator)"}
+              {isEn ? "Toggle simulated positions to witness secure access scopes in action instantly:" : "Bonyeza majukumu tofauti hapa chini ili kuona jinsi gani mifumo ya ulinzi inavyofanya kazi:"}
+              { tag: 'Event Owner', label: isEn ? 'Event Owner / Admin' : 'Mwenye Shughuli (Admin)' },
+              { tag: 'Treasurer', label: isEn ? 'Treasurer' : 'Hazina (Treasurer)' },
+              { tag: 'Secretary', label: isEn ? 'Secretary' : 'Katibu (Secretary)' },
+              { tag: 'Committee Member', label: isEn ? 'Committee Member' : 'Mjumbe wa Kamati' }
+              {activeRole === 'Event Owner' && (isEn ? "Logged in as Event Owner (Full Access Granted)" : "Umeingia kama Mwenye Shughuli (Ruhusa Kamili ya Admin)")}
+              {activeRole === 'Treasurer' && (isEn ? "Logged in as Mweka Hazina (Treasurer - Payments Access Only)" : "Umeingia kama Mweka Hazina (Hazina - Ruhusa ya Kuongeza Malipo tu, Hakuna kufuta)")}
+              {activeRole === 'Secretary' && (isEn ? "Logged in as Katibu (Secretary - Viewer Access with Pledges & Lists)" : "Umeingia kama Katibu wa Kamati (Secretary - Kuona data pekee, Hakuna kuhariri)")}
+              {activeRole === 'Committee Member' && (isEn ? "Logged in as Committee Member (Summary Dashboard Only - Personal logs hidden)" : "Umeingia kama Mjumbe wa Kamati (Summary tu - Taarifa za kifedha za mtu mmoja mmoja zimefichwa)")}
+              {activeRole === 'Event Owner' && (isEn ? "✓ Modify targets • ✓ Manage committee members • ✓ Record payments • ✓ Deep analytics • ✓ Public progress manager" : "✓ Badilisha Malengo • ✓ Ongeza Wanakamati • ✓ Sajili malipo yote • ✓ Utendaji wa log na Ripoti")}
+              {activeRole === 'Treasurer' && (isEn ? "✓ Record payment amounts • ✓ Print/download reports • ✗ Cannot delete records • ✗ Cannot change committee members" : "✓ Sajili malipo mapya • ✓ Pakua Ripoti • ✗ Huwezi kufuta muamala wowote • ✗ Huwezi kubadili wajumbe")}
+              {activeRole === 'Secretary' && (isEn ? "✓ Read-only guests & pledges • ✓ Export reports • ✗ Cannot add payments • ✗ Cannot modify system setups" : "✓ Tazama wageni na ahadi zao • ✓ Pakua Ripoti • ✗ Huwezi kuongeza malipo wala kuandikisha data")}
+              {activeRole === 'Committee Member' && (isEn ? "✓ Summary widgets & charts only • ✗ Restricted from viewing detailed names, individual payment logs, or contact numbers" : "✓ Tazama asilimia na chati tu • ✗ Umezuiliwa kuona majina, simu au kiasi kimoja kimoja cha mtu kukulinda siri")}
+          <span>{isEn ? "Lock / Logout 🔒" : "Ondoka Kwenye Mfumo 🔒"}</span>
+          { id: 'dashboard', label: isEn ? 'Dashboard Summary' : 'Mwanzo wa Kamati', icon: Layers },
+          { id: 'analytics', label: isEn ? 'Analytics & Trends' : 'Takwimu za Chati', icon: TrendingUp },
+          { id: 'reports', label: isEn ? 'Committee Reports' : 'Ripoti za Kamati', icon: Printer },
+          { id: 'members', label: isEn ? 'Manage Committee' : 'Wanakamati wote', icon: Users },
+          { id: 'contributions', label: isEn ? 'Contribution Module' : 'Michango & Kadi', icon: Coins },
+          { id: 'files', label: isEn ? 'Documents & Files' : 'Nyaraka & Faili', icon: FolderOpen },
+          { id: 'activity', label: isEn ? 'Activity Logs' : 'Kihistoria cha Logs', icon: Activity },
+          { id: 'public-link', label: isEn ? 'Public Tracking Link' : 'Public Progress Link', icon: Share2 }
+                  {isEn ? "Active Target Tracker" : "Mfuatiliaji Maalum wa Fundraising Target"}
+                  {isEn ? "FUNDRAISING GOAL STATUS" : "MALENGO YA MAKUSANYO (TARGET TRACKER)"}
+                  {isEn ? "Comparison with the target set by the event organization committee:" : "Kiasi kilichopangwa na kamati kulinganisha na makusanyo ya sasa:"}
+                    {isEn ? "Set Target Goal (TZS):" : "Weka Target ya Sherehe (TZS):"}
+                  <span className="text-[9px] text-slate-500 block">{isEn ? "Click out / tab save" : "Bofya nje ili kuhifadhi"}</span>
+                  <p className="text-[10px] uppercase font-mono text-slate-400">{isEn ? "Fundraising Target Set" : "Kiwango cha Target kilichosajiliwa"}</p>
+                <span className="text-[10px] font-mono uppercase text-slate-400 block">{isEn ? "Target Amount" : "Shabaha Iliyowekwa"}</span>
+                <span className="text-[10px] font-mono uppercase text-emerald-400 block">{isEn ? "Collected (Paid)" : "Kiasi Kilichokusanywa"}</span>
+                <span className="text-[10px] font-mono uppercase text-rose-400 block">{isEn ? "Remaining Balance" : "Gharama Iliyobaki"}</span>
+                <span className="text-amber-400">{isEn ? "Collection Progress:" : "Maendeleo ya Makusanyo:"}</span>
+              <span className="text-[9.5px] font-mono text-slate-400 uppercase font-bold">{isEn ? "Total Guests" : "Wageni Wote"}</span>
+              <p className="text-[9px] text-slate-500 italic">{isEn ? "Guests loaded in directory" : "Wageni wote walioalikwa"}</p>
+              <span className="text-[9.5px] font-mono text-cyan-400 uppercase font-bold">{isEn ? "Contributors Count" : "Idadi Waliotoa Ahadi"}</span>
+                {(( (metrics.pledgedCount + metrics.partiallyPaidCount + metrics.fullyPaidCount) / (metrics.totalGuests || 1)) * 100).toFixed(0)}% {isEn ? "of guests participated" : "ya wageni wote walioshiriki"}
+              <span className="text-[9.5px] font-mono text-amber-400 uppercase font-bold">{isEn ? "Total Pledged" : "Jumla ya Ahadi TZS"}</span>
+              <p className="text-[9px] text-slate-500 italic">{isEn ? "Official commitment commitments" : "Thamani ya ahadi rasmi"}</p>
+              <span className="text-[9.5px] font-mono text-emerald-400 uppercase font-bold">{isEn ? "Total Collected" : "Jumla ya Malipo TZS"}</span>
+              <p className="text-[9px] text-emerald-500/80 font-bold font-mono">TZS {metrics.outstandingBalance.toLocaleString()} {isEn ? "pending due" : "inadaiwa"}</p>
+                <span className="text-[9px] font-mono text-emerald-400 uppercase font-bold block">{isEn ? "Fully Paid Contributors" : "Waliolipa Ahadi Yote"}</span>
+                <span className="text-[9px] font-mono text-cyan-400 uppercase font-bold block">{isEn ? "Partially Paid Contribs" : "Waliolipa Nusu/Sehemu"}</span>
+                <span className="text-[9px] font-mono text-amber-400 uppercase font-bold block">{isEn ? "No Pledge Registered" : "Bado hawajaahidi"}</span>
+                <span className="text-[9px] font-mono text-rose-455 uppercase font-bold block">{isEn ? "Outstanding Balance" : "Sura ya Salio linalodaiwa"}</span>
+                    <span>{isEn ? "Live Contributions Activity Feed" : "Kichunguzi cha Makusanyo ya Live (Live Feed)"}</span>
+                  <p className="text-[10px] text-slate-450">{isEn ? "Recent transactions logged in committee" : "Miamala ya makusanyo inayotokea hivi punde kwenye kamati"}</p>
+                  <span className="text-[9.5px] font-mono text-slate-400">{isEn ? "Auto-refresh in:" : "Inajisafisha baada ya:"} <strong className="text-amber-400">{secondsToRefresh}s</strong></span>
+                  {isEn ? "Sandbox helper: Simulate a guest completing their financial pledge online:" : "Sandbox: Gusa kitufe cha upande wa kulia ili ku-simulate mgeni kuongeza ahadi mpya kwenye mfumo:"}
+                  <span>{isEn ? "Simulate Guest Pledge" : "Simulate Ahadi Mpya"}</span>
+                    {isEn ? "No contribution payments registered yet on this event." : "Bado hakuna mabadiliko au malipo yoyote yaliyosajiliwa kwenye event ya sasa."}
+                              {p.notes || (isEn ? "Contribution" : "Mchango wa Harusi")} • Ref: <span className="text-slate-350">{p.reference}</span>
+                  {isEn ? "Simulated Ledger Options" : "Mionekano ya Wajumbe (Role-Action Security)"}
+                    ? (isEn ? "Treasurer Tools: Select any guest below to record as payment updates." : "Kama Mweka Hazina, unaweza kurekodi malipo mapya ya wageni hapa:")
+                    : (isEn ? "Only Trem/Owner may register collections. View list below:" : "Ni Mweka Hazina tu mwenye uwezo wa kurekodi malipo mapya ya mgeni:")
+                      {isEn ? "ACCESS RESTRICTED" : "KAZI IMEZUIWA KWA MJUMBE"}
+                      {isEn ? "According to security control 16.11, general Committee Members cannot view names or individual payment levels. Switch simulator to Event Owner or Treasurer above to unlock." : "Kwa kuzingatia sheria ya kiratibu 16.11 na usalama, mjumbe wa kamati wa kawaida hawezi kuona majina au kiasi kimoja kimoja cha wachangiaji."}
+                            {isEn ? "Pledged" : "Ahadi"}: TZS {(g.pledgeAmount || 0).toLocaleString()} • {isEn ? "Paid" : "Kusanywa"}: TZS {(g.paidAmount || 0).toLocaleString()}
+                  <span>{isEn ? "Committee Alert & Event Notification Dispatch Logs" : "Mfumo wa Taarifa Maalum za Kamati (Notifications)"}</span>
+                  {isEn ? "Pledges, completions, and fundraising target achieved alert indicators:" : "Taarifa zote za papo kwa papo za ahadi mpya, makusanyo kukamilika au target kuu kufikiwa:"}
+                  {isEn ? "Clear Alerts" : "Futa Zote"}
+                  {isEn ? "No notifications registered." : "Hakuna taarifa yoyote mpya ya mabadiliko ya michango kwa sasa."}
+                  {isEn ? "Collection Flow Progress Graph" : "Kasi ya Makusanyo kwa Siku (Collection Trend Tracker)"}
+                  {isEn ? "Historical progression tracking daily, weekly or monthly incoming collections:" : "Kiasi cha miamala inayoingia nchini kila siku kuwezesha kamati kupanga bajeti:"}
+                  <span className="text-[10px] font-mono uppercase text-slate-400 block">{isEn ? "Daily Collection Flow" : "Kiwango cha Daily Collections"}</span>
+                  <span className="text-[10px] font-mono uppercase text-slate-400 block">{isEn ? "Estimated Weekly Rate" : "Kadirio Weekly Collections"}</span>
+                  <span className="text-[10px] font-mono uppercase text-slate-400 block">{isEn ? "Active Event Month Sum" : "Monthly Sum (Target status)"}</span>
+                  <span>{isEn ? "Pledging Hall of Honor" : "Watunza Heshima (Top Contributors)"}</span>
+                  {isEn ? "Highest individual pledges registered on this active event:" : "Orodha ya wageni waliosajili ahadi zenye thamani kubwa zaidi ya michango:"}
+                  <p className="font-mono text-[11px] text-rose-455 uppercase font-black">{isEn ? "ACCESS RESTRICTED" : "KAZI IMEZUIWA"}</p>
+                    {isEn ? "Committee members can only view general collection rates. Individual rosters are protected." : "Wajumbe wamezuiwa kuona majina kuzuia upendeleo."}
+                      {isEn ? "No registered pledges yet." : "Bado hakuna ahadi zilizowekwa."}
+                              {isEn ? "Paid" : "Amelipa"}: TZS {(g.paidAmount || 0).toLocaleString()}
+                <span>{isEn ? "Financial Committee Official Ledgers" : "Mfumo Muhimu wa Ripoti za Vitengo vya Sherehe"}</span>
+                {isEn ? "Generate, export, and formulate reports for the financial audit committee:" : "Zalisha, kagua na andaa matokeo rasmi ya makusanyo kwa wajumbe wa harusi:"}
+                <span>{isEn ? "Export Official PDF" : "Pakua Ripoti ya PDF (Rasmi)"}</span>
+              { id: 'Summary', name: isEn ? '1. Summary Ledger' : '1. Muhtasari wa Michango' },
+              { id: 'Collection', name: isEn ? '2. Collections Log' : '2. Ripoti ya Makusanyo' },
+              { id: 'Outstanding', name: isEn ? '3. Due Balances' : '3. Wenye Salio la Deni' },
+              { id: 'FullyPaid', name: isEn ? '4. Fully Paid' : '4. Waliolipa Yote' },
+              { id: 'Pending', name: isEn ? '5. Active Pledges' : '5. Wenye Ahadi' },
+              { id: 'NoPledge', name: isEn ? '6. No Pledge' : '6. Wasioahidi Bado' },
+              { id: 'Attendance', name: isEn ? '7. Attendance Log' : '7. Mahudhurio ya Wageni' },
+              { id: 'RSVP_Report', name: isEn ? '8. RSVP & Messages' : '8. RSVP & Ujumbe' },
+                  <p className="text-[9px] font-mono text-slate-500">{isEn ? "Active Report:" : "Aina ya Ripoti ya Sasa:"} <strong className="text-white uppercase">{selectedReport}</strong> • Printed At: {new Date().toLocaleDateString('sw-TZ')}</p>
+                      <p className="font-semibold uppercase tracking-wider text-slate-400">{isEn ? 'Exported/Printed Date:' : 'Tarehe ya Kuchapishwa:'}</p>
+                      {isEn ? 'OFFICIAL CONTRIBUTIONS REPORT' : 'RIPOTI RASMI YA MICHANGO'}
+                      <span>{isEn ? 'Event Date:' : 'Tarehe ya Sherehe:'}</span>
+                      <span className="text-[9.5px] font-black text-blue-50 uppercase tracking-[0.2em]">{isEn ? 'TARGET BUDGET' : 'MALENGO (TARGET)'}</span>
+                      <span className="text-[9.5px] font-black text-amber-50 uppercase tracking-[0.2em]">{isEn ? 'TOTAL PLEDGED' : 'JUMLA YA AHADI'}</span>
+                      <span className="text-[9.5px] font-black text-emerald-50 uppercase tracking-[0.2em]">{isEn ? 'CASH COLLECTED' : 'FEDHA TASLIMU'}</span>
+                      <span className="text-[9.5px] font-black text-rose-50 uppercase tracking-[0.2em]">{isEn ? 'OUTSTANDING BAL' : 'DENI / SALIO'}</span>
+                        {isEn ? 'GROUP LEVEL SUMMARIES' : 'MUHTASARI KWA MAKUNDI'}
+                            <th className="py-2.5 px-4 border-r border-slate-200 print-border-gray uppercase tracking-wider">{isEn ? 'Campaign Group' : 'Kundi la Mchangiaji'}</th>
+                            <th className="py-2.5 px-4 border-r border-slate-200 text-center print-border-gray uppercase tracking-wider">{isEn ? 'Count' : 'Idadi'}</th>
+                            <th className="py-2.5 px-4 border-r border-slate-200 text-right print-border-gray uppercase tracking-wider">{isEn ? 'Total Pledged' : 'Jumla ya Ahadi'}</th>
+                            <th className="py-2.5 px-4 border-r border-slate-200 text-right print-border-gray uppercase tracking-wider">{isEn ? 'Collected Cash' : 'Makusanyo'}</th>
+                            <th className="py-2.5 px-4 text-right print-border-gray uppercase tracking-wider">{isEn ? 'Balances' : 'Mabaki (TZS)'}</th>
+                            <td className="py-2.5 px-4 border-r border-slate-200 print-border-gray">{isEn ? 'TOTALS' : 'JUMLA KUU'}</td>
+                        {isEn ? 'MASTER GUEST REVENUE DATABASE' : 'DAFTARI KUU LA MICHANGO YA WAGENI'}
+                        {guests.length} {isEn ? 'GUESTS TOTAL' : 'WAGENI WOTE'}
+                            <th className="py-2.5 px-3 border-r border-slate-200 text-center print-border-gray uppercase tracking-wider">{isEn ? 'S/N' : 'Na.'}</th>
+                            <th className="py-2.5 px-3 border-r border-slate-200 print-border-gray uppercase tracking-wider">{isEn ? 'Guest Full Name' : 'Jina la Mgeni'}</th>
+                            <th className="py-2.5 px-3 border-r border-slate-200 print-border-gray uppercase tracking-wider">{isEn ? 'Mobile' : 'Simu'}</th>
+                            <th className="py-2.5 px-3 border-r border-slate-200 print-border-gray uppercase tracking-wider">{isEn ? 'Category' : 'Kundi'}</th>
+                            <th className="py-2.5 px-3 border-r border-slate-200 text-right print-border-gray uppercase tracking-wider">{isEn ? 'Pledge' : 'Ahadi'}</th>
+                            <th className="py-2.5 px-3 border-r border-slate-200 text-right print-border-gray uppercase tracking-wider">{isEn ? 'Paid Amt' : 'Imelipwa'}</th>
+                            <th className="py-2.5 px-3 border-r border-slate-200 text-right print-border-gray uppercase tracking-wider">{isEn ? 'Balance' : 'Salio'}</th>
+                            <th className="py-2.5 px-3 print-border-gray uppercase tracking-wider">{isEn ? 'Clearance' : 'Hali'}</th>
+                                {isEn ? g.clearance : (g.clearance === 'Completed' ? 'Umekamilisha' : g.clearance === 'Partial' ? 'Kiasi' : 'Bado')}
+                      <span>{isEn ? 'Download Excel / CSV' : 'Pakua Excel / CSV'}</span>
+                      <span>{isEn ? 'Direct Browser Print' : 'Chapa Moja kwa Moja'}</span>
+                      <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{isEn ? 'TOTAL COLLECTION' : 'JUMLA MAKUSANYO'}</p>
+                         <span className="text-[9px] text-emerald-500 font-bold uppercase">{isEn ? 'Success Rate' : 'Kiwango cha Mafanikio'}</span>
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{isEn ? 'PAYMENTS COUNT' : 'IDADI YA MALIPO'}</p>
+                         <span className="text-[9px] text-blue-500 font-bold uppercase">{isEn ? 'Average Trans' : 'Wastani wa Malipo'}</span>
+                      <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">{isEn ? 'PENDING COMMITMENT' : 'PENDING COMMITMENT'}</p>
+                         <span className="text-[9px] text-amber-500 font-bold uppercase">{isEn ? 'In Arrears' : 'Inadaiwa'}</span>
+                         <span className="text-[10px] font-black text-rose-400">{isEn ? 'Action Required' : 'Hatua Inahitajika'}</span>
+                {isEn ? "Add New Committee Members" : "Ongeza Wanakamati Wapya"}
+                {isEn ? "Invitations Dispatch Center" : "Sajili Mjumbe wa Kamati"}
+                {isEn ? "System dispatches instant access login links to target members:" : "Utatuma kiungo cha ufikiaji na namba ya logins papo kwa hapo kwa mjumbe mpya:"}
+                <label className="font-bold text-slate-300 block uppercase font-mono text-[9.5px]" htmlFor="member-fullname">{isEn ? "Full Name:" : "Jina Kamili la Mjumbe:"}</label>
+                  <label className="font-bold text-slate-300 block uppercase font-mono text-[9.5px]" htmlFor="member-phone">{isEn ? "Phone Number:" : "Simu ya Mkononi:"}</label>
+                  <label className="font-bold text-slate-300 block uppercase font-mono text-[9.5px]" htmlFor="member-email">{isEn ? "Email address:" : "Barua Pepe (Email):"}</label>
+                <label className="font-bold text-slate-300 block uppercase font-mono text-[9.5px]">{isEn ? "Position & Responsibility:" : "Nafasi kwenye Kamati (Position):"}</label>
+                <label className="font-bold text-slate-300 block uppercase font-mono text-[9.5px]">{isEn ? "Invitation Channel:" : "Njia ya Kutuma Mwaliko:"}</label>
+                {isEn ? "Send Login Link invitation" : "Alika Mjumbe (Tuma Login Link)"}
+                {isEn ? "Registered Committee Members list" : "Orodha ya Wanakamati waliopo kwenye mfumo"}
+              <p className="text-slate-450 text-[10.5px]">{isEn ? "Roster of honor with position configurations:" : "Kadi za watendaji wa kamati ya sasa kufuana na mamlaka yao:"}</p>
+                      {isEn ? 'Remove' : 'Ondoa'}
+                    {isEn ? "Share Dashboard Access (PIN Locks)" : "Shiriki Viungo kwa Wajumbe Nakala"}
+                  {isEn 
+                      alert(isEn ? 'Copied to clipboard' : 'Ujumbe umenakiliwa! Sasa unaweza kwenda ku-paste (kubandika) Whatsapp kwa wanakamati!');
+                    {isEn ? "Copy Access Message for WhatsApp" : "Nakili Ujumbe kwa ajili ya WhatsApp"}
+              <span>{isEn ? "Committee Activity Log audits" : "Kihistoria cha Logs za Wanakamati (Audit Trails)"}</span>
+              {isEn ? "System audit events recorded on this event space dynamically:" : "Tathmini ya mienendo yote inayofanywa na wajumbe kuzuia ufisadi na kudhibiti data zote:"}
+                <th className="py-2.5 px-3">{isEn ? 'USER' : 'MTENDAJI'}</th>
+                <th className="py-2.5 px-3">{isEn ? 'ACTION EXECUTED' : 'KITENDO'}</th>
+                <th className="py-2.5 px-3">{isEn ? 'DATE / TIME' : 'MUDA'}</th>
+                <th className="py-2.5 px-3 text-right">{isEn ? 'IP ADDRESS' : 'IP ADDRESS'}</th>
+              {isEn ? "Public Progress tracker indicator" : "Kiungo cha Maendeleo ya Harusi ya Public (Public Link)"}
+              {isEn ? "SECURE PUBLIC TRACKING LINK" : "WEKA KIUNGO MAALUM KWA PUBLIC"}
+              {isEn ? "According to mandate 16.10, this link is completely safe to share in WhatsApp groups. Displays overall progress bar and metrics without any contributor names or confidential data." : "Sheria ya 16.10: Kiungo hiki kiko salama kabisa kushirikisha kwenye vikundi vya WhatsApp vya kamati nzima ya harusi. Inaonyesha asilimia pekee bila kuonyesha majina ya watu."}
+              <span className="text-[10px] font-mono text-slate-400 uppercase font-bold">{isEn ? "Generated Public Progress URL:" : "Kiungo cha maendeleo kilichozalishwa na mfumo:"}</span>
+                  alert(isEn ? "Copied public link!" : "Copied successfully!");
+              <span>{isEn ? "Live Preview Public URL Page" : "Fungua Public Progress Page"}</span>
+                {isEn ? "Secure Shared repository" : "Hifadhi ya Faili na Nyaraka Pamoja"}
+                {isEn ? "EVENT SHARED DOCUMENTS & RECORDS" : "NYARAKA NA FAILI ZA KAMATI YA SHEREHE"}
+                {isEn ? "Upload and access planning guides, pdf flyers, event program outlines, schedules, budgets, and template designs." : "Pakia na uhifadhi miongozo ya sherehe, bajeti za Excel, ratiba za PDF, michoro ya kumbi au images mbalimbali za kamati yetu."}
+                      {isEn ? "Choose File To Upload" : "Chagua Faili la Kupakia"}
+                      {isEn ? "or drag and drop it here" : "au kokota na uwasilishe hapa"}
+                      {isEn ? "Formats: PDF, XLSX, DOCX, PNG, JPG" : "Aina: PDF, Excel, Word, Picha"}
+                      {isEn ? "Max: 1.5MB per file" : "Kikomo: 1.5MB kwa faili"}
+                  <span>{isEn ? "System Integrity & Encryption" : "Ulinzi na Usiri wa Faili"}</span>
+                  {isEn ? "All files are converted into highly compressed secure base64 format for high availability. Larger file templates are logged and compiled dynamically." : "Faili zote zinabanwa kitaalam na kubadilishwa kuwa base64 kwa ajili ya kufikiwa kwa haraka, kukuwezesha kuzindua na kuzisambaza bila hasara ya data."}
+                  { id: 'all', label: isEn ? 'All Files' : 'Zote', count: eventFiles.length },
+                  { id: 'spreadsheet', label: isEn ? 'Tables / Excel' : 'Lahajedwali', count: eventFiles.filter(f => f.category === 'spreadsheet').length },
+                  { id: 'document', label: isEn ? 'Documents' : 'Nyaraka za Matini', count: eventFiles.filter(f => f.category === 'document').length },
+                  { id: 'image', label: isEn ? 'Images & Cards' : 'Picha na Kadi', count: eventFiles.filter(f => f.category === 'image').length }
+                      <h4 className="text-xs font-black text-white uppercase">{isEn ? "No Files Found" : "Hakuna Faili Lililopatikana"}</h4>
+                        {isEn ? "No files stored under this category yet. Upload a document from the panel on the left." : "Hakuna nyaraka au picha iliyohifadhiwa hapa kwa sasa. Pakia document kutoka upande wa kushoto."}
+                                  title={isEn ? "Download file" : "Pakua faili"}
+                                  <span>{isEn ? "GET" : "PAKUA"}</span>
+                                      if (confirm(isEn ? `Are you sure you want to delete ${file.name}?` : `Je, una uhakika wa kufuta faili la ${file.name}?`)) {
+                                    title={isEn ? "Delete file" : "Futa faili"}
+                {isEn ? "Record Contribution Payment Piece" : "Kamati: Sajili Malipo ya Mchango"}
+                {isEn ? "Target Pledge" : "Ahadi"}: TZS {treasuryTargetGuest.pledgeAmount?.toLocaleString()} • {isEn ? "Paid" : "Amelipa So far"}: TZS {(treasuryTargetGuest.paidAmount || 0).toLocaleString()}
+                  {isEn ? "Enter Amount Paid (TZS):" : "Kiasi Kilicholipwa Sasa (TZS):"}
+                  {isEn ? "Transaction Reference (MPESA/CRDB etc):" : "Kumbukumbu la Muamala / Reference:"}
+                  {isEn ? "Short Audit Notes:" : "Maelezo Mafupi (Notes):"}
+                  {isEn ? "Cancel" : "Ghairi"}
+                  {isEn ? "Submit Payment" : "Sajili Matokeo"}
+                {event.name || (isEn ? "Our Event Fundraise Progress" : "MICHANGO YA HARUSI YETU")}
+                {isEn ? "OFFICIAL PUBLIC AUDIT PROGRESS BAR" : "MAENDELEO YA MAKUSANYO YA KAMATI KIKAMILIFU"}
+                <span className="text-[10px] font-mono uppercase text-slate-400 block">{isEn ? "Target" : "Target kuu"}</span>
+                <span className="text-[10px] font-mono uppercase text-emerald-450 block">{isEn ? "Collected" : "Zilizolipwa"}</span>
+                <span className="text-[10px] font-mono uppercase text-rose-455 block">{isEn ? "Remaining" : "Bado Zinasalia"}</span>
+                <span className="text-slate-400">{isEn ? "Target Reached Rate:" : "Asilimia za Kufikia Lengo:"}</span>
+              <p className="font-bold">✓ {isEn ? "100% Secure & Confidential View" : "✓ Mfumo Salama wa Kuficha majina"}</p>
+                {isEn ? "Names of individual contributors are withheld to enforce privacy strictly according to regulation 16.11." : "Taarifa zote za siri za kila mtu zimefichwa kikamilifu ili kulinda watumiaji."}

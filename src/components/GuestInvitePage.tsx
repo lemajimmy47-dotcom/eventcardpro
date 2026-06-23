@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { EventDetails, TemplateSettings, Guest } from '../types';
 import { drawCardToCanvas } from '../utils/canvasHelper';
+import { useLanguage } from '../context/LanguageContext';
 
 interface GuestInvitePageProps {
   guest: Guest;
@@ -11,6 +12,8 @@ interface GuestInvitePageProps {
 }
 
 export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }: GuestInvitePageProps) {
+  const { language } = useLanguage();
+  const isEn = language === 'en';
   const [rsvpStatus, setRsvpStatus] = useState(guest.rsvpStatus || 'Bado');
   const [rsvpGuestsCount, setRsvpGuestsCount] = useState(guest.rsvpGuestsCount || 1);
   const [rsvpComment, setRsvpComment] = useState(guest.rsvpComment || '');
@@ -62,12 +65,12 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
         rsvpGuestsCount: 1,
         rsvpComment: ''
       });
-      setRsvpFeedback("Ahsante sana! Usiliki wako umerekodiwa.");
+      setRsvpFeedback(isEn ? "Thank you! Your response has been recorded." : "Ahsante sana! Usiliki wako umerekodiwa.");
       setTimeout(() => setRsvpFeedback(null), 4500);
     })
     .catch(err => {
       console.error(err);
-      setRsvpFeedback("Hitilafu imetokea. Tafadhali jaribu tena.");
+      setRsvpFeedback(isEn ? "An error occurred. Please try again." : "Hitilafu imetokea. Tafadhali jaribu tena.");
     })
     .finally(() => setRsvpUpdating(false));
   };
@@ -97,17 +100,17 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
 
         {cardImageUrl && (
           <motion.div initial={{opacity:0, scale:0.95}} animate={{opacity:1, scale:1}} className="text-center space-y-3">
-            <img src={cardImageUrl} className="mx-auto rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5" alt="Kadi ya Mwaliko" />
+            <img src={cardImageUrl} className="mx-auto rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5" alt={isEn ? "Invitation Card" : "Kadi ya Mwaliko"} />
           </motion.div>
         )}
 
         {/* Header */}
         <div className="text-center space-y-2 pb-1">
            <h1 className="text-2xl font-extrabold tracking-tight text-white uppercase">
-             MWALIKO WA {(event.name || "Tukio").toUpperCase()}
+             {isEn ? "INVITATION TO" : "MWALIKO WA"} {(event.name || (isEn ? "Event" : "Tukio")).toUpperCase()}
            </h1>
            <p className="text-sm text-neutral-400">
-             Karibu, mpendwa <span className="font-bold text-amber-400 uppercase">{guest.name}</span>
+             {isEn ? "Welcome, dear" : "Karibu, mpendwa"} <span className="font-bold text-amber-400 uppercase">{guest.name}</span>
            </p>
         </div>
 
@@ -118,8 +121,8 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
                 <span className="text-2xl">🎟️</span>
               </div>
               <div>
-                <h3 className="font-extrabold text-emerald-400 uppercase tracking-widest text-[14px]">RSVP - Thibitisha Ushiriki</h3>
-                <p className="text-[11px] text-neutral-500 mt-1">Tafadhali chagua chaguo lako hapa chini.</p>
+                <h3 className="font-extrabold text-emerald-400 uppercase tracking-widest text-[14px]">{isEn ? 'RSVP - Confirm Attendance' : 'RSVP - Thibitisha Ushiriki'}</h3>
+                <p className="text-[11px] text-neutral-500 mt-1">{isEn ? 'Please make your selection below.' : 'Tafadhali chagua chaguo lako hapa chini.'}</p>
               </div>
             </div>
 
@@ -129,14 +132,14 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
                 disabled={rsvpUpdating}
                 className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition active:scale-95 disabled:opacity-50 text-[12.5px] cursor-pointer shadow-lg"
               >
-                 {rsvpStatus === 'Atahudhuria' ? '✅ Umehudhuria' : 'Ndio, Nitahudhuria'}
+                 {rsvpStatus === 'Atahudhuria' ? (isEn ? '✅ Attending' : '✅ Umehudhuria') : (isEn ? 'Yes, I will attend' : 'Ndio, Nitahudhuria')}
               </button>
               <button 
                 onClick={() => performRsvpUpdate('Hatahudhuria')}
                 disabled={rsvpUpdating}
                 className="w-full py-4 bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold rounded-xl transition active:scale-95 disabled:opacity-50 text-[12.5px] cursor-pointer"
               >
-                 {rsvpStatus === 'Hatahudhuria' ? '❌ Umeghairi' : 'Hapana, Nina Udhuru'}
+                 {rsvpStatus === 'Hatahudhuria' ? (isEn ? '❌ Declined' : '❌ Umeghairi') : (isEn ? 'No, I cannot attend' : 'Hapana, Nina Udhuru')}
               </button>
               
               {event.mapsLink ? (
@@ -150,7 +153,7 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
                   </a>
               ) : (
                 <div className="w-full py-4 bg-white/5 text-neutral-500 font-extrabold rounded-xl text-[12.5px] flex items-center justify-center border border-white/5 cursor-not-allowed">
-                  LOCATION HAIJAPATIKANA
+                  {isEn ? "LOCATION NOT AVAILABLE" : "LOCATION HAIJAPATIKANA"}
                 </div>
               )}
             </div>
@@ -162,7 +165,7 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
             )}
             
             {rsvpUpdating && (
-                <div className="text-[11px] text-center text-neutral-500 mt-4">Inatuma...</div>
+                <div className="text-[11px] text-center text-neutral-500 mt-4">{isEn ? "Submitting..." : "Inatuma..."}</div>
             )}
           </div>
         </div>

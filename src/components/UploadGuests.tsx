@@ -285,7 +285,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
   }, [isBulkModalOpen]);
 
   const handleDownloadSampleCSV = () => {
-    const headers = "Jina la Mgeni,Namba ya Simu,Aina ya Kadi\n";
+    const headers = isEn ? "Guest Name,Phone Number,Card Type\n" : "Jina la Mgeni,Namba ya Simu,Aina ya Kadi\n";
     const rows = [
       "Eugen Mamboya,0714786751,DOUBLE",
       "Fatma Ally,0755883901,SINGLE",
@@ -448,7 +448,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     if (isDuplicateGuestUniversal(guestName, guestPhone, guests)) {
       alert(isEn 
         ? "Stop! A guest with this name or phone number already exists in the system (Duplicate information found)." 
-        : "Hataza! Mgeni mwenye jina hili au namba hii ya simu tayari yupo kwenye mfumo (Duplicate information found).");
+        : (isEn ? "Warning! A guest with this name or phone number already exists in the system (Duplicate information found)." : "Hataza! Mgeni mwenye jina hili au namba hii ya simu tayari yupo kwenye mfumo (Duplicate information found)."));
       setIsSubmitting(false);
       return;
     }
@@ -687,7 +687,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
       <html>
       <head>
         <meta charset="utf-8">
-        <title>EVENTCARD - Chapisha Kadi za Wageni</title>
+        <title>EVENTCARD - {isEn ? "Print Guest Cards" : "Chapisha Kadi za Wageni"}</title>
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
           
@@ -846,8 +846,8 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
       <body>
         <div class="no-print-header">
           <div>
-            <h1>Kadi za Wageni - EVENTCARD Designer Print</h1>
-            <p>Jumla ya kadi zinazochapishwa: <strong>${itemsToPrint.length}</strong></p>
+            <h1>{isEn ? "Guest Cards" : "Kadi za Wageni"} - EVENTCARD Designer Print</h1>
+            <p>{isEn ? "Total cards to print:" : "Jumla ya kadi zinazochapishwa:"} <strong>${itemsToPrint.length}</strong></p>
           </div>
           <button class="print-btn" onclick="window.print()">
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -957,14 +957,14 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
               
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-white tracking-tight">
-                  Inapakia Wageni Kwenye Database...
+                  {isEn ? "Loading Guests into Database..." : "Inapakia Wageni Kwenye Database..."}
                 </h3>
                 <p className="text-slate-400 text-xs font-mono pb-1">
                   Uhakiki: wageni {chunkUploadedCount?.current} kati ya {chunkUploadedCount?.total}
                 </p>
                 {lastUploadedGuestName && (
                   <p className="text-blue-400 text-[11px] font-mono font-medium animate-pulse bg-blue-500/10 py-1 px-3.5 rounded-lg border border-blue-500/10 inline-block max-w-full truncate">
-                    Mgeni anayesajiliwa: {lastUploadedGuestName}
+                    {isEn ? "Registering guest:" : "Mgeni anayesajiliwa:"} {lastUploadedGuestName}
                   </p>
                 )}
               </div>
@@ -1010,7 +1010,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
         <div>
           <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-400" />
-            <span>Pakia na Simamia Wageni (Upload Guests)</span>
+            <span>{isEn ? "Upload and Manage Guests" : "Pakia na Simamia Wageni (Upload Guests)"}</span>
           </h2>
           <p className="text-slate-350 mt-0.5">Tengeneza kadi mwalikwa ya kipekee kwa kila mgeni automatically.</p>
         </div>
@@ -1048,7 +1048,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
         </div>
 
         <div className="backdrop-blur-md bg-blue-500/10 border border-blue-500/20 rounded-2xl p-3 text-center">
-          <p className="text-[9px] uppercase font-mono tracking-wider text-blue-400 font-bold">Jumla Kadi</p>
+          <p className="text-[9px] uppercase font-mono tracking-wider text-blue-400 font-bold">{isEn ? "Total Cards" : "Jumla Kadi"}</p>
           <p className="text-xl font-extrabold text-blue-300 mt-1">{totalCards}</p>
         </div>
 
@@ -1064,7 +1064,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
           </span>
           <input 
             type="text"
-            placeholder="Tafuta kwa Jina, Simu, au Code..."
+            placeholder={isEn ? "Search by Name, Phone, or Code..." : "Tafuta kwa Jina, Simu, au Code..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-sans placeholder-slate-400"

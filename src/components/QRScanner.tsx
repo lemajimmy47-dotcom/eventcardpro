@@ -115,7 +115,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
     // Build simple CSV with headers
     const headers = isEn 
       ? ["ID", "Card Code", "Guest Name", "Phone Number", "Card Type", "Check-in Time", "RSVP Status", "Companions Count"]
-      : ["ID", "Namba ya Kadi (Code)", "Jina la Mgeni", "Namba ya Simu", "Aina ya Kadi (Card Type)", "Muda wa Kuingia (Check-in Time)", "RSVP Status", "Idadi ya Wageni (Companions)"];
+      : isEn ? ["ID", "Code", "Guest Name", "Phone Number", "Card Type", "Check-in Time", "RSVP Status", "Companions"] : ["ID", "Namba ya Kadi (Code)", "Jina la Mgeni", "Namba ya Simu", "Aina ya Kadi (Card Type)", "Muda wa Kuingia (Check-in Time)", "RSVP Status", "Idadi ya Wageni (Companions)"];
     const csvRows = [
       headers.join(","),
       ...checkedInGuests.map(g => [
@@ -486,7 +486,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
   const handleTriggerSimulatedScan = (guestId: string) => {
     if (!guestId) return;
     const target = guestsRef.current.find(g => g.id === guestId);
-    triggerScanResult(target || null, !target, !target ? 'Mgeni huyu hajapatikana kwenye orodha!' : '');
+    triggerScanResult(target || null, !target, !target ? (isEn ? 'This guest was not found in the list!' : 'Mgeni huyu hajapatikana kwenye orodha!') : '');
   };
 
   const handleManualCodeCheckIn = (e: React.FormEvent) => {
@@ -694,7 +694,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
           } else if (name === 'NotReadableError' || name === 'TrackStartError') {
             swahiliMessage = 'Kamera Inatumiwa sasa (NotReadableError)! Labda inapiga picha au kutumika na app nyingine kama WhatsApp/Zoom. Tafadhali zima app hizo kisha urudie tena.';
           } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-            swahiliMessage = 'Kifaa cha Kamera Hakipatikani (NotFoundError)! Hakuna kamera inayofanya kazi iliyotambuliwa kwenye kifaa hiki kwa sasa.';
+            swahiliMessage = isEn ? 'Camera Device Not Found (NotFoundError)! No working camera detected on this device right now.' : 'Kifaa cha Kamera Hakipatikani (NotFoundError)! Hakuna kamera inayofanya kazi iliyotambuliwa kwenye kifaa hiki kwa sasa.';
           } else if (name === 'SecurityError') {
             swahiliMessage = 'Hitilafu ya Usalama (SecurityError)! Kivinjari chako kinahitaji kiungo cha salama cha HTTPS ili kuwasha kamera, au kiko ndani ya mfumo uliozuiwa.';
           } else if (name === 'OverconstrainedError') {
@@ -1092,7 +1092,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
               activeTab === 'list' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Wageni & Hakiki ({countConfirmedGuests})
+            {isEn ? 'Guests & Check-in' : 'Wageni & Hakiki'} ({countConfirmedGuests})
           </button>
           <button
             onClick={() => setActiveTab('logs')}
@@ -1113,7 +1113,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
           title={countCheckedIn === 0 ? "Orodha ya walioingia iko wazi kwa sasa" : "Pakua orodha nzima ya walioingia katika CSV"}
         >
           <Download className="w-3.5 h-3.5" />
-          <span>Pakua Walioingia ({countCheckedIn}) - CSV</span>
+          <span>{isEn ? 'Download Checked-in' : 'Pakua Walioingia'} ({countCheckedIn}) - CSV</span>
         </button>
       </div>
 
@@ -1434,7 +1434,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                     {scanResult.status === 'success' && (
                       <div className="space-y-2">
                         <CheckCircle className="w-12 h-12 mx-auto text-white animate-bounce" />
-                        <h4 className="font-bold text-lg leading-tight uppercase font-sans">Mgeni Amekubaliwa!</h4>
+                        <h4 className="font-bold text-lg leading-tight uppercase font-sans">{isEn ? 'Guest Admitted!' : 'Mgeni Amekubaliwa!'}</h4>
                         <div className="text-xs space-y-0.5 font-sans">
                           <p className="font-bold text-sm bg-black/20 px-3 py-1.5 rounded-full inline-block mb-1">{scanResult.guestName}</p>
                           <p>Kadi: <strong>{scanResult.cardType}</strong></p>
@@ -1455,7 +1455,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                             className="inline-flex items-center gap-1.5 px-4 py-2 bg-black/30 hover:bg-black/50 text-white font-bold rounded-xl transition cursor-pointer text-[11px] border border-white/10"
                           >
                             <Camera className="w-3.5 h-3.5" />
-                            <span>Piga Picha ya Mgeni</span>
+                            <span>{isEn ? 'Take Guest Photo' : 'Piga Picha ya Mgeni'}</span>
                           </button>
                         </div>
                       </div>
@@ -1557,7 +1557,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   <div className="flex gap-2.5 border-t border-rose-500/10 pt-2.5">
                     <span className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-500/15 text-blue-300 text-[9px] font-extrabold shrink-0 mt-0.5 border border-blue-500/25">💡</span>
                     <p>
-                      <strong>Njia Mbadala ya Haraka:</strong> Hakuna shida kabisa! Kwenye upande wa kulia, gusa tu kitufe cha <strong className="text-blue-300">Tafuta kwa Jina</strong> au orodha ya wageni uwa-check in kwa kubofya mara moja tu bila kuhitaji kamera!
+                      isEn ? <><strong>Quick Alternative:</strong> No problem at all! On the right side, just tap the <strong className="text-blue-300">Search by Name</strong> button or the guest list to check them in with one click without needing a camera!</> : <><strong>Njia Mbadala ya Haraka:</strong> Hakuna shida kabisa! Kwenye upande wa kulia, gusa tu kitufe cha <strong className="text-blue-300">Tafuta kwa Jina</strong> au orodha ya wageni uwa-check in kwa kubofya mara moja tu bila kuhitaji kamera!</>
                     </p>
                   </div>
                 </div>
@@ -1598,12 +1598,12 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             {/* Attendance Confirmation Progress bar comparing Checked In vs Confirmed RSVP */}
             <div className="w-full max-w-xs bg-black/40 border border-white/10 rounded-2xl p-4 space-y-2 text-xs">
               <div className="flex justify-between items-center text-[10px] uppercase font-mono tracking-wider text-slate-400 font-bold">
-                <span>Walioingia (Scanned)</span>
-                <span>Waliothibitisha (Confirmed RSVP)</span>
+                <span>{isEn ? 'Checked-in (Scanned)' : 'Walioingia (Scanned)'}</span>
+                <span>{isEn ? 'Confirmed (RSVP)' : 'Waliothibitisha (Confirmed RSVP)'}</span>
               </div>
               
               <div className="flex justify-between items-baseline">
-                <span className="text-xl font-extrabold text-white">{countCheckedIn} <span className="text-xs text-slate-400">Wageni</span></span>
+                <span className="text-xl font-extrabold text-white">{countCheckedIn} <span className="text-xs text-slate-400">{isEn ? "Guests" : "Wageni"}</span></span>
                 <span className="text-xs font-mono text-slate-350">Kati ya {countRsvped} (RSVP)</span>
               </div>
 
@@ -1637,7 +1637,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
 
               {/* Selector dropdown */}
               <div className="space-y-1">
-                <label className="font-bold text-slate-300 block mb-1" htmlFor="simulate-guest-scan-select">Hariri: Chagua Mgeni wa Kuskani</label>
+                <label className="font-bold text-slate-300 block mb-1" htmlFor="simulate-guest-scan-select">{isEn ? "Edit: Select Guest to Scan" : "Hariri: Chagua Mgeni wa Kuskani"}</label>
                 <select
                   id="simulate-guest-scan-select"
                   value={selectedGuestSimId}
@@ -1779,7 +1779,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="bg-emerald-950/25 border border-emerald-500/15 rounded-2xl p-4 flex justify-between items-center">
               <div>
-                <p className="text-[8.5px] text-emerald-400 font-bold uppercase font-mono tracking-widest">Waliodhibitisha (RSVP)</p>
+                <p className="text-[8.5px] text-emerald-400 font-bold uppercase font-mono tracking-widest">{isEn ? "Confirmed (RSVP)" : "Waliodhibitisha (RSVP)"}</p>
                 <p className="text-lg font-extrabold text-white mt-0.5">{countConfirmedGuests} <span className="text-[10px] text-slate-400 font-normal">Kadi ({countConfirmedSeats} Watu)</span></p>
               </div>
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -1787,7 +1787,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
 
             <div className="bg-blue-950/25 border border-blue-500/15 rounded-2xl p-4 flex justify-between items-center">
               <div>
-                <p className="text-[8.5px] text-blue-400 font-bold uppercase font-mono tracking-widest">Waliofika (Check-in)</p>
+                <p className="text-[8.5px] text-blue-400 font-bold uppercase font-mono tracking-widest">{isEn ? "Arrived (Check-in)" : "Waliofika (Check-in)"}</p>
                 <p className="text-lg font-extrabold text-white mt-0.5">{countCheckedIn} <span className="text-[10px] text-slate-400 font-normal">Kadi ({countCheckedInSeats} Watu)</span></p>
               </div>
               <Users className="w-5 h-5 text-blue-400 shrink-0" />
@@ -1927,15 +1927,15 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 text-white">
               <h4 className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
-                Muda uliopo sasa
+                {isEn ? "Current Time" : "Muda uliopo sasa"}
               </h4>
               <p className="text-2xl font-black text-white">{new Date().toLocaleTimeString()}</p>
-              <p className="text-[10px] text-slate-450 italic">Tukio linaendelea...</p>
+              <p className="text-[10px] text-slate-450 italic">{isEn ? "Event in progress..." : "Tukio linaendelea..."}</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 text-white">
               <h4 className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-2">
                 <Users className="w-3.5 h-3.5 text-emerald-400" />
-                Wageni Waliofika
+                {isEn ? "Arrived Guests" : "Wageni Waliofika"}
               </h4>
               <p className="text-2xl font-black text-white">{countCheckedIn}</p>
               <p className="text-[10px] text-slate-450 italic">Kati ya walio RSVP {countRsvped}</p>
@@ -1955,7 +1955,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-blue-400" />
-                Mtiririko wa Wageni (Arrival Pattern)
+                {isEn ? "Guest Arrival Pattern" : "Mtiririko wa Wageni (Arrival Pattern)"}
               </h3>
               <span className="text-[10px] text-slate-400 font-mono">Imesasishwa sasa hivi</span>
             </div>
@@ -2016,7 +2016,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="px-5 py-4 border-b border-white/5 bg-white/5 flex items-center justify-between">
               <h4 className="font-bold text-[10px] uppercase tracking-widest flex items-center gap-2">
                 <History className="w-3.5 h-3.5 text-slate-400" />
-                Audit Logs: Orodha ya Muda wa Skani
+                {isEn ? "Audit Logs: Scan Time List" : "Audit Logs: Orodha ya Muda wa Skani"}
               </h4>
               <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">Realtime</span>
             </div>
@@ -2024,7 +2024,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
               <table className="w-full text-left border-collapse text-[10.5px]">
                 <thead className="sticky top-0 bg-[#090f1d] shadow-sm z-10">
                   <tr className="text-slate-500 border-b border-white/5">
-                    <th className="px-5 py-2.5 font-bold">Muda (Time)</th>
+                    <th className="px-5 py-2.5 font-bold">{isEn ? "Time" : "Muda (Time)"}</th>
                     <th className="px-5 py-2.5 font-bold">Mgeni (Guest)</th>
                     <th className="px-5 py-2.5 font-bold">Kadi (Card)</th>
                     <th className="px-5 py-2.5 font-bold text-right">Hali (Status)</th>

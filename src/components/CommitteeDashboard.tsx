@@ -2225,10 +2225,10 @@ export default function CommitteeDashboard({
                   <p className="text-[9px] font-mono text-slate-500">{isEn ? "Active Report:" : "Aina ya Ripoti ya Sasa:"} <strong className="text-white uppercase">{selectedReport}</strong> • Printed At: {new Date().toLocaleDateString('sw-TZ')}</p>
                   <div className="flex flex-wrap justify-center items-center gap-3 mt-2 px-3 py-1 bg-white/5 rounded-xl border border-white/5 max-w-lg mx-auto divide-x divide-white/10">
                     <span className="text-[10px] text-slate-400 font-mono pl-2">
-                      Jumla SMS Zilizotumwa: <strong className="text-blue-400 font-black">{totalSmsSent}</strong>
+                      {isEn ? 'Total SMS Sent:' : 'Jumla SMS Zilizotumwa:'} <strong className="text-blue-400 font-black">{totalSmsSent}</strong>
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono pl-3">
-                      Jumla WA Zilizotumwa: <strong className="text-emerald-400 font-black">{totalWhatsappSent}</strong>
+                      {isEn ? 'Total WA Sent:' : 'Jumla WA Zilizotumwa:'} <strong className="text-emerald-400 font-black">{totalWhatsappSent}</strong>
                     </span>
                   </div>
                 </div>
@@ -2549,7 +2549,7 @@ export default function CommitteeDashboard({
                         <th className="py-3.5 px-4 font-black">S/N</th>
                         <th className="py-3.5 px-4 font-black">Mlipaji (Guest Name)</th>
                         <th className="py-3.5 px-4 font-black text-right">Kiasi Kilicholipwa</th>
-                        <th className="py-3.5 px-4 font-black">Tarehe</th>
+                        <th className="py-3.5 px-4 font-black">{isEn ? 'Date' : 'Tarehe'}</th>
                         <th className="py-3.5 px-4 font-black">Msimbo / Ref</th>
                         <th className="py-3.5 px-4 font-black">Maelezo (Notes)</th>
                       </tr>
@@ -2572,7 +2572,7 @@ export default function CommitteeDashboard({
                             <tr>
                               <td colSpan={6} className="py-12 text-center text-slate-500 font-sans italic">
                                 <p className="text-lg">📭</p>
-                                <p className="mt-2">Hakuna malipo yaliyosajiliwa bado kwenye mfumo.</p>
+                                <p className="mt-2">{isEn ? 'No payments registered in the system yet.' : 'Hakuna malipo yaliyosajiliwa bado kwenye mfumo.'}</p>
                               </td>
                             </tr>
                           );
@@ -2636,7 +2636,7 @@ export default function CommitteeDashboard({
                   </thead>
                   <tbody className="divide-y divide-white/5 font-mono text-slate-200 text-[11px]">
                     {[...partialPaidList, ...noPaymentPledgeList].length === 0 ? (
-                      <tr><td colSpan={7} className="py-6 text-center text-slate-500">Mungu ni mwema! Hakuna mtu anayedaiwa sasa hivi.</td></tr>
+                      <tr><td colSpan={7} className="py-6 text-center text-slate-500">{isEn ? 'God is good! No one owes anything right now.' : 'Mungu ni mwema! Hakuna mtu anayedaiwa sasa hivi.'}</td></tr>
                     ) : (
                       [...partialPaidList, ...noPaymentPledgeList].map(g => {
                         const b = (g.pledgeAmount || 0) - (g.paidAmount || 0);
@@ -2662,7 +2662,7 @@ export default function CommitteeDashboard({
             {selectedReport === 'FullyPaid' && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-extrabold text-xs uppercase text-slate-300 font-mono">4. Orodha ya Waliotimiza Ahadi Kikamilifu</h4>
+                  <h4 className="font-extrabold text-xs uppercase text-slate-300 font-mono">{isEn ? '4. List of Fully Paid Members' : '4. Orodha ya Waliotimiza Ahadi Kikamilifu'}</h4>
                   <button 
                     onClick={() => downloadReportCSV('Orodha_ya_Waliolipa_Yote', fullyPaidList)}
                     className="p-1 px-2.5 bg-white/5 hover:bg-white/10 rounded font-mono text-[10px] text-amber-400 flex items-center gap-1"
@@ -2689,7 +2689,7 @@ export default function CommitteeDashboard({
                       fullyPaidList.map(g => (
                         <tr key={g.id} className="hover:bg-white/5 transition-colors">
                           <td className="py-2 px-3 font-bold uppercase">{g.name}</td>
-                          <td className="py-2 px-3 text-slate-400">{g.phone || 'Hakuna simu'}</td>
+                          <td className="py-2 px-3 text-slate-400">{g.phone || (isEn ? 'No phone' : 'Hakuna simu')}</td>
                           <td className="py-2 px-3 text-right text-emerald-400 font-black">TZS {(g.pledgeAmount || 0).toLocaleString()}</td>
                           <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
                           <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
@@ -2705,7 +2705,7 @@ export default function CommitteeDashboard({
             {selectedReport === 'Pending' && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-extrabold text-xs uppercase text-slate-300 font-mono">5. Orodha Kuu ya Ahadi Zote zilizowekwa</h4>
+                  <h4 className="font-extrabold text-xs uppercase text-slate-300 font-mono">{isEn ? '5. Master List of All Pledges' : '5. Orodha Kuu ya Ahadi Zote zilizowekwa'}</h4>
                   <button 
                     onClick={() => downloadReportCSV('Kumbukumbu_ya_Ahadi_Zote', activePledgeList)}
                     className="p-1 px-2.5 bg-white/5 hover:bg-white/10 rounded font-mono text-[10px] text-amber-400 flex items-center gap-1"

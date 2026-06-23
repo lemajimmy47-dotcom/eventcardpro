@@ -115,6 +115,43 @@ async function performSelfCleaningAndMigration(data: any) {
   }
 }
 
+/**
+ * Safely sanitizes and validates Fetch HTTP Headers to avoid ByteString errors on native Node fetch.
+ * Returns a new headers object or throws a detailed friendly error if illegal characters are found.
+ */
+function sanitizeHttpHeaders(headers: any, settings: any): Record<string, string> {
+  const cleanHeaders: Record<string, string> = {};
+  if (!headers || typeof headers !== 'object') return cleanHeaders;
+
+  for (const [key, rawValue] of Object.entries(headers)) {
+    if (rawValue === undefined || rawValue === null) continue;
+    const value = String(rawValue);
+
+    // Filter out invalid characters in header keys (non-ASCII)
+    const cleanKey = key.replace(/[^\x00-\x7F]/g, "");
+
+    // Check for characters with code > 255 in header value
+    let hasInvalidChar = false;
+    let detailsStr = "";
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      if (code > 255) {
+        hasInvalidChar = true;
+        detailsStr += `'${value[i]}' (code ${code} at index ${i}), `;
+      }
+    }
+
+    if (hasInvalidChar) {
+      detailsStr = detailsStr.trim().replace(/,$/, '');
+      const providerName = settings?.provider === "meseji" ? "Meseji.co.tz" : "SMS Gateway";
+      throw new Error(`Hitilafu katika Mipangilio (Invalid Settings Character): Token yako (API Key/Token) au 'Sender ID' yako ina alama isiyoruhusiwa ${detailsStr}.\n\nTafsiri: Hii hutokea kwa kawaida unaponakili (copy-paste) picha la makosa au alama ya cross "✗" au alama za nukuu tofauti (smart quotes) toka kwenye ripoti za awali.\n\nSuluhisho: Tafadhali nenda kwenye Alama ya Mipangilio (Settings Icon) ya ukurasa wa Kutuma Ujumbe, futa yaliyomo kwenye 'API Token' na 'Sender ID', kisha nakili na uandike kwa makini Token safi ya kutoka akaunti yako ya ${providerName} bila kuweka alama au nyakati (timestamps) za ripoti.`);
+    }
+
+    cleanHeaders[cleanKey] = value;
+  }
+  return cleanHeaders;
+}
+
 async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[]) {
   // Standardize/Clean Tanzanian phone numbers to 255XXXXXXXXX format
   const cleanedPhone = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
@@ -179,14 +216,24 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         };
 
         const metaUrl = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
-        const response = await fetch(metaUrl, {
-          method: 'POST',
-          headers: {
+        let response;
+        try {
+          const rawHeaders = {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
+          };
+          response = await fetch(metaUrl, {
+            method: 'POST',
+            headers: sanitizeHttpHeaders(rawHeaders, settings),
+            body: JSON.stringify(payload)
+          });
+        } catch (err: any) {
+          const errorStr = (err?.message || String(err)).toLowerCase();
+          if (errorStr.includes("bytestring") || errorStr.includes("character at index") || errorStr.includes("greater than 255")) {
+            throw new Error(`Hitilafu katika Mipangilio ya WhatsApp: Token uliyoweka kwenye Mipangilio ya Meta WhatsApp ina alama isiyoruhusiwa (isiyo ya ASCII). Tafadhali thibitisha au uandike upya token yako bila kuweka alama au nyakati (timestamps) zisizo sahihi.`);
+          }
+          throw err;
+        }
 
         const respText = await response.text();
         console.log("[Meta WhatsApp Resp]:", respText);
@@ -332,8 +379,28 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     return "SMS Simulation";
   }
 
-  const response = await fetch(requestUrl, fetchOptions);
-  const responseContent = await response.text();
+  if (fetchOptions.headers) {
+    fetchOptions.headers = sanitizeHttpHeaders(fetchOptions.headers, settings);
+  }
+
+  let response;
+  let responseContent = "";
+  try {
+    response = await fetch(requestUrl, fetchOptions);
+    responseContent = await response.text();
+  } catch (err: any) {
+    const errorStr = (err?.message || String(err)).toLowerCase();
+    
+    // Check if the error is the ByteString / header character coding error
+    if (errorStr.includes("bytestring") || errorStr.includes("character at index") || errorStr.includes("greater than 255")) {
+      const providerName = settings?.provider === "meseji" ? "Meseji.co.tz" : "SMS Gateway";
+      throw new Error(`Hitilafu katika Mipangilio (ByteString Error): Token yako au 'Sender ID' yako kwenye Mipangilio ya SMS ina alama/harufi batili (kama vile cross ✗, smart quotes, au emoji).\n\nTafsiri: Hii hutokea kwa kawaida unaponakili (copy-paste) picha la makosa au alama ya cross "✗" au alama za nukuu tofauti (smart quotes) toka kwenye ripoti za awali.\n\nSuluhisho: Tafadhali nenda kwenye Alama ya Mipangilio (Settings Icon) ya ukurasa wa Kutuma Ujumbe, futa yaliyomo kwenye 'API Token' na 'Sender ID', kisha nakili na uandike kwa makini Token safi ya kutoka akaunti yako ya ${providerName} bila kuweka alama au nyakati (timestamps) za ripoti za makosa.`);
+    }
+    
+    // Handle other connection/fetch errors cleanly
+    console.error(`[SMS] Fetch exception for URL ${requestUrl}:`, err);
+    throw new Error(`Imeshindwa kufungua kiunganishi na Mtoa Huduma wa SMS (Fetch Failed): ${err.message || err}. Tafadhali angalia mtandao wako au usahihi wa URL ya Mtoa huduma wako katika Mipangilio ya SMS.`);
+  }
   
   if (!response.ok) {
     console.error(`[SMS] Gateway Error Status: ${response.status}, Body: ${responseContent}`);
