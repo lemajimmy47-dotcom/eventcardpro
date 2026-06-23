@@ -296,8 +296,10 @@ export default function SMSGatewayConfig() {
                 </div>
               </div>
             )}
-            
-            {/* Custom WhatsApp Gateway Management Area */}
+          </>
+        )}
+        
+        {/* Custom WhatsApp Gateway Management Area */}
             <div className="space-y-3 border-t border-white/10 pt-4 mt-4">
               <label className="font-bold text-slate-300 block text-xs">
                 {isEn ? "WhatsApp Integration Channel" : "Njia ya Ujumbe ya WhatsApp"}
@@ -443,8 +445,6 @@ export default function SMSGatewayConfig() {
                 </div>
               )}
             </div>
-          </>
-        )}
 
         <div className="flex gap-3 pt-3">
           <button

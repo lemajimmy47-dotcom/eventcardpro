@@ -424,7 +424,7 @@ export async function fetchFullStateFromDB(): Promise<any> {
       };
     }
 
-    const firstSms = sqlSmsSettings[0];
+    const firstSms = sqlSmsSettings.find(s => s.id === "settings") || sqlSmsSettings[0];
     const smsGatewaySettings = firstSms ? {
       provider: firstSms.provider || "simulation",
       url: firstSms.url || "",

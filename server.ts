@@ -211,7 +211,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     return "SMS Simulation";
   }
 
-  const senderId = settings.senderId || "EVENTCARD";
+  const senderId = settings.senderId || "EVENT CARD";
   let requestUrl = "";
   let fetchOptions: any = {
     method: "POST",

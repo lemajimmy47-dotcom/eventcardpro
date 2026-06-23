@@ -34,6 +34,8 @@ export interface EventDetails {
     thanks1Sw?: string;
     thanks2En?: string;
     thanks2Sw?: string;
+    invitationTemplateSw?: string;
+    invitationTemplateEn?: string;
   } | null;
 
   // Optional Contribution configuration

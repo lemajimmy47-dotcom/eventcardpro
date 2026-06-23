@@ -44,9 +44,6 @@ Please save the date for the upcoming {event_name} event on {date}.
 
 A formal invitation and admission card will reach you soon.
 
-Please click this link to view our special card:
-{link}
-
 You are warmly welcome!`);
       } else {
         setStdTemplate(`Habari {name}
@@ -54,9 +51,6 @@ You are warmly welcome!`);
 Tafadhali hifadhi tarehe ya sherehe ya {event_name} itakayofanyika tarehe {date}.
 
 Mwaliko rasmi pamoja na kadi ya kiingilio utakufikia hivi karibuni.
-
-Tafadhali bofya kiungo hiki kuona kadi yetu maalum:
-{link}
 
 Karibu sana!`);
       }
@@ -162,17 +156,11 @@ Please save the date for the upcoming {event_name} event on {date}.
 
 A formal invitation and admission card will reach you soon.
 
-Please click this link to view our special card:
-{link}
-
 You are warmly welcome!` : `Habari {name}
 
 Tafadhali hifadhi tarehe ya sherehe ya {event_name} itakayofanyika tarehe {date}.
 
 Mwaliko rasmi pamoja na kadi ya kiingilio utakufikia hivi karibuni.
-
-Tafadhali bofya kiungo hiki kuona kadi yetu maalum:
-{link}
 
 Karibu sana!`);
           setSelectedFile(null);
@@ -288,7 +276,7 @@ Karibu sana!`);
       const template = stdTemplate || '';
       const contacts = [eventDetails.contact1, eventDetails.contact2, eventDetails.contact3].filter(Boolean).join('\n');
       
-      return template
+      const compiled = template
         .replace(/{name}/g, guestCleanName)
         .replace(/{host}/g, eventDetails.hostName || 'Familia yetu')
         .replace(/{event_name}/g, eventDetails.name || 'Sherehe yetu')
@@ -307,9 +295,19 @@ Karibu sana!`);
         .replace(/{time}/g, `${eventDetails.time || ""} ${eventDetails.period || ""}`)
         .replace(/{card_number}/g, guestObj?.code || "[Code]")
         .replace(/{card_type}/g, guestObj?.cardType || "DOUBLE");
+
+      if (stripLink) {
+        // Scrub any other URLs completely
+        let cleaned = compiled.replace(/https?:\/\/[^\s]+/gi, "");
+        cleaned = cleaned.replace(/[a-zA-Z0-9.-]+\.co\.tz[^\s]*/gi, "");
+        cleaned = cleaned.replace(/[a-zA-Z0-9.-]+\.app[^\s]*/gi, "");
+        cleaned = cleaned.replace(/[a-zA-Z0-9.-]+\.com[^\s]*/gi, "");
+        return cleaned.trim();
+      }
+      return compiled.trim();
     } catch (e) {
       console.error("Error compiling message:", e);
-      return (stdTemplate || '').replace(/{link}/g, stripLink ? "" : window.location.origin);
+      return (stdTemplate || '').replace(/{link}/g, "");
     }
   };
 
