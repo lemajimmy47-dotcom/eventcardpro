@@ -19,6 +19,14 @@ export default function SMSGatewayConfig() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [balance, setBalance] = useState<number | string | null>(null);
 
+  // New WhatsApp Integration sub-states
+  const [whatsappProvider, setWhatsappProvider] = useState<'simulation' | 'meta' | 'custom_webhook'>('simulation');
+  const [whatsappUrlInput, setWhatsappUrlInput] = useState('');
+  const [whatsappMetaToken, setWhatsappMetaToken] = useState('');
+  const [whatsappMetaPhoneId, setWhatsappMetaPhoneId] = useState('');
+  const [whatsappMetaTemplateName, setWhatsappMetaTemplateName] = useState('kadi_mwaliko');
+  const [whatsappMetaLang, setWhatsappMetaLang] = useState('sw');
+
   const fetchBalance = () => {
     fetch('/api/sms-balance')
       .then(res => res.json())
@@ -36,6 +44,34 @@ export default function SMSGatewayConfig() {
       .then(data => {
         if (data && data.provider) {
           setGatewaySettings(prev => ({ ...prev, ...data }));
+          
+          // Deserialize WhatsApp Cloud API settings if packed as generic JSON
+          const wUrl = data.whatsappUrl || '';
+          if (wUrl.trim().startsWith('{') && wUrl.trim().endsWith('}')) {
+            try {
+              const parsed = JSON.parse(wUrl);
+              if (parsed.provider === 'meta') {
+                setWhatsappProvider('meta');
+                setWhatsappMetaToken(parsed.meta_token || '');
+                setWhatsappMetaPhoneId(parsed.phone_number_id || '');
+                setWhatsappMetaTemplateName(parsed.template_name || 'kadi_mwaliko');
+                setWhatsappMetaLang(parsed.template_lang || 'sw');
+                setWhatsappUrlInput('');
+              } else {
+                setWhatsappProvider('custom_webhook');
+                setWhatsappUrlInput(wUrl);
+              }
+            } catch (e) {
+              setWhatsappProvider('custom_webhook');
+              setWhatsappUrlInput(wUrl);
+            }
+          } else if (wUrl) {
+            setWhatsappProvider('custom_webhook');
+            setWhatsappUrlInput(wUrl);
+          } else {
+            setWhatsappProvider('simulation');
+            setWhatsappUrlInput('');
+          }
         }
         setIsLoaded(true);
         fetchBalance();
@@ -67,10 +103,30 @@ export default function SMSGatewayConfig() {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+
+    // Serialize WhatsApp settings before dispatching to backend
+    let finalWhatsappUrl = '';
+    if (whatsappProvider === 'meta') {
+      finalWhatsappUrl = JSON.stringify({
+        provider: 'meta',
+        meta_token: whatsappMetaToken.trim(),
+        phone_number_id: whatsappMetaPhoneId.trim(),
+        template_name: whatsappMetaTemplateName.trim(),
+        template_lang: whatsappMetaLang.trim()
+      });
+    } else if (whatsappProvider === 'custom_webhook') {
+      finalWhatsappUrl = whatsappUrlInput.trim();
+    }
+
+    const payload = {
+      ...gatewaySettings,
+      whatsappUrl: finalWhatsappUrl
+    };
+
     fetch('/api/sms-settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(gatewaySettings)
+      body: JSON.stringify(payload)
     })
       .then(res => {
         if (!res.ok) throw new Error("Kuhifadhi kulishindwa");
@@ -241,18 +297,151 @@ export default function SMSGatewayConfig() {
               </div>
             )}
             
-            <div className="space-y-1 border-t border-white/10 pt-4 mt-2">
-              <label className="font-bold text-slate-300 block text-xs">Automated WhatsApp URL Hook (Optional)</label>
-              <p className="text-[9px] text-slate-500 pb-1">
-                E.g. <code className="text-emerald-400">https://wa.yourserver.com/send?phone={"{to}"}&text={"{message}"}</code>
-              </p>
-              <input 
-                type="url" 
-                placeholder="https://"
-                value={gatewaySettings.whatsappUrl}
-                onChange={(e) => setGatewaySettings({ ...gatewaySettings, whatsappUrl: e.target.value })}
-                className="w-full bg-[#050b18] border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-[10px]"
-              />
+            {/* Custom WhatsApp Gateway Management Area */}
+            <div className="space-y-3 border-t border-white/10 pt-4 mt-4">
+              <label className="font-bold text-slate-300 block text-xs">
+                {isEn ? "WhatsApp Integration Channel" : "Njia ya Ujumbe ya WhatsApp"}
+              </label>
+              
+              <div className="grid grid-cols-3 gap-2 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setWhatsappProvider('simulation')}
+                  className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase transition ${
+                    whatsappProvider === 'simulation'
+                      ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
+                      : 'bg-white/5 border border-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  Simulation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWhatsappProvider('meta')}
+                  className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase transition ${
+                    whatsappProvider === 'meta'
+                      ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400'
+                      : 'bg-white/5 border border-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  Official Meta (WABA)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWhatsappProvider('custom_webhook')}
+                  className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase transition ${
+                    whatsappProvider === 'custom_webhook'
+                      ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400'
+                      : 'bg-white/5 border border-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  Webhook API
+                </button>
+              </div>
+
+              {whatsappProvider === 'simulation' && (
+                <p className="text-[10px] text-slate-500 italic bg-white/5 rounded-lg p-2 leading-relaxed">
+                  {isEn 
+                    ? "Simulation Mode: Sent messages are simulated instantly. You can test without spending and trace messages inside logs."
+                    : "Mfumo wa Kujaribu: Ujumbe utatengenezwa na kuonyeshwa kama umetumwa hapa hapa bila gharama yoyote ya salio."}
+                </p>
+              )}
+
+              {whatsappProvider === 'meta' && (
+                <div className="space-y-4 bg-blue-500/5 border border-blue-500/10 rounded-xl p-3 pt-2">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-[10px] font-bold text-blue-400">SUPPORTED WITH META CLOUD API</span>
+                    <a 
+                      href="https://developers.facebook.com/" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-[9px] text-blue-400 underline flex items-center gap-0.5"
+                    >
+                      Meta Console
+                    </a>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 block">
+                      {isEn ? "Meta Permanent Access Token" : "Meta Access Token ya Kudumu"}
+                    </label>
+                    <input 
+                      type="password" 
+                      placeholder="EAAGxxxxxxxxxxxx..."
+                      value={whatsappMetaToken}
+                      onChange={(e) => setWhatsappMetaToken(e.target.value)}
+                      className="w-full bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 block">
+                      {isEn ? "Meta Phone Number ID" : "ID ya Namba ya Simu Meta (Phone Number ID)"}
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder="E.g. 106338573934827"
+                      value={whatsappMetaPhoneId}
+                      onChange={(e) => setWhatsappMetaPhoneId(e.target.value)}
+                      className="w-full bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-400 block">
+                        {isEn ? "WABA Template Name" : "Jina la Template Meta"}
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="E.g. kadi_mwaliko"
+                        value={whatsappMetaTemplateName}
+                        onChange={(e) => setWhatsappMetaTemplateName(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
+                        className="w-full bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-semibold text-slate-400 block">
+                        {isEn ? "Language Code" : "Luka ya Template"}
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="E.g. sw au en"
+                        value={whatsappMetaLang}
+                        onChange={(e) => setWhatsappMetaLang(e.target.value.toLowerCase().trim())}
+                        className="w-full bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[9px] text-slate-400 leading-normal p-2 bg-black/40 rounded-lg mt-1">
+                    <p className="font-bold text-slate-300 pb-0.5">⚠️ Muhimu kwa Meta WABA:</p>
+                    {isEn 
+                      ? "Ensure your Meta message template parameters ({{1}}, {{2}}, {{3}}...) are aligned in the correct sequence. Our software maps variables in order of their appearance."
+                      : "Hakikisha template yako ya Meta ina vigezo kwa mpangilio sahihi. Mfumo wetu utatuma taarifa (Kama Jina la Mgeni, Ukumbi, n.k) kwa ulingano sahihi."}
+                  </div>
+                </div>
+              )}
+
+              {whatsappProvider === 'custom_webhook' && (
+                <div className="space-y-2 bg-purple-500/5 border border-purple-500/10 rounded-xl p-3">
+                  <label className="font-semibold text-slate-400 block text-[10px]">
+                    {isEn ? "Custom WhatsApp URL Endpoint" : "Anwani ya Webhook ya WhatsApp (Custom Webhook)"}
+                  </label>
+                  <p className="text-[9px] text-slate-500 leading-relaxed pb-1">
+                    {isEn 
+                      ? "Supports third-party APIs (Evolution, UltraMsg, Baileys, etc.). Use {to} and {message} tokens."
+                      : "Inasaidia API mbalimbali za WhatsApp. Tumia alama ya {to} kwa namba ya simu, na {message} kwa ujumbe."}
+                  </p>
+                  <input 
+                    type="url" 
+                    placeholder="https://api.yourgateway.com/send?phone={to}&text={message}"
+                    value={whatsappUrlInput}
+                    onChange={(e) => setWhatsappUrlInput(e.target.value)}
+                    className="w-full bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  />
+                </div>
+              )}
             </div>
           </>
         )}

@@ -201,23 +201,35 @@ export default function ContributionManager({
   }, [smsWalletBalance, isSimulationBalance]);
 
   // Load and store customizable message templates for each event (EN and SW versions)
-  const [tplPledge1En, setTplPledge1En] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`) || `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nPlease click here to register your pledge:\n{Kiungo}\n\nThank you very much!`);
-  const [tplPledge1Sw, setTplPledge1Sw] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`) || `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!`);
+  // We prioritize event.smsTemplates (persisted in database), then safeLocalStorage (for client-side fallback), then default strings.
+  const [tplPledge1En, setTplPledge1En] = useState<string>(() => event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`) || `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nThank you very much!`);
+  const [tplPledge1Sw, setTplPledge1Sw] = useState<string>(() => {
+    const saved = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
+    const oldDefault1 = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!`;
+    const oldDefault2 = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nAsante sana!,`;
+    const oldDefault3 = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!,`;
+    const oldDefault4 = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n\nAsante sana!`;
+    const newDefault = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n{Kiungo}\n\nAsante sana!`;
+    if (!saved || saved === oldDefault1 || saved === oldDefault2 || saved === oldDefault3 || saved === oldDefault4) {
+      return newDefault;
+    }
+    return saved;
+  });
 
-  const [tplPledge2En, setTplPledge2En] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_pledge2_en_${event.id}`) || `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nPlease submit your pledge using this unique secure gateway:\n{Kiungo}\n\nThank you deeply.`);
-  const [tplPledge2Sw, setTplPledge2Sw] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_pledge2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nTafadhali wasilisha ahadi yako kupitia kiungo hiki:\n{Kiungo}\n\nAsante muno.`);
+  const [tplPledge2En, setTplPledge2En] = useState<string>(() => event.smsTemplates?.pledge2En || safeLocalStorage.getItem(`kadi_tpl_pledge2_en_${event.id}`) || `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nThank you deeply.`);
+  const [tplPledge2Sw, setTplPledge2Sw] = useState<string>(() => event.smsTemplates?.pledge2Sw || safeLocalStorage.getItem(`kadi_tpl_pledge2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nAsante muno.`);
 
-  const [tplRem1En, setTplRem1En] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Hello {Mgeni},\n\nFriendly reminder regarding your contribution pledge for "{Tukio}".\n\nPledged: TZS {Ahadi}\n- Paid: TZS {Paid}\n- Balance Due: TZS {Balance}\n\nWishing you all the best, thank you!`);
-  const [tplRem1Sw, setTplRem1Sw] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Habari {Mgeni},\n\nKumbusho la kirafiki kuhusu mchango wako wa {Tukio}.\n\nAhadi: TZS {Ahadi}\n- Uliyolipa: TZS {Paid}\n- Salio lako: TZS {Balance}\n\nTunakutakia heri, Asante!`);
+  const [tplRem1En, setTplRem1En] = useState<string>(() => event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Hello {Mgeni},\n\nFriendly reminder regarding your contribution pledge for "{Tukio}".\n\nPledged: TZS {Ahadi}\n- Paid: TZS {Paid}\n- Balance Due: TZS {Balance}\n\nWishing you all the best, thank you!`);
+  const [tplRem1Sw, setTplRem1Sw] = useState<string>(() => event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Habari {Mgeni},\n\nKumbusho la kirafiki kuhusu mchango wako wa {Tukio}.\n\nAhadi: TZS {Ahadi}\n- Uliyolipa: TZS {Paid}\n- Salio lako: TZS {Balance}\n\nTunakutakia heri, Asante!`);
 
-  const [tplRem2En, setTplRem2En] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
-  const [tplRem2Sw, setTplRem2Sw] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
+  const [tplRem2En, setTplRem2En] = useState<string>(() => event.smsTemplates?.rem2En || safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
+  const [tplRem2Sw, setTplRem2Sw] = useState<string>(() => event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
 
-  const [tplThanks1En, setTplThanks1En] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_thanks1_en_${event.id}`) || `Hello {Mgeni},\n\nWe would like to thank you with immense gratitude for fully completing your contribution pledge for our event "{Tukio}".\n\nThank you so much and God bless you!`);
-  const [tplThanks1Sw, setTplThanks1Sw] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_thanks1_sw_${event.id}`) || `Habari {Mgeni},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {Tukio}.\n\nAsante sana na Mungu akubariki!`);
+  const [tplThanks1En, setTplThanks1En] = useState<string>(() => event.smsTemplates?.thanks1En || safeLocalStorage.getItem(`kadi_tpl_thanks1_en_${event.id}`) || `Hello {Mgeni},\n\nWe would like to thank you with immense gratitude for fully completing your contribution pledge for our event "{Tukio}".\n\nThank you so much and God bless you!`);
+  const [tplThanks1Sw, setTplThanks1Sw] = useState<string>(() => event.smsTemplates?.thanks1Sw || safeLocalStorage.getItem(`kadi_tpl_thanks1_sw_${event.id}`) || `Habari {Mgeni},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {Tukio}.\n\nAsante sana na Mungu akubariki!`);
 
-  const [tplThanks2En, setTplThanks2En] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_thanks2_en_${event.id}`) || `Dear {Mgeni},\n\nWe have successfully recorded your contribution in full.\n\nYour presence and priceless support are deeply appreciated as they play a huge role in making "{Tukio}" a reality.\n\nBlessings to you!`);
-  const [tplThanks2Sw, setTplThanks2Sw] = useState<string>(() => safeLocalStorage.getItem(`kadi_tpl_thanks2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTujasajili na tumepokea mchango wako kikamilifu.\n\nTunathamini sana mchango wako na support yako ya hali ya juu katika kufanikisha tukio letu la {Tukio}.\n\nUbarikiwe sana muno!`);
+  const [tplThanks2En, setTplThanks2En] = useState<string>(() => event.smsTemplates?.thanks2En || safeLocalStorage.getItem(`kadi_tpl_thanks2_en_${event.id}`) || `Dear {Mgeni},\n\nWe have successfully recorded your contribution in full.\n\nYour presence and priceless support are deeply appreciated as they play a huge role in making "{Tukio}" a reality.\n\nBlessings to you!`);
+  const [tplThanks2Sw, setTplThanks2Sw] = useState<string>(() => event.smsTemplates?.thanks2Sw || safeLocalStorage.getItem(`kadi_tpl_thanks2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTujasajili and tumepokea mchango wako kikamilifu.\n\nTunathamini sana mchango wako na support yako ya hali ya juu katika kufanikisha tukio letu la {Tukio}.\n\nUbarikiwe sana muno!`);
 
   // Active templates based on system language
   const customPledgeTpl1 = isEn ? tplPledge1En : tplPledge1Sw;
@@ -233,35 +245,87 @@ export default function ContributionManager({
   const customThanksTpl2 = isEn ? tplThanks2En : tplThanks2Sw;
   const setCustomThanksTpl2 = isEn ? setTplThanks2En : setTplThanks2Sw;
 
+  // Track the event ID for which templates are currently loaded in state memory to avoid race condition wipes
+  const lastLoadedEventIdRef = useRef<string>(event.id);
+
+  // Sync state values when event.id or event.smsTemplates changes to handle transitions without unmounting context
   useEffect(() => {
-    safeLocalStorage.setItem(`kadi_tpl_pledge1_en_${event.id}`, tplPledge1En);
-    safeLocalStorage.setItem(`kadi_tpl_pledge1_sw_${event.id}`, tplPledge1Sw);
+    setTplPledge1En(event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`) || `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nThank you very much!`);
+    
+    const savedSw1 = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
+    const oldDefault1sw = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!`;
+    const oldDefault2sw = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nAsante sana!,`;
+    const oldDefault3sw = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!,`;
+    const oldDefault4sw = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n\nAsante sana!`;
+    const newDefaultSw1 = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n{Kiungo}\n\nAsante sana!`;
+    if (!savedSw1 || savedSw1 === oldDefault1sw || savedSw1 === oldDefault2sw || savedSw1 === oldDefault3sw || savedSw1 === oldDefault4sw) {
+      setTplPledge1Sw(newDefaultSw1);
+    } else {
+      setTplPledge1Sw(savedSw1);
+    }
+
+    setTplPledge2En(event.smsTemplates?.pledge2En || safeLocalStorage.getItem(`kadi_tpl_pledge2_en_${event.id}`) || `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nThank you deeply.`);
+    setTplPledge2Sw(event.smsTemplates?.pledge2Sw || safeLocalStorage.getItem(`kadi_tpl_pledge2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nAsante muno.`);
+
+    setTplRem1En(event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Hello {Mgeni},\n\nFriendly reminder regarding your contribution pledge for "{Tukio}".\n\nPledged: TZS {Ahadi}\n- Paid: TZS {Paid}\n- Balance Due: TZS {Balance}\n\nWishing you all the best, thank you!`);
+    setTplRem1Sw(event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Habari {Mgeni},\n\nKumbusho la kirafiki kuhusu mchango wako wa {Tukio}.\n\nAhadi: TZS {Ahadi}\n- Uliyolipa: TZS {Paid}\n- Salio lako: TZS {Balance}\n\nTunakutakia heri, Asante!`);
+
+    setTplRem2En(event.smsTemplates?.rem2En || safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
+    setTplRem2Sw(event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
+
+    setTplThanks1En(event.smsTemplates?.thanks1En || safeLocalStorage.getItem(`kadi_tpl_thanks1_en_${event.id}`) || `Hello {Mgeni},\n\nWe would like to thank you with immense gratitude for fully completing your contribution pledge for our event "{Tukio}".\n\nThank you so much and God bless you!`);
+    setTplThanks1Sw(event.smsTemplates?.thanks1Sw || safeLocalStorage.getItem(`kadi_tpl_thanks1_sw_${event.id}`) || `Habari {Mgeni},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {Tukio}.\n\nAsante sana na Mungu akubariki!`);
+
+    setTplThanks2En(event.smsTemplates?.thanks2En || safeLocalStorage.getItem(`kadi_tpl_thanks2_en_${event.id}`) || `Dear {Mgeni},\n\nWe have successfully recorded your contribution in full.\n\nYour presence and priceless support are deeply appreciated as they play a huge role in making "{Tukio}" a reality.\n\nBlessings to you!`);
+    setTplThanks2Sw(event.smsTemplates?.thanks2Sw || safeLocalStorage.getItem(`kadi_tpl_thanks2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTujasajili and tumepokea mchango wako kikamilifu.\n\nTunathamini sana mchango wako na support yako ya hali ya juu katika kufanikisha tukio letu la {Tukio}.\n\nUbarikiwe sana muno!`);
+    
+    lastLoadedEventIdRef.current = event.id;
+  }, [event.id, event.smsTemplates]);
+
+  // Handle auto-save safely only if loaded event.id matches
+  useEffect(() => {
+    if (lastLoadedEventIdRef.current === event.id) {
+      safeLocalStorage.setItem(`kadi_tpl_pledge1_en_${event.id}`, tplPledge1En);
+      safeLocalStorage.setItem(`kadi_tpl_pledge1_sw_${event.id}`, tplPledge1Sw);
+    }
   }, [tplPledge1En, tplPledge1Sw, event.id]);
 
   useEffect(() => {
-    safeLocalStorage.setItem(`kadi_tpl_pledge2_en_${event.id}`, tplPledge2En);
-    safeLocalStorage.setItem(`kadi_tpl_pledge2_sw_${event.id}`, tplPledge2Sw);
+    if (lastLoadedEventIdRef.current === event.id) {
+      safeLocalStorage.setItem(`kadi_tpl_pledge2_en_${event.id}`, tplPledge2En);
+      safeLocalStorage.setItem(`kadi_tpl_pledge2_sw_${event.id}`, tplPledge2Sw);
+    }
   }, [tplPledge2En, tplPledge2Sw, event.id]);
 
   useEffect(() => {
-    safeLocalStorage.setItem(`kadi_tpl_rem1_en_${event.id}`, tplRem1En);
-    safeLocalStorage.setItem(`kadi_tpl_rem1_sw_${event.id}`, tplRem1Sw);
+    if (lastLoadedEventIdRef.current === event.id) {
+      safeLocalStorage.setItem(`kadi_tpl_rem1_en_${event.id}`, tplRem1En);
+      safeLocalStorage.setItem(`kadi_tpl_rem1_sw_${event.id}`, tplRem1Sw);
+    }
   }, [tplRem1En, tplRem1Sw, event.id]);
 
   useEffect(() => {
-    safeLocalStorage.setItem(`kadi_tpl_rem2_en_${event.id}`, tplRem2En);
-    safeLocalStorage.setItem(`kadi_tpl_rem2_sw_${event.id}`, tplRem2Sw);
+    if (lastLoadedEventIdRef.current === event.id) {
+      safeLocalStorage.setItem(`kadi_tpl_rem2_en_${event.id}`, tplRem2En);
+      safeLocalStorage.setItem(`kadi_tpl_rem2_sw_${event.id}`, tplRem2Sw);
+    }
   }, [tplRem2En, tplRem2Sw, event.id]);
 
   useEffect(() => {
-    safeLocalStorage.setItem(`kadi_tpl_thanks1_en_${event.id}`, tplThanks1En);
-    safeLocalStorage.setItem(`kadi_tpl_thanks1_sw_${event.id}`, tplThanks1Sw);
+    if (lastLoadedEventIdRef.current === event.id) {
+      safeLocalStorage.setItem(`kadi_tpl_thanks1_en_${event.id}`, tplThanks1En);
+      safeLocalStorage.setItem(`kadi_tpl_thanks1_sw_${event.id}`, tplThanks1Sw);
+    }
   }, [tplThanks1En, tplThanks1Sw, event.id]);
 
   useEffect(() => {
-    safeLocalStorage.setItem(`kadi_tpl_thanks2_en_${event.id}`, tplThanks2En);
-    safeLocalStorage.setItem(`kadi_tpl_thanks2_sw_${event.id}`, tplThanks2Sw);
+    if (lastLoadedEventIdRef.current === event.id) {
+      safeLocalStorage.setItem(`kadi_tpl_thanks2_en_${event.id}`, tplThanks2En);
+      safeLocalStorage.setItem(`kadi_tpl_thanks2_sw_${event.id}`, tplThanks2Sw);
+    }
   }, [tplThanks2En, tplThanks2Sw, event.id]);
+
+  const [isTemplateSaved, setIsTemplateSaved] = useState(false);
 
   const [smsSuccessPopup, setSmsSuccessPopup] = useState<{
     isOpen: boolean;
@@ -1137,13 +1201,18 @@ export default function ContributionManager({
   const getContributionMessageText = (
     g: Guest, 
     type: 'Pledge' | 'Reminder' | 'Thanks', 
-    channel?: string
+    channel?: string,
+    forceAppendLink: boolean = false
   ) => {
     const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://eventcard.app';
     const link = `${currentOrigin}/?invite=${g.code || g.id}&pledge=true&eventId=${event.id}&lang=${language}`; // Removed tpl, backend handles it
     let text = '';
     if (type === 'Pledge') {
       text = pledgeRequestTemplates[messageTemplateIndex].text(g.name, event.name || 'Sherehe', link);
+      // For SMS without {Kiungo} in template, let's append it if we are on SMS channel
+      if (((channel || sendingChannel).toLowerCase() === 'sms' && includeSmsLink && !text.includes(link)) || (forceAppendLink && !text.includes(link))) {
+        text += `\n\nKiungo/Link:\n${link}`;
+      }
     } else if (type === 'Reminder') {
       const p = g.pledgeAmount || 0;
       const pd = g.paidAmount || 0;
@@ -1184,14 +1253,14 @@ export default function ContributionManager({
       if (messageTemplateIndex === 0) {
         setCustomPledgeTpl1(
           isEn 
-            ? `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nPlease click here to register your pledge:\n{Kiungo}\n\nThank you very much!`
-            : `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!`
+            ? `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nThank you very much!`
+            : `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n{Kiungo}\n\nAsante sana!`
         );
       } else {
         setCustomPledgeTpl2(
           isEn
-            ? `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nPlease submit your pledge using this unique secure gateway:\n{Kiungo}\n\nThank you deeply.`
-            : `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nTafadhali wasilisha ahadi yako kupitia kiungo hiki:\n{Kiungo}\n\nAsante muno.`
+            ? `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nThank you deeply.`
+            : `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nAsante muno.`
         );
       }
     } else if (subTab === 'reminders') {
@@ -1223,6 +1292,60 @@ export default function ContributionManager({
         );
       }
     }
+  };
+
+  const handleSaveTemplate = () => {
+    if (subTab === 'pledge-requests') {
+      if (messageTemplateIndex === 0) {
+        safeLocalStorage.setItem(`kadi_tpl_pledge1_sw_${event.id}`, tplPledge1Sw);
+        safeLocalStorage.setItem(`kadi_tpl_pledge1_en_${event.id}`, tplPledge1En);
+      } else {
+        safeLocalStorage.setItem(`kadi_tpl_pledge2_sw_${event.id}`, tplPledge2Sw);
+        safeLocalStorage.setItem(`kadi_tpl_pledge2_en_${event.id}`, tplPledge2En);
+      }
+    } else if (subTab === 'reminders') {
+      if (messageTemplateIndex === 0) {
+        safeLocalStorage.setItem(`kadi_tpl_rem1_sw_${event.id}`, tplRem1Sw);
+        safeLocalStorage.setItem(`kadi_tpl_rem1_en_${event.id}`, tplRem1En);
+      } else {
+        safeLocalStorage.setItem(`kadi_tpl_rem2_sw_${event.id}`, tplRem2Sw);
+        safeLocalStorage.setItem(`kadi_tpl_rem2_en_${event.id}`, tplRem2En);
+      }
+    } else if (subTab === 'thank-you') {
+      if (messageTemplateIndex === 0) {
+        safeLocalStorage.setItem(`kadi_tpl_thanks1_sw_${event.id}`, tplThanks1Sw);
+        safeLocalStorage.setItem(`kadi_tpl_thanks1_en_${event.id}`, tplThanks1En);
+      } else {
+        safeLocalStorage.setItem(`kadi_tpl_thanks2_sw_${event.id}`, tplThanks2Sw);
+        safeLocalStorage.setItem(`kadi_tpl_thanks2_en_${event.id}`, tplThanks2En);
+      }
+    }
+
+    if (onUpdateEvent) {
+      onUpdateEvent({
+        ...event,
+        smsTemplates: {
+          ...(event.smsTemplates || {}),
+          pledge1En: tplPledge1En,
+          pledge1Sw: tplPledge1Sw,
+          pledge2En: tplPledge2En,
+          pledge2Sw: tplPledge2Sw,
+          rem1En: tplRem1En,
+          rem1Sw: tplRem1Sw,
+          rem2En: tplRem2En,
+          rem2Sw: tplRem2Sw,
+          thanks1En: tplThanks1En,
+          thanks1Sw: tplThanks1Sw,
+          thanks2En: tplThanks2En,
+          thanks2Sw: tplThanks2Sw,
+        }
+      });
+    }
+
+    setIsTemplateSaved(true);
+    setTimeout(() => {
+      setIsTemplateSaved(false);
+    }, 3000);
   };
 
   const handleResetGuestStatus = (guestId: string) => {
@@ -3272,14 +3395,29 @@ export default function ContributionManager({
                       ● {isEn ? "Changes are auto-saved instantly!" : "Mabadiliko yanajihifadhi kiotomatiki wakati unachapa!"}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleResetTemplateText}
-                    className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
-                    title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
-                  >
-                    Reset
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {isTemplateSaved && (
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold animate-fade-in border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                        ✓ {isEn ? "Saved!" : "Umehifadhiwa!"}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveTemplate}
+                      className="text-[9.5px] font-mono font-bold text-slate-950 hover:bg-amber-400 bg-amber-500 border border-amber-500/20 px-2.5 py-1 rounded-lg transition shadow flex items-center gap-1"
+                      title={isEn ? "Save changes manually" : "Hifadhi mabadiliko sasa"}
+                    >
+                      💾 {isEn ? "Save" : "Hifadhi"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetTemplateText}
+                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
+                      title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -3506,14 +3644,29 @@ export default function ContributionManager({
                       ● {isEn ? "Changes are auto-saved instantly!" : "Mabadiliko yanajihifadhi kiotomatiki wakati unachapa!"}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleResetTemplateText}
-                    className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
-                    title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
-                  >
-                    Reset
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {isTemplateSaved && (
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold animate-fade-in border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                        ✓ {isEn ? "Saved!" : "Umehifadhiwa!"}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveTemplate}
+                      className="text-[9.5px] font-mono font-bold text-slate-950 hover:bg-amber-400 bg-amber-500 border border-amber-500/20 px-2.5 py-1 rounded-lg transition shadow flex items-center gap-1"
+                      title={isEn ? "Save changes manually" : "Hifadhi mabadiliko sasa"}
+                    >
+                      💾 {isEn ? "Save" : "Hifadhi"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetTemplateText}
+                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
+                      title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -3732,14 +3885,29 @@ export default function ContributionManager({
                       ● {isEn ? "Changes are auto-saved instantly!" : "Mabadiliko yanajihifadhi kiotomatiki wakati unachapa!"}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleResetTemplateText}
-                    className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
-                    title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
-                  >
-                    Reset
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {isTemplateSaved && (
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold animate-fade-in border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                        ✓ {isEn ? "Saved!" : "Umehifadhiwa!"}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveTemplate}
+                      className="text-[9.5px] font-mono font-bold text-slate-950 hover:bg-amber-400 bg-amber-500 border border-amber-500/20 px-2.5 py-1 rounded-lg transition shadow flex items-center gap-1"
+                      title={isEn ? "Save changes manually" : "Hifadhi mabadiliko sasa"}
+                    >
+                      💾 {isEn ? "Save" : "Hifadhi"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetTemplateText}
+                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-550/10 hover:bg-red-550/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
+                      title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -4619,7 +4787,7 @@ export default function ContributionManager({
                           {isEn ? "Compiled Message Text (Sample Preview):" : "Ujumbe Utakaoambatana na Kadi:"}
                         </label>
                         <div className="bg-slate-950/90 rounded-xl p-3.5 border border-white/5 font-sans text-xs text-slate-350 leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto">
-                          {getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, 'whatsapp')}
+                          {getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, 'whatsapp', true)}
                         </div>
                       </div>
                     </div>
@@ -4629,7 +4797,7 @@ export default function ContributionManager({
                         {isEn ? "Message text to be sent:" : "Ujumbe utakaotumwa:"}
                       </label>
                       <div className="bg-slate-950 rounded-xl p-4 border border-white/5 font-sans text-xs text-slate-300 leading-relaxed whitespace-pre-wrap max-h-56 overflow-y-auto">
-                        {getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, activeSendTarget.channel)}
+                        {getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, activeSendTarget.channel, activeSendTarget.channel === 'whatsapp')}
                       </div>
 
                       {activeSendTarget.channel === 'sms' && (
@@ -4684,7 +4852,7 @@ export default function ContributionManager({
                     </button>
                   ) : activeSendTarget.channel === 'whatsapp' ? (
                     <a
-                      href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, activeSendTarget.channel))}`}
+                      href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, activeSendTarget.channel, true))}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl transition duration-200 flex items-center justify-center gap-2 font-extrabold uppercase font-mono text-[11px] tracking-wider cursor-pointer shadow-lg hover:brightness-110"
@@ -4781,7 +4949,7 @@ export default function ContributionManager({
           const currentNum = queue.currentIndex + 1;
           const progressPercent = Math.round((queue.currentIndex / total) * 100);
 
-          const textForGuest = getContributionMessageText(currentGuest, queue.type, 'whatsapp');
+          const textForGuest = getContributionMessageText(currentGuest, queue.type, 'whatsapp', true);
 
           // Action to advance queue
           const handleAdvanceQueue = (markAsSent: boolean) => {

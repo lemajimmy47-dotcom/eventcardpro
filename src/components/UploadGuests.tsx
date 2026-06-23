@@ -38,8 +38,8 @@ function LazyGuestCardImage({ guest, event, settings, className }: LazyGuestCard
   useEffect(() => {
     let active = true;
     const canvas = document.createElement('canvas');
-    canvas.width = 450;
-    canvas.height = 600;
+    canvas.width = settings.orientation === 'landscape' ? 600 : 450;
+    canvas.height = settings.orientation === 'landscape' ? 450 : 600;
     
     drawCardToCanvas(
       canvas,
@@ -84,8 +84,8 @@ function LazyGuestCardImage({ guest, event, settings, className }: LazyGuestCard
 
 const getCardImageUrlOnDemand = (g: Guest, event: EventDetails, settings: TemplateSettings): string => {
   const canvas = document.createElement('canvas');
-  canvas.width = 450;
-  canvas.height = 600;
+  canvas.width = settings.orientation === 'landscape' ? 600 : 450;
+  canvas.height = settings.orientation === 'landscape' ? 450 : 600;
   drawCardToCanvas(
     canvas,
     event,
@@ -1581,11 +1581,11 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
               </div>
 
               {/* Dynamic canvas drawing preview */}
-              <div className="relative border-4 border-white/15 rounded-2xl shadow-xl overflow-hidden aspect-[3/4] bg-white w-full max-w-[280px]">
+              <div className={`relative border-4 border-white/15 rounded-2xl shadow-xl overflow-hidden bg-white w-full ${settings.orientation === 'landscape' ? 'aspect-[4/3] max-w-[340px]' : 'aspect-[3/4] max-w-[280px]'}`}>
                 <canvas 
                   ref={previewCanvasRef} 
-                  width={450} 
-                  height={600} 
+                  width={settings.orientation === 'landscape' ? 600 : 450} 
+                  height={settings.orientation === 'landscape' ? 450 : 600} 
                   className="w-full h-auto block"
                 />
               </div>

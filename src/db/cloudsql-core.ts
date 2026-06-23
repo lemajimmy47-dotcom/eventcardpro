@@ -223,6 +223,7 @@ export async function seedFromBackupFile(): Promise<boolean> {
           cardTypeY: typeof tsObj.cardTypeY === "number" ? tsObj.cardTypeY : 25,
           cardTypeSize: typeof tsObj.cardTypeSize === "number" ? tsObj.cardTypeSize : 16,
           cardTypeColor: tsObj.cardTypeColor ? String(tsObj.cardTypeColor) : null,
+          orientation: tsObj.orientation ? String(tsObj.orientation) : "portrait",
         }).onConflictDoNothing();
       }
     }
@@ -348,6 +349,7 @@ export async function fetchFullStateFromDB(): Promise<any> {
       mapsLink: e.mapsLink || "",
       eventImgUrl: e.eventImgUrl || "",
       messageLogs: e.messageLogs || [],
+      smsTemplates: e.smsTemplates || null,
       contributionsEnabled: e.contributionsEnabled || false,
       fundraisingGoal: e.fundraisingGoal || 0,
       autoRsvpRemindersEnabled: e.autoRsvpRemindersEnabled || false,
@@ -542,6 +544,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
           mapsLink: ev.mapsLink ? String(ev.mapsLink) : null,
           eventImgUrl: ev.eventImgUrl ? String(ev.eventImgUrl) : null,
           messageLogs: ev.messageLogs || null,
+          smsTemplates: ev.smsTemplates || null,
           contributionsEnabled: ev.contributionsEnabled === true,
           fundraisingGoal: typeof ev.fundraisingGoal === "number" ? ev.fundraisingGoal : 0,
           autoRsvpRemindersEnabled: ev.autoRsvpRemindersEnabled === true,
@@ -569,6 +572,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             mapsLink: sql`EXCLUDED.maps_link`,
             eventImgUrl: sql`EXCLUDED.event_img_url`,
             messageLogs: sql`EXCLUDED.message_logs`,
+            smsTemplates: sql`EXCLUDED.sms_templates`,
             contributionsEnabled: sql`EXCLUDED.contributions_enabled`,
             fundraisingGoal: sql`EXCLUDED.fundraising_goal`,
             autoRsvpRemindersEnabled: sql`EXCLUDED.auto_rsvp_reminders_enabled`,
@@ -744,6 +748,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
           cardTypeY: typeof tsObj.cardTypeY === "number" ? tsObj.cardTypeY : 25,
           cardTypeSize: typeof tsObj.cardTypeSize === "number" ? tsObj.cardTypeSize : 16,
           cardTypeColor: tsObj.cardTypeColor ? String(tsObj.cardTypeColor) : null,
+          orientation: tsObj.orientation ? String(tsObj.orientation) : "portrait",
         }).onConflictDoUpdate({
           target: schema.templateSettings.id,
           set: {
@@ -762,6 +767,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             cardTypeY: typeof tsObj.cardTypeY === "number" ? tsObj.cardTypeY : 25,
             cardTypeSize: typeof tsObj.cardTypeSize === "number" ? tsObj.cardTypeSize : 16,
             cardTypeColor: tsObj.cardTypeColor ? String(tsObj.cardTypeColor) : null,
+            orientation: tsObj.orientation ? String(tsObj.orientation) : "portrait",
           }
         });
       }

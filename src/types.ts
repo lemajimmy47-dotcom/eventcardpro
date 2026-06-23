@@ -21,6 +21,20 @@ export interface EventDetails {
 
   // Logs for persistence
   messageLogs?: MessageLog[];
+  smsTemplates?: {
+    pledge1En?: string;
+    pledge1Sw?: string;
+    pledge2En?: string;
+    pledge2Sw?: string;
+    rem1En?: string;
+    rem1Sw?: string;
+    rem2En?: string;
+    rem2Sw?: string;
+    thanks1En?: string;
+    thanks1Sw?: string;
+    thanks2En?: string;
+    thanks2Sw?: string;
+  } | null;
 
   // Optional Contribution configuration
   contributionsEnabled?: boolean;
@@ -114,6 +128,7 @@ export interface TemplateSettings {
   cardTypeY: number;
   cardTypeSize: number;
   cardTypeColor?: string; // Custom color for card type badge
+  orientation?: 'portrait' | 'landscape';
 }
 
 export interface Guest {

@@ -115,7 +115,7 @@ async function performSelfCleaningAndMigration(data: any) {
   }
 }
 
-async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string) {
+async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[]) {
   // Standardize/Clean Tanzanian phone numbers to 255XXXXXXXXX format
   const cleanedPhone = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
   let formattedPhone = cleanedPhone;
@@ -128,6 +128,74 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
   // Handle WhatsApp custom automated HTTP dispatch if configured
   if (channel === 'whatsapp') {
     if (settings.whatsappUrl) {
+      // Check if it's a serialized JSON representing official Meta config
+      let metaConfig: any = null;
+      try {
+        if (settings.whatsappUrl.trim().startsWith('{') && settings.whatsappUrl.trim().endsWith('}')) {
+          metaConfig = JSON.parse(settings.whatsappUrl);
+        }
+      } catch (e) {
+        // Not a JSON, keep as standard Custom Webhook
+      }
+
+      if (metaConfig && metaConfig.provider === 'meta') {
+        const token = (metaConfig.meta_token || "").trim();
+        const phoneId = (metaConfig.phone_number_id || "").trim();
+        const templateName = (metaConfig.template_name || "").trim();
+        const templateLang = (metaConfig.template_lang || "sw").trim();
+        
+        console.log(`[Meta WhatsApp] Dispatching to ${formattedPhone} using template ${templateName}`);
+        
+        // Structure parameters for Meta WhatsApp Business body
+        const parameters = Array.isArray(templateParams) && templateParams.length > 0 
+          ? templateParams.map((val: string) => ({
+              type: "text",
+              text: String(val)
+            }))
+          : [
+              {
+                type: "text",
+                text: text // fallback to full text as single parameter if none sent
+              }
+            ];
+
+        const payload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: formattedPhone,
+          type: "template",
+          template: {
+            name: templateName,
+            language: {
+              code: templateLang
+            },
+            components: [
+              {
+                type: "body",
+                parameters: parameters
+              }
+            ]
+          }
+        };
+
+        const metaUrl = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
+        const response = await fetch(metaUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const respText = await response.text();
+        console.log("[Meta WhatsApp Resp]:", respText);
+        if (!response.ok) {
+          throw new Error(`Meta API failed: ${respText}`);
+        }
+        return respText;
+      }
+
       const finalUrl = settings.whatsappUrl
         .replace(/{to}/g, formattedPhone)
         .replace(/{message}/g, encodeURIComponent(text));
@@ -866,7 +934,7 @@ async function startServer() {
   // API 7: Real Send SMS & WhatsApp dispatcher
   app.post("/api/send-sms", async (req, res) => {
     try {
-      const { guestId, phone, text, channel, scheduleTime } = req.body;
+      const { guestId, phone, text, channel, scheduleTime, templateParams } = req.body;
       if (!phone || !text) {
         return res.status(400).json({ error: "Missing phone number or message text" });
       }
@@ -874,7 +942,7 @@ async function startServer() {
       const db = await readDBLatest();
       const settings = db.smsGatewaySettings || { provider: "simulation" };
 
-      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime);
+      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams);
       
       let batchId = null;
       try {

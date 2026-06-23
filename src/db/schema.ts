@@ -20,6 +20,7 @@ export const events = pgTable("events", {
   mapsLink: text("maps_link"),
   eventImgUrl: text("event_img_url"),
   messageLogs: jsonb("message_logs"),
+  smsTemplates: jsonb("sms_templates"),
   contributionsEnabled: boolean("contributions_enabled").default(false),
   fundraisingGoal: integer("fundraising_goal").default(0),
   autoRsvpRemindersEnabled: boolean("auto_rsvp_reminders_enabled").default(false),
@@ -87,6 +88,7 @@ export const templateSettings = pgTable("template_settings", {
   cardTypeY: integer("card_type_y").default(25),
   cardTypeSize: integer("card_type_size").default(16),
   cardTypeColor: text("card_type_color"),
+  orientation: text("orientation").default("portrait"),
 });
 
 export const smsGatewaySettings = pgTable("sms_gateway_settings", {

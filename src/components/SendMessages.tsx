@@ -48,8 +48,8 @@ export default function SendMessages({ event, settings, guests, language, onUpda
     const guest = activeSendTarget.guest;
     const canvas = document.createElement('canvas');
     
-    canvas.width = 450;
-    canvas.height = 650;
+    canvas.width = settings.orientation === 'landscape' ? 600 : 450;
+    canvas.height = settings.orientation === 'landscape' ? 450 : 600;
     setModalImageLoaded(false);
     drawCardToCanvas(
       canvas, 
@@ -150,28 +150,16 @@ export default function SendMessages({ event, settings, guests, language, onUpda
     if (saved && (saved.includes('Habari') || saved.includes('Familia'))) {
       return saved;
     }
-    return `Habari {name},
-Familia ya {host_name} kwa kushirikiana na Kamati ya Maandalizi, wanayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
+    return `🌸 SAVE THE DATE 🌸
 
-TAARIFA ZA SHEREHE
+Habari {name},
 
-Tarehe: {date}
-Ukumbi: {venue}
-Muda: {time}
-Kadi Na: {card_number}
-Aina ya Kadi: {card_type}
+Tafadhali hifadhi tarehe hii muhimu kwa ajili ya tukio letu la {event_name} litakalofanyika siku ya {date}.
 
-Uwepo wako ni wa thamani kubwa kwetu na utachangia kuifanya siku hii kuwa ya furaha na kumbukumbu nzuri.
+Unaweza kuona kadi yetu ya mwaliko, ramani ya ukumbi, na taarifa zote rasmi kupitia kiungo hiki cha kipekee:
+{kiungo}
 
-Ikiwa namba hii ipo WhatsApp, kadi yako ya mwaliko imetumwa huko pia.
-
-Mawasiliano:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
-
-Karibu sana.
-
-{kiungo}`;
+Tunafurahia sana ushiriki wako. Karibu sana!`;
   });
 
   const [invitationTemplateEn, setInvitationTemplateEn] = useState<string>(() => {
@@ -180,28 +168,16 @@ Karibu sana.
     if (saved && (saved.includes('Hello') || saved.includes('Dear') || saved.includes('Welcome'))) {
       return saved;
     }
-    return `Hello {name},
-The family of {host_name} in collaboration with the Organizing Committee, are pleased to welcome you to participate in {event_name}.
+    return `🌸 SAVE THE DATE 🌸
 
-EVENT DETAILS
+Hello {name},
 
-Date: {date}
-Venue: {venue}
-Time: {time}
-Card No: {card_number}
-Card Type: {card_type}
+Please save this important date for our {event_name} event which will be held on {date}.
 
-Your presence is highly valued and will contribute to making this day joyous and memorable.
+You can view our invitation card, venue map, and all official details via this unique link:
+{kiungo}
 
-If this number is on WhatsApp, your invitation card has been sent there as well.
-
-Contact:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
-
-You are warmly welcome.
-
-{kiungo}`;
+We are very excited to have you join us. You are warmly welcome!`;
   });
 
   const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
@@ -213,56 +189,32 @@ You are warmly welcome.
       if (savedSw && (savedSw.includes('Habari') || savedSw.includes('Familia'))) {
         setInvitationTemplateSw(savedSw);
       } else {
-        setInvitationTemplateSw(`Habari {name},
-Familia ya {host_name} kwa kushirikiana na Kamati ya Maandalizi, wanayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
+        setInvitationTemplateSw(`🌸 SAVE THE DATE 🌸
 
-TAARIFA ZA SHEREHE
+Habari {name},
 
-Tarehe: {date}
-Ukumbi: {venue}
-Muda: {time}
-Kadi Na: {card_number}
-Aina ya Kadi: {card_type}
+Tafadhali hifadhi tarehe hii muhimu kwa ajili ya tukio letu la {event_name} litakalofanyika siku ya {date}.
 
-Uwepo wako ni wa thamani kubwa kwetu na utachangia kuifanya siku hii kuwa ya furaha na kumbukumbu nzuri.
+Unaweza kuona kadi yetu ya mwaliko, ramani ya ukumbi, na taarifa zote rasmi kupitia kiungo hiki cha kipekee:
+{kiungo}
 
-Ikiwa namba hii ipo WhatsApp, kadi yako ya mwaliko imetumwa huko pia.
-
-Mawasiliano:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
-
-Karibu sana.
-
-{kiungo}`);
+Tunafurahia sana ushiriki wako. Karibu sana!`);
       }
 
       const savedEn = safeLocalStorage.getItem(`kadi_message_template_${event.id}_en`) || safeLocalStorage.getItem('kadi_message_template_en');
       if (savedEn && (savedEn.includes('Hello') || savedEn.includes('Dear') || savedEn.includes('Welcome'))) {
         setInvitationTemplateEn(savedEn);
       } else {
-        setInvitationTemplateEn(`Hello {name},
-The family of {host_name} in collaboration with the Organizing Committee, are pleased to welcome you to participate in {event_name}.
+        setInvitationTemplateEn(`🌸 SAVE THE DATE 🌸
 
-EVENT DETAILS
+Hello {name},
 
-Date: {date}
-Venue: {venue}
-Time: {time}
-Card No: {card_number}
-Card Type: {card_type}
+Please save this important date for our {event_name} event which will be held on {date}.
 
-Your presence is highly valued and will contribute to making this day joyous and memorable.
+You can view our invitation card, venue map, and all official details via this unique link:
+{kiungo}
 
-If this number is on WhatsApp, your invitation card has been sent there as well.
-
-Contact:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
-
-You are warmly welcome.
-
-{kiungo}`);
+We are very excited to have you join us. You are warmly welcome!`);
       }
     }
   }, [event?.id]);
@@ -350,9 +302,7 @@ Contact:
 {contact_1_name} - {contact_1_phone}
 {contact_2_name} - {contact_2_phone}
 
-You are warmly welcome.
-
-{kiungo}`);
+You are warmly welcome.`);
     } else {
       setInvitationTemplateSw(`Habari {name},
 Familia ya {host_name} kwa kushirikiana na Kamati ya Maandalizi, wanayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
@@ -373,9 +323,7 @@ Mawasiliano:
 {contact_1_name} - {contact_1_phone}
 {contact_2_name} - {contact_2_phone}
 
-Karibu sana.
-
-{kiungo}`);
+Karibu sana.`);
     }
   };
 
@@ -453,12 +401,13 @@ Karibu sana.
     return { countSmsSent: sms, countWhatsappSent: wa, countPending: pending };
   }, [filteredGuests]);
 
-  const getGuestMessageText = (g: Guest, stripLink: boolean = false) => {
-    // Generate the real link for this specific guest in the current running environment
-    const appUrl = `${window.location.origin}/?invite=${g.code || g.id}&eventId=${event.id}&lang=${language}`;
+  const getGuestMessageText = (g: Guest, isSms: boolean = false, forceAppendLink: boolean = false) => {
+    const currentOrigin = typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') 
+      ? window.location.origin 
+      : 'https://eventcard.co.tz';
+    const appUrl = `${currentOrigin}/?invite=${g.code || g.id}&std=true&eventId=${event.id}&lang=${language}`;
 
     let text = language === 'en' ? invitationTemplateEn : invitationTemplateSw;
-
     const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
 
     const replacements: { [key: string]: string } = {
@@ -484,8 +433,8 @@ Karibu sana.
       '{eventHall}': event.eventHallName || "[Ukumbi]",
       '{vazi}': event.dressCode || "[Vazi]",
       '{dressCode}': event.dressCode || "[Dress Code]",
-      '{kiungo}': stripLink ? "" : appUrl,
-      '{inviteUrl}': stripLink ? "" : appUrl,
+      '{kiungo}': (isSms && !sendSmsLink) ? "" : appUrl,
+      '{inviteUrl}': (isSms && !sendSmsLink) ? "" : appUrl,
       '{namba_mwaliko}': g.code || "[Code]",
       '{card_number}': g.code || "[Code]",
       '{inviteCode}': g.code || "[Code]",
@@ -502,7 +451,13 @@ Karibu sana.
       text = text.split(key).join(replacements[key]);
     });
 
-    return text.trim();
+    text = text.trim();
+
+    if ((isSms && !sendSmsLink && !text.includes(appUrl)) || (forceAppendLink && !text.includes(appUrl))) {
+      text += `\n\n${language === 'en' ? 'Link:' : 'Kiungo:'}\n${appUrl}`;
+    }
+
+    return text;
   };
 
   const cleanPhoneForWhatsapp = (phoneStr: string) => {
@@ -548,6 +503,61 @@ Karibu sana.
     try {
       const mainText = getGuestMessageText(target, channel === 'sms');
       const formattedScheduleTime = isScheduling && scheduleTime ? scheduleTime.replace('T', ' ') + ':00' : undefined;
+
+      // Extract template params dynamically for official Meta WhatsApp template matching
+      let templateParams: string[] | undefined = undefined;
+      if (channel === 'whatsapp') {
+        const rawTemplate = language === 'en' ? invitationTemplateEn : invitationTemplateSw;
+        const currentOrigin = typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') 
+          ? window.location.origin 
+          : 'https://eventcard.co.tz';
+        const appUrl = `${currentOrigin}/?invite=${target.code || target.id}&std=true&eventId=${event.id}&lang=${language}`;
+        const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
+
+        const replacements: { [key: string]: string } = {
+          '{mgeni}': target.name,
+          '{name}': target.name,
+          '{guestName}': target.name,
+          '{jina_la_mgeni}': target.name,
+          '(jina_la_mgeni)': target.name,
+          '{mwenyeji}': event.hostName || "[Mwenyeji]",
+          '{hostName}': event.hostName || "[Mwenyeji]",
+          '{host_name}': event.hostName || "[Mwenyeji]",
+          '{sherehe}': event.name || "[Sherehe]",
+          '{event_name}': event.name || "[Sherehe]",
+          '{eventName}': event.name || "[Sherehe]",
+          '{tarehe}': event.date || "26/11/2026",
+          '{date}': event.date || "26/11/2026",
+          '{eventDate}': event.date || "26/11/2026",
+          '{muda}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+          '{time}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+          '{eventTime}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+          '{ukumbi}': event.eventHallName || "[Ukumbi]",
+          '{venue}': event.eventHallName || "[Ukumbi]",
+          '{eventHall}': event.eventHallName || "[Ukumbi]",
+          '{vazi}': event.dressCode || "[Vazi]",
+          '{dressCode}': event.dressCode || "[Dress Code]",
+          '{kiungo}': appUrl,
+          '{inviteUrl}': appUrl,
+          '{namba_mwaliko}': target.code || "[Code]",
+          '{card_number}': target.code || "[Code]",
+          '{inviteCode}': target.code || "[Code]",
+          '{aina}': target.cardType || "DOUBLE",
+          '{card_type}': target.cardType || "DOUBLE",
+          '{mwasiliano}': contacts,
+          '{contact_1_name}': event.contact1Name || "",
+          '{contact_1_phone}': event.contact1 || "",
+          '{contact_2_name}': event.contact2Name || "",
+          '{contact_2_phone}': event.contact2 || ""
+        };
+
+        const regex = /\{[a-zA-Z0-9_\-Hh]+\}/g;
+        const matches = rawTemplate.match(regex) || [];
+        templateParams = matches.map(match => {
+          const val = replacements[match];
+          return val !== undefined ? val : match;
+        });
+      }
       
       // Use the simulation or Gateway API
       const res = await fetch('/api/send-sms', {
@@ -558,7 +568,8 @@ Karibu sana.
           phone: target.phone,
           text: mainText,
           channel,
-          scheduleTime: formattedScheduleTime
+          scheduleTime: formattedScheduleTime,
+          templateParams
         })
       });
       
@@ -567,7 +578,10 @@ Karibu sana.
 
       // If it was SMS, also send the link separately if enabled
       if (channel === 'sms' && sendSmsLink) {
-        const appUrl = `${window.location.origin}/?invite=${target.code || target.id}&eventId=${event.id}&lang=${language}`;
+        const currentOrigin = typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') 
+          ? window.location.origin 
+          : 'https://eventcard.co.tz';
+        const appUrl = `${currentOrigin}/?invite=${target.code || target.id}&std=true&eventId=${event.id}&lang=${language}`;
         // Short delay between messages
         await new Promise(resolve => setTimeout(resolve, 500));
         await fetch('/api/send-sms', {
@@ -718,7 +732,10 @@ Karibu sana.
 
       try {
         const mainText = getGuestMessageText(guest, true); // Strip link from main text
-        const appUrl = `${window.location.origin}/?invite=${guest.code || guest.id}&eventId=${event.id}&lang=${language}`;
+        const currentOrigin = typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') 
+          ? window.location.origin 
+          : 'https://eventcard.co.tz';
+        const appUrl = `${currentOrigin}/?invite=${guest.code || guest.id}&std=true&eventId=${event.id}&lang=${language}`;
         
         // 1. Send Main Message
         const res = await fetch('/api/send-sms', {
@@ -1482,7 +1499,7 @@ Karibu sana.
                   </span>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(getGuestMessageText(activeSendTarget.guest, activeSendTarget.channel === 'sms'));
+                      navigator.clipboard.writeText(getGuestMessageText(activeSendTarget.guest, activeSendTarget.channel === 'sms', activeSendTarget.channel === 'whatsapp'));
                       setCopySuccess(true);
                       setTimeout(() => setCopySuccess(false), 2000);
                     }}
@@ -1495,7 +1512,7 @@ Karibu sana.
                 </div>
                 
                 <div className="bg-slate-950 p-4 rounded-xl border border-white/5 font-mono text-[10.5px] text-slate-200 leading-relaxed whitespace-pre-wrap max-h-[140px] overflow-y-auto select-all scrollbar-thin">
-                  {getGuestMessageText(activeSendTarget.guest, activeSendTarget.channel === 'sms')}
+                  {getGuestMessageText(activeSendTarget.guest, activeSendTarget.channel === 'sms', activeSendTarget.channel === 'whatsapp')}
                 </div>
               </div>
 
@@ -1593,7 +1610,7 @@ Karibu sana.
                 
                 {activeSendTarget.channel === 'whatsapp' ? (
                   <a
-                    href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getGuestMessageText(activeSendTarget.guest))}`}
+                    href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getGuestMessageText(activeSendTarget.guest, false, true))}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}

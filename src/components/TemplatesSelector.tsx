@@ -508,13 +508,26 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                 id="font-family-select"
                 value={localSettings.fontFamily}
                 onChange={(e) => setLocalSettings({ ...localSettings, fontFamily: e.target.value })}
-                className="w-full border border-white/10 bg-[#050b18] rounded-xl px-3 py-2 text-white focus:outline-none cursor-pointer text-xs font-semibold"
+                className="w-full border border-white/10 bg-[#050b18] rounded-xl px-3 py-2 text-white focus:outline-none cursor-pointer text-xs font-semibold mb-3"
               >
                 {fonts.map(font => (
                   <option key={font.id} value={font.id} className="bg-[#050b18] text-white">
                     {font.name}
                   </option>
                 ))}
+              </select>
+              
+              <label className="font-bold text-slate-300 block mt-3" htmlFor="orientation-select">
+                {language === 'sw' ? 'Muundo wa Kadi' : 'Card Orientation'}
+              </label>
+              <select
+                id="orientation-select"
+                value={localSettings.orientation || 'portrait'}
+                onChange={(e) => setLocalSettings({ ...localSettings, orientation: e.target.value as 'portrait' | 'landscape' })}
+                className="w-full border border-white/10 bg-[#050b18] rounded-xl px-3 py-2 text-white focus:outline-none cursor-pointer text-xs font-semibold"
+              >
+                <option value="portrait" className="bg-[#050b18] text-white">{language === 'sw' ? 'Wima (Portrait)' : 'Portrait'}</option>
+                <option value="landscape" className="bg-[#050b18] text-white">{language === 'sw' ? 'Ulalo (Landscape)' : 'Landscape'}</option>
               </select>
             </div>
           </div>
@@ -549,14 +562,16 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
         {/* RIGHT COLUMN: Canvas Workspace Live Preview (5 Cols) */}
         <div className="lg:col-span-5 flex flex-col items-center space-y-3">
           <h3 className="font-bold text-slate-350 text-[11px] uppercase tracking-wider font-mono self-start text-center w-full">
-            {language === 'sw' ? '3. Mwonekano wa Kadi (450 x 600 px)' : '3. Live Canva Preview (450 x 600 px)'}
+            {language === 'sw' 
+              ? (localSettings.orientation === 'landscape' ? '3. Mwonekano wa Kadi (600 x 450 px)' : '3. Mwonekano wa Kadi (450 x 600 px)') 
+              : (localSettings.orientation === 'landscape' ? '3. Live Canva Preview (600 x 450 px)' : '3. Live Canva Preview (450 x 600 px)')}
           </h3>
           
-          <div className="relative border-4 border-white/10 rounded-3xl shadow-2xl overflow-hidden aspect-[3/4] bg-white w-full max-w-[340px]">
+          <div className={`relative border-4 border-white/10 rounded-3xl shadow-2xl overflow-hidden bg-white w-full ${localSettings.orientation === 'landscape' ? 'aspect-[4/3] max-w-[450px]' : 'aspect-[3/4] max-w-[340px]'}`}>
             <canvas 
               ref={canvasRef} 
-              width={450} 
-              height={600} 
+              width={localSettings.orientation === 'landscape' ? 600 : 450} 
+              height={localSettings.orientation === 'landscape' ? 450 : 600} 
               className="w-full h-auto block bg-white"
             />
           </div>

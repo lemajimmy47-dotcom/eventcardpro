@@ -865,6 +865,7 @@ export default function App() {
     cardTypeY: 15,
     cardTypeSize: 14,
     cardTypeColor: '#fbbf24',
+    orientation: 'portrait',
   };
 
   const renderContent = () => {
