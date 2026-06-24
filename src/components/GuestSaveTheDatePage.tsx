@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Heart, Share2, MessageSquare } from 'lucide-react';
 import { Guest, EventDetails } from '../types';
+import { useLanguage } from '../context/LanguageContext';
 
 interface Props {
   guest: Guest;
@@ -11,6 +12,9 @@ interface Props {
 }
 
 export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, customMessage }: Props) {
+  const { language } = useLanguage();
+  const isEn = language === 'en';
+
   // Try to find if there is a custom image in saveTheDates on local storage fallback
   const getSaveTheDateImage = () => {
     if (saveTheDateImage) return saveTheDateImage;
@@ -49,10 +53,10 @@ export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, c
             <span>SAVE THE DATE</span>
           </span>
           <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight uppercase mt-2">
-            HIFADHI TAREHE YETU
+            {isEn ? "SAVE OUR DATE" : "HIFADHI TAREHE YETU"}
           </h1>
           <p className="text-xs text-slate-400">
-            Mpendwa <span className="font-bold text-rose-300 uppercase">{guest.name}</span>, tafadhali hifadhi tarehe ya sherehe yetu.
+            {isEn ? "Dear" : "Mpendwa"} <span className="font-bold text-rose-300 uppercase">{guest.name}</span>, {isEn ? "please save the date for our ceremony." : "tafadhali hifadhi tarehe ya sherehe yetu."}
           </p>
         </div>
 
@@ -79,14 +83,14 @@ export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, c
           {/* Subtle overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-6 text-center">
             <p className="text-xl font-mono font-bold text-white tracking-widest uppercase mb-1">
-              {event.name || "SHEREHE MAALUM"}
+              {event.name || (isEn ? "SPECIAL EVENT" : "SHEREHE MAALUM")}
             </p>
             <p className="text-xs text-rose-300 font-bold tracking-widest uppercase mb-3">
-              TAREHE: {event.date}
+              {isEn ? "DATE:" : "TAREHE:"} {event.date}
             </p>
             <div className="w-[100px] h-[1px] bg-rose-500/50 mx-auto mb-2"></div>
             <p className="text-[10px] text-slate-400 italic">
-              "Ushiriki wako ni furaha yetu"
+              {isEn ? '"Your presence is our joy"' : '"Ushiriki wako ni furaha yetu"'}
             </p>
           </div>
         </motion.div>
@@ -97,12 +101,12 @@ export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, c
             <Calendar className="w-5 h-5 text-rose-400" />
           </div>
           <div className="space-y-2">
-            <h3 className="font-extrabold text-rose-400 text-sm uppercase tracking-wide">Taarifa za Sherehe</h3>
+            <h3 className="font-extrabold text-rose-400 text-sm uppercase tracking-wide">{isEn ? "Event Details" : "Taarifa za Sherehe"}</h3>
             <p className="text-xs text-slate-300 leading-relaxed font-sans">
-              Familia ya <span className="font-bold text-white">{event.hostName || "Waandaji"}</span> inayo furaha kukujulisha kuwa maandalizi ya sherehe yetu ya <span className="font-bold text-white">{event.name}</span> yanasonga mbele kwa ufanisi mkubwa.
+              {isEn ? "The " : "Familia ya "}<span className="font-bold text-white">{event.hostName || (isEn ? "Hosts" : "Waandaji")}</span> {isEn ? "family is pleased to inform you that the preparations for our " : "inayo furaha kukujulisha kuwa maandalizi ya sherehe yetu ya "}<span className="font-bold text-white">{event.name}</span> {isEn ? "ceremony are progressing with great success." : "yanasonga mbele kwa ufanisi mkubwa."}
             </p>
             <p className="text-xs text-slate-300 leading-relaxed font-sans mt-2">
-              Tafadhali karibu uhifadhi tarehe ya <span className="font-bold text-rose-300">{event.date}</span>. Mwaliko rasmi ukiwa na kadi ya kiingilio ya kidigitali yenye QR Code utatumwa kwako hivi karibuni kupitia namba yako ya simu. Stay tuned!
+              {isEn ? "Please save the date of " : "Tafadhali karibu uhifadhi tarehe ya "}<span className="font-bold text-rose-300">{event.date}</span>. {isEn ? "A formal invitation with a digital admission card and QR Code will be sent to you soon via your phone number. Stay tuned!" : "Mwaliko rasmi ukiwa na kadi ya kiingilio ya kidigitali yenye QR Code utatumwa kwako hivi karibuni kupitia namba yako ya simu. Stay tuned!"}
             </p>
           </div>
 
@@ -116,7 +120,7 @@ export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, c
               className="px-5 py-3 w-full bg-slate-800 hover:bg-slate-700 active:scale-[0.98] transition border border-white/15 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow cursor-pointer"
             >
               <Calendar className="w-4 h-4 text-rose-400" />
-              <span>Weka Kwenye Kalenda Yako</span>
+              <span>{isEn ? "Add to Your Calendar" : "Weka Kwenye Kalenda Yako"}</span>
             </button>
           </div>
         </div>
@@ -124,7 +128,7 @@ export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, c
         {/* Footer info box */}
         <div className="text-center text-[10px] text-slate-500 space-y-1">
           <p>© EVENTCARD DIGITAL SYSTEM - All Rights Reserved</p>
-          <p>Mwaliko huu umetengenezwa kidigitali kwa ubora wa hali ya juu.</p>
+          <p>{isEn ? "This invitation is digitally crafted with high quality." : "Mwaliko huu umetengenezwa kidigitali kwa ubora wa hali ya juu."}</p>
         </div>
       </div>
     </div>
