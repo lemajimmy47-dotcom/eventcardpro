@@ -1217,19 +1217,19 @@ Karibu sana.`);
                     className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500/30 bg-slate-900 border-white/10 cursor-pointer"
                   />
                   <label htmlFor="toggle-sms-link" className="text-[10.5px] font-bold text-slate-200 cursor-pointer select-none">
-                    Tuma Kiungo cha Kadi (Link) katika SMS ya pili?
+                    {isEn ? "Include Card Link in a second SMS?" : "Tuma Kiungo cha Kadi (Link) katika SMS ya pili?"}
                   </label>
                 </div>
                 <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
                   sendSmsLink ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
                 }`}>
-                  {sendSmsLink ? 'SMS 2 + LINK' : 'SMS 1 YA MANENO PEKEE'}
+                  {sendSmsLink ? (isEn ? '2 SMS + LINK' : 'SMS 2 + LINK') : (isEn ? '1 SMS TEXT ONLY' : 'SMS 1 YA MANENO PEKEE')}
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed pl-6">
                 {sendSmsLink 
-                  ? "ITAFIKA KWA SMS MBILI: Moja ni ujumbe wa maneno ya mialiko, na ya pili ni kiungo cha mtandaoni cha kadi. Inatumia salio zaidi ya SMS."
-                  : "ITAFIKA KWA SMS MOJA TU: Inatuma ujumbe wako wa maandishi pekee bila kadi/kiungo ya picha. Inapunguza nusu ya gharama na inalinda salio lako la SMS 31!"
+                  ? (isEn ? "SENT AS TWO SMS: First is invitation text, second is guest-specific card link. Consumes more credits." : "ITAFIKA KWA SMS MBILI: Moja ni ujumbe wa maneno ya mialiko, na ya pili ni kiungo cha mtandaoni cha kadi. Inatumia salio zaidi ya SMS.")
+                  : (isEn ? "SENT AS SINGLE SMS: Text-only message without the visual image link. Saves credits." : "ITAFIKA KWA SMS MOJA TU: Inatuma ujumbe wako wa maandishi pekee bila kadi/kiungo ya picha. Inapunguza nusu ya gharama na inalinda salio lako la SMS 31!")
                 }
               </p>
             </div>
@@ -1237,7 +1237,7 @@ Karibu sana.`);
             {/* Clickable Placeholders */}
             <div className="hidden space-y-1.5">
               <span className="text-[9px] uppercase font-mono tracking-wider text-slate-500 block font-bold">
-                Bofya vibandiko hivi kuweka taarifa zinazobadilika (Dynamic Placeholders):
+                {isEn ? "Click placeholders to insert dynamic template fields:" : "Bofya vibandiko hivi kuweka taarifa zinazobadilika (Dynamic Placeholders):"}
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {[
@@ -1272,22 +1272,22 @@ Karibu sana.`);
             <div className="flex items-center justify-between border-b border-white/5 pb-2">
               <div className="flex items-center space-x-1.5">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] uppercase font-mono tracking-wider text-slate-300 font-bold">Live Dynamic Preview (Mfano kwa mgeni wa kwanza)</span>
+                <span className="text-[10px] uppercase font-mono tracking-wider text-slate-300 font-bold">{isEn ? "Live Dynamic Preview (Sample of first guest)" : "Live Dynamic Preview (Mfano kwa mgeni wa kwanza)"}</span>
               </div>
               {guests.length > 0 && (
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-bold font-mono font-sans">
-                  Mgeni: {guests[0].name}
+                  {isEn ? "Guest:" : "Mgeni:"} {guests[0].name}
                 </span>
               )}
             </div>
 
-            <div className="flex-grow bg-[#04080e] p-3.5 rounded-lg border border-white/5 font-mono text-[10.5px] text-slate-200 leading-relaxed whitespace-pre-wrap max-h-[190px] overflow-y-auto select-all scrollbar-thin">
-              {guests.length > 0 ? getGuestMessageText(guests[0], false) : "Tafadhali kwanza ingiza wageni katika sehemu ya 'Wageni' ili kuona preview hapa."}
+            <div className="flex-grow bg-[#04080e] p-3.5 rounded-lg border border-white/5 font-mono text-[10.5px] text-slate-205 leading-relaxed whitespace-pre-wrap max-h-[190px] overflow-y-auto select-all scrollbar-thin">
+              {guests.length > 0 ? getGuestMessageText(guests[0], false) : (isEn ? "Please register guests under 'Guests' first to preview custom messages here." : "Tafadhali kwanza ingiza wageni katika sehemu ya 'Wageni' ili kuona preview hapa.")}
             </div>
 
             <div className="text-[9.5px] text-slate-400 flex items-start space-x-1.5 leading-normal">
               <span className="text-amber-500 text-[11px] font-bold">ℹ</span>
-              <p>Mabadiliko yoyote unayofanya hapa yatasasisha ujumbe wote utakaotembea kupitia WhatsApp na SMS kwenye jedwali hapo chini.</p>
+              <p>{isEn ? "Any custom edits made above will dynamically refresh all invitation text dispatches in the registry log below." : "Mabadiliko yoyote unayofanya hapa yatasasisha ujumbe wote utakaotembea kupitia WhatsApp na SMS kwenye jedwali hapo chini."}</p>
             </div>
           </div>
         </div>
@@ -1315,8 +1315,8 @@ Karibu sana.`);
                   <tr>
                     <td colSpan={6} className="px-5 py-12 text-center text-slate-500 italic">
                       {messageType === 'save_the_date' 
-                        ? 'Hakuna wageni waliothibitisha kuhudhuria bado. Save the Date inatumwa kwa wale walioweka "Atahudhuria" pekee.'
-                        : 'Hakuna wageni waliopatikana.'}
+                        ? (isEn ? 'No guests confirmed attendance yet. Save the Date is sent to attending guests only.' : 'Hakuna wageni waliothibitisha kuhudhuria bado. Save the Date inatumwa kwa wale walioweka "Atahudhuria" pekee.')
+                        : (isEn ? 'No guests found.' : 'Hakuna wageni waliopatikana.')}
                     </td>
                   </tr>
                 ) : (
@@ -1352,7 +1352,7 @@ Karibu sana.`);
                           </span>
                           {guest.smsStatus === 'Imetumia' && (
                             <span className="text-[10px] text-slate-400 font-mono font-normal">
-                              Zilizotumwa: <strong className="text-emerald-400 font-bold">{guest.smsCount || 1}</strong>
+                              {isEn ? "Sent:" : "Zilizotumwa:"} <strong className="text-emerald-400 font-bold">{guest.smsCount || 1}</strong>
                             </span>
                           )}
                         </div>
@@ -1370,7 +1370,7 @@ Karibu sana.`);
                           </span>
                           {guest.whatsappStatus === 'Imetumia' && (
                             <span className="text-[10px] text-slate-400 font-mono font-normal">
-                              Zilizotumwa: <strong className="text-blue-400 font-bold">{guest.whatsappCount || 1}</strong>
+                              {isEn ? "Sent:" : "Zilizotumwa:"} <strong className="text-blue-400 font-bold">{guest.whatsappCount || 1}</strong>
                             </span>
                           )}
                         </div>
@@ -1388,7 +1388,7 @@ Karibu sana.`);
                           }`}
                           title="Hariri Taarifa za Mgeni"
                         >
-                          Hariri (Edit)
+                          {isEn ? "Edit" : "Hariri (Edit)"}
                         </button>
 
                         {/* Reset Status button */}
@@ -1398,7 +1398,7 @@ Karibu sana.`);
                             className="p-1 px-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-lg transition cursor-pointer text-[10px]"
                             title="Futa Hali ya Kutuma"
                           >
-                            Reset Hali
+                            {isEn ? "Reset Status" : "Reset Hali"}
                           </button>
                         )}
 
@@ -1428,17 +1428,17 @@ Karibu sana.`);
                     </tr>
                   ))
                 )}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
           </div>
         </div>
 
         {/* Right simulated cloud logger (4 Cols) */}
         <div className="lg:col-span-4 flex flex-col space-y-3">
-          <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">Miamala na Kumbukumbu ya Kutuma (Logs)</h4>
+          <h4 className="font-bold text-slate-300 text-[10px] uppercase font-mono tracking-wider">{isEn ? "Transaction & Dispatch Logs" : "Miamala na Kumbukumbu ya Kutuma (Logs)"}</h4>
           <div className="flex-grow bg-slate-950/60 rounded-2xl p-4 font-mono text-[9px] h-[300px] overflow-y-auto border border-white/10 space-y-1.5 leading-relaxed antialiased">
             {sendLogs.length === 0 ? (
-              <p className="text-slate-600 italic">Kubonyeza "Vuta na Tuma zote" au kutuma kadi moja mmoja kutaorodhesha taarifa za kadi hapa...</p>
+              <p className="text-slate-600 italic">{isEn ? "Click 'Dispatch All' or send individually to stream real-time logs here..." : "Kubonyeza \"Vuta na Tuma zote\" au kutuma kadi moja mmoja kutaorodhesha taarifa za kadi hapa..."}</p>
             ) : (
               sendLogs.map((log, i) => {
                 const isError = log.includes('✗') || log.includes('Imeshindwa') || log.includes('Hitilafu');
