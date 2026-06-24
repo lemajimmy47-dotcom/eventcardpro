@@ -134,7 +134,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    const cleanFileName = `Wageni_Walioingia_${(event.name || 'Sherehe').replace(/[^a-zA-Z0-9_\u00c0-\u00ff]+/g, '_')}.csv`;
+    const cleanFileName = isEn ? `Checked_In_Guests_${(event.name || 'Event').replace(/[^a-zA-Z0-9_\u00c0-\u00ff]+/g, '_')}.csv` : `Wageni_Walioingia_${(event.name || 'Sherehe').replace(/[^a-zA-Z0-9_\u00c0-\u00ff]+/g, '_')}.csv`;
     link.setAttribute("download", cleanFileName);
     document.body.appendChild(link);
     link.click();
@@ -459,13 +459,13 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             if (matchedGuest) {
               triggerScanResult(matchedGuest);
             } else {
-              triggerScanResult(null, true, `QR kadi uliyopakia (${scannedText}) haimo kwenye mwaliko wetu.`);
+              triggerScanResult(null, true, isEn ? `Uploaded QR card (${scannedText}) is not in our guest list.` : `QR kadi uliyopakia (${scannedText}) haimo kwenye mwaliko wetu.`);
             }
           } else {
             // No QR detected in the uploaded image
             playFeedbackSound('error');
             setScanResult({ status: 'error' });
-            setManualError('Msimbo wa QR haukupatikana kwenye picha hii. Hakikisha picha iko wazi na yenye mwanga wa kutosha!');
+            setManualError(isEn ? 'No QR code found in this image. Ensure the image is clear and well-lit!' : 'Msimbo wa QR haukupatikana kwenye picha hii. Hakikisha picha iko wazi na yenye mwanga wa kutosha!');
             setTimeout(() => {
               setScanResult(null);
               setManualError('');
@@ -497,7 +497,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
     // Look up guest by Ky code (e.g. KY-4509) or ID
     const target = matchGuestFromScannedText(manualCode);
     if (!target) {
-      triggerScanResult(null, true, 'Kodi haipo au haitambuliki kwenye mfumo wa kadi mwalikwa!');
+      triggerScanResult(null, true, isEn ? 'Code not found or unrecognized in guest list!' : 'Kodi haipo au haitambuliki kwenye mfumo wa kadi mwalikwa!');
       setManualCode('');
       return;
     }
@@ -690,17 +690,17 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
           const name = err ? err.name : '';
           
           if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-            swahiliMessage = 'Ruhusa Imekataliwa (Permission Denied)! Ruhusu matumizi ya kamera kwa kugusa alama ya kufuli (lock icons) kwenye bar ya anwani na uchague "Ruhusu/Allow" upande wa Kamera.';
+            swahiliMessage = isEn ? 'Permission Denied! Allow camera access by clicking the lock icon in the address bar and selecting "Allow" for Camera.' : 'Ruhusa Imekataliwa (Permission Denied)! Ruhusu matumizi ya kamera kwa kugusa alama ya kufuli (lock icons) kwenye bar ya anwani na uchague "Ruhusu/Allow" upande wa Kamera.';
           } else if (name === 'NotReadableError' || name === 'TrackStartError') {
-            swahiliMessage = 'Kamera Inatumiwa sasa (NotReadableError)! Labda inapiga picha au kutumika na app nyingine kama WhatsApp/Zoom. Tafadhali zima app hizo kisha urudie tena.';
+            swahiliMessage = isEn ? 'Camera in use (NotReadableError)! It may be in use by another app like WhatsApp/Zoom. Please close those apps and try again.' : 'Kamera Inatumiwa sasa (NotReadableError)! Labda inapiga picha au kutumika na app nyingine kama WhatsApp/Zoom. Tafadhali zima app hizo kisha urudie tena.';
           } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
             swahiliMessage = isEn ? 'Camera Device Not Found (NotFoundError)! No working camera detected on this device right now.' : 'Kifaa cha Kamera Hakipatikani (NotFoundError)! Hakuna kamera inayofanya kazi iliyotambuliwa kwenye kifaa hiki kwa sasa.';
           } else if (name === 'SecurityError') {
-            swahiliMessage = 'Hitilafu ya Usalama (SecurityError)! Kivinjari chako kinahitaji kiungo cha salama cha HTTPS ili kuwasha kamera, au kiko ndani ya mfumo uliozuiwa.';
+            swahiliMessage = isEn ? 'Security Error (SecurityError)! Your browser requires a secure HTTPS connection to use the camera, or it is inside a restricted environment.' : 'Hitilafu ya Usalama (SecurityError)! Kivinjari chako kinahitaji kiungo cha salama cha HTTPS ili kuwasha kamera, au kiko ndani ya mfumo uliozuiwa.';
           } else if (name === 'OverconstrainedError') {
-            swahiliMessage = 'Kamera haikuweza kukubali vigezo vya uboreshaji (OverconstrainedError). Tafadhali badilisha chaguo la kamera.';
+            swahiliMessage = isEn ? 'Camera could not satisfy constraint settings (OverconstrainedError). Please switch camera option.' : 'Kamera haikuweza kukubali vigezo vya uboreshaji (OverconstrainedError). Tafadhali badilisha chaguo la kamera.';
           } else {
-            swahiliMessage = err.message || 'Kamera imeshindwa kufunguka au ruhusa imekataliwa. Hakikisha umetoa ruhusa ya kamera kwenye kifaa.';
+            swahiliMessage = err.message || (isEn ? 'Camera failed to start or permission denied. Check camera permissions on your device.' : 'Kamera imeshindwa kufunguka au ruhusa imekataliwa. Hakikisha umetoa ruhusa ya kamera kwenye kifaa.');
           }
           
           setCameraError(swahiliMessage);
@@ -788,7 +788,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   triggerScanResult(matchedGuest);
                 } else {
                   // Only trigger error if the scanned QR code is unique/different to prevent immediate loops
-                  triggerScanResult(null, true, `Msimbo wa QR ulioskaniwa (${scannedText}) haujasajiliwa kwani si wa mwaliko wetu.`);
+                  triggerScanResult(null, true, isEn ? `Scanned QR code (${scannedText}) is not registered in our guest list.` : `Msimbo wa QR ulioskaniwa (${scannedText}) haujasajiliwa kwani si wa mwaliko wetu.`);
                 }
               }
             }
@@ -836,7 +836,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         setSnapCameraError('');
         setSnapImage(null);
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error('Huduma ya piga picha haijaruhusiwa au haiauniwi hapa.');
+          throw new Error(isEn ? 'Photo capture service is not allowed or supported here.' : 'Huduma ya piga picha haijaruhusiwa au haiauniwi hapa.');
         }
 
         const snapConstraintSets = [
@@ -855,7 +855,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         }
 
         if (!streamObj) {
-          throw new Error('Haikupata kibali cha kamera au msaada wa kamera ya mbele ulikataliwa.');
+          throw new Error(isEn ? 'Could not get camera permission or front camera support was denied.' : 'Haikupata kibali cha kamera au msaada wa kamera ya mbele ulikataliwa.');
         }
 
         if (!active) {
@@ -877,7 +877,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         }
       } catch (err: any) {
         console.warn('Snap camera error:', err);
-        setSnapCameraError(err.message || 'Haikupata kibali cha kamera au kamera inatumika kwa ajili ya skana. Tafadhali ruhusu kamera na jaribu tena.');
+        setSnapCameraError(err.message || (isEn ? 'Failed to get camera permission or camera is in use. Please allow camera and try again.' : 'Haikupata kibali cha kamera au kamera inatumika kwa ajili ya skana. Tafadhali ruhusu kamera na jaribu tena.'));
       }
     };
 
@@ -1084,7 +1084,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
               activeTab === 'scanner' ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Skani (QR)
+            {isEn ? 'Scan (QR)' : 'Skani (QR)'}
           </button>
           <button
             onClick={() => setActiveTab('list')}
@@ -1110,7 +1110,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
           onClick={handleExportCheckedInCsv}
           disabled={countCheckedIn === 0}
           className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600/10 hover:bg-emerald-600/20 disabled:bg-white/5 border border-emerald-500/20 hover:border-emerald-500/40 disabled:border-white/5 text-emerald-300 disabled:text-slate-500 font-bold rounded-xl transition cursor-pointer disabled:cursor-not-allowed text-[11px]"
-          title={countCheckedIn === 0 ? "Orodha ya walioingia iko wazi kwa sasa" : "Pakua orodha nzima ya walioingia katika CSV"}
+          title={countCheckedIn === 0 ? (isEn ? "The checked-in list is currently empty" : "Orodha ya walioingia iko wazi kwa sasa") : (isEn ? "Download entire checked-in list as CSV" : "Pakua orodha nzima ya walioingia katika CSV")}
         >
           <Download className="w-3.5 h-3.5" />
           <span>{isEn ? 'Download Checked-in' : 'Pakua Walioingia'} ({countCheckedIn}) - CSV</span>
@@ -1150,7 +1150,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
               {!cameraActive && (
                 <div className="text-center space-y-2 text-slate-400 group z-10 p-4 max-h-full overflow-y-auto w-full h-full flex flex-col justify-center">
                   {!cameraError && <QrCode className="w-12 h-12 mx-auto text-blue-400 opacity-60 animate-pulse" />}
-                  {!cameraError && <p className="text-[10px] font-mono tracking-wider text-slate-300 uppercase">Kamera Inasubiriwa...</p>}
+                  {!cameraError && <p className="text-[10px] font-mono tracking-wider text-slate-300 uppercase">{isEn ? 'Waiting for Camera...' : 'Kamera Inasubiriwa...'}</p>}
                   {cameraError ? (
                     isPermissionDenied ? (
                       <div className="w-full flex flex-col h-full justify-between space-y-2 py-1 text-left">
@@ -1318,13 +1318,13 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                     ) : (
                       <div className="space-y-2">
                         <p className="text-[9px] text-rose-300 font-sans leading-normal">
-                          Kamera imeshindwa kuwaka: {cameraError}
+                          {isEn ? 'Camera failed to start:' : 'Kamera imeshindwa kuwaka:'} {cameraError}
                         </p>
                         
                         {isMobileIframe && (
                           <div className="bg-blue-950/40 border border-blue-500/25 p-2 rounded-xl mt-1 space-y-1.5 text-center">
                             <p className="text-[8.5px] text-blue-300 leading-normal">
-                              🔒 Usalama wa Safari/Chrome huzuia kamera ya simu kufanya kazi ndani ya Iframe.
+                              🔒 {isEn ? 'Safari/Chrome security prevents phone camera from working inside an Iframe.' : 'Usalama wa Safari/Chrome huzuia kamera ya simu kufanya kazi ndani ya Iframe.'}
                             </p>
                             <a 
                               href={window.location.href} 
@@ -1344,7 +1344,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                             onClick={() => setRetryCount(prev => prev + 1)}
                             className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-[9px] font-bold text-white rounded-lg transition shadow-md cursor-pointer"
                           >
-                            Rudia Kamera 🔄
+                            {isEn ? 'Retry Camera 🔄' : 'Rudia Kamera 🔄'}
                           </button>
                           
                           <label 
@@ -1352,7 +1352,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-[9px] font-bold text-white rounded-lg transition shadow-md cursor-pointer"
                           >
                             <Camera className="w-3 h-3" />
-                            <span>Piga Picha ya QR 📸</span>
+                            <span>{isEn ? 'Take QR Photo 📸' : 'Piga Picha ya QR 📸'}</span>
                           </label>
                           <input 
                             id="qr-image-fallback-upload-inner-alt"
@@ -1369,10 +1369,10 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                       {isMobileIframe ? (
                         <div className="space-y-2.5 bg-blue-950/35 border border-blue-500/25 p-3.5 rounded-xl">
                           <p className="text-[9.5px] text-blue-300 font-sans font-bold leading-normal">
-                            🔒 Usalama wa kivinjari unazuia kamera ya simu yako kuwaka ndani ya AI Studio Preview!
+                            🔒 {isEn ? 'Browser security prevents your phone camera from starting inside AI Studio Preview!' : 'Usalama wa kivinjari unazuia kamera ya simu yako kuwaka ndani ya AI Studio Preview!'}
                           </p>
                           <p className="text-[8.5px] text-slate-350 font-sans leading-relaxed">
-                            Unaweza kupiga picha ya kadi sasa au gusa kitufe kilicho chini kufungua mfumo kwenye ukurasa kamili ili kuskani ukitumia kamera mara moja:
+                            {isEn ? 'You can take a photo of the card now or tap the button below to open the system in a full page to scan using the camera immediately:' : 'Unaweza kupiga picha ya kadi sasa au gusa kitufe kilicho chini kufungua mfumo kwenye ukurasa kamili ili kuskani ukitumia kamera mara moja:'}
                           </p>
                           <a 
                             href={window.location.href} 
@@ -1387,7 +1387,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                       ) : (
                         <>
                           <p className="text-[9px] text-slate-350 font-sans leading-relaxed">
-                            Kama kiashiria cha kamera hakitokei, gusa kitufe hapa chini ili kuwasha kamera mara moja:
+                            {isEn ? 'If the camera indicator does not appear, tap the button below to turn on the camera immediately:' : 'Kama kiashiria cha kamera hakitokei, gusa kitufe hapa chini ili kuwasha kamera mara moja:'}
                           </p>
                           
                           <button
@@ -1396,13 +1396,13 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                             className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-[10px] font-extrabold rounded-xl transition shadow-lg shrink-0 cursor-pointer active:scale-95 animate-bounce font-mono uppercase tracking-wider flex items-center gap-1.5 mx-auto"
                           >
                             <Camera className="w-4 h-4" />
-                            <span>Washa Kamera Sasa 🎥</span>
+                            <span>{isEn ? 'Start Camera Now 🎥' : 'Washa Kamera Sasa 🎥'}</span>
                           </button>
                         </>
                       )}
 
                       <p className="text-[8px] text-slate-500 font-sans italic leading-normal">
-                        Kama unatumia simu, unaweza pia kutumia "Njia Mbadala" hapa chini kupakia/kupiga picha ya QR moja kwa moja.
+                        {isEn ? 'If you are using a mobile phone, you can also use the "Alternative Method" below to upload/take a picture of the QR code directly.' : 'Kama unatumia simu, unaweza pia kutumia "Njia Mbadala" hapa chini kupakia/kupiga picha ya QR moja kwa moja.'}
                       </p>
                     </div>
                   )}
@@ -1414,7 +1414,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/60 px-3 py-1 rounded-full flex items-center gap-1.5 z-10 border border-emerald-500/20 shadow-md">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 absolute"></span>
-                  <span className="text-[8px] text-emerald-300 font-mono tracking-widest font-extrabold uppercase leading-none">KAMERA INASOMA</span>
+                  <span className="text-[8px] text-emerald-300 font-mono tracking-widest font-extrabold uppercase leading-none">{isEn ? 'CAMERA SCANNING' : 'KAMERA INASOMA'}</span>
                 </div>
               )}
 
@@ -1437,9 +1437,9 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                         <h4 className="font-bold text-lg leading-tight uppercase font-sans">{isEn ? 'Guest Admitted!' : 'Mgeni Amekubaliwa!'}</h4>
                         <div className="text-xs space-y-0.5 font-sans">
                           <p className="font-bold text-sm bg-black/20 px-3 py-1.5 rounded-full inline-block mb-1">{scanResult.guestName}</p>
-                          <p>Kadi: <strong>{scanResult.cardType}</strong></p>
-                          <p>Idadi walioingia: <strong>{scanResult.companions}</strong></p>
-                          <p className="italic text-[10px] text-emerald-100 font-mono mt-1">Saa: {scanResult.time}</p>
+                          <p>{isEn ? 'Card:' : 'Kadi:'} <strong>{scanResult.cardType}</strong></p>
+                          <p>{isEn ? 'Guests arrived:' : 'Idadi walioingia:'} <strong>{scanResult.companions}</strong></p>
+                          <p className="italic text-[10px] text-emerald-100 font-mono mt-1">{isEn ? 'Time:' : 'Saa:'} {scanResult.time}</p>
                         </div>
                         <div className="pt-2">
                           <button
@@ -1464,12 +1464,12 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                     {scanResult.status === 'duplicate' && (
                       <div className="space-y-2 p-1">
                         <AlertTriangle className="w-12 h-12 mx-auto text-yellow-300 animate-pulse" />
-                        <h4 className="font-bold text-base leading-tight uppercase font-sans text-yellow-200">KADI ISHATUMIWA! DIAL UP</h4>
+                        <h4 className="font-bold text-base leading-tight uppercase font-sans text-yellow-200">{isEn ? 'CARD ALREADY USED!' : 'KADI ISHATUMIWA! DIAL UP'}</h4>
                         <div className="text-[10px] space-y-0.5 font-sans leading-normal">
                           <p className="font-bold text-xs bg-black/30 px-3 py-1 rounded-full inline-block mb-1 text-white">{scanResult.guestName}</p>
-                          <p className="text-slate-100">Kadi hii imeshapitia skana hapo mbeleni na imetumika tayari!</p>
-                          <p className="font-semibold text-yellow-200">Saa ya skan ya kwanza: {scanResult.time}</p>
-                          <p className="text-[9px] text-amber-200 italic mt-1 border-t border-white/10 pt-1">Onyo: Mwezeshe usher kuzuia duplicate entry!</p>
+                          <p className="text-slate-100">{isEn ? 'This card has already been scanned before and is used!' : 'Kadi hii imeshapitia skana hapo mbeleni na imetumika tayari!'}</p>
+                          <p className="font-semibold text-yellow-200">{isEn ? 'Time of first scan:' : 'Saa ya skan ya kwanza:'} {scanResult.time}</p>
+                          <p className="text-[9px] text-amber-200 italic mt-1 border-t border-white/10 pt-1">{isEn ? 'Warning: Ensure usher prevents duplicate entry!' : 'Onyo: Mwezeshe usher kuzuia duplicate entry!'}</p>
                         </div>
                       </div>
                     )}
@@ -1479,7 +1479,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                         <XCircle className="w-12 h-12 mx-auto text-rose-200" />
                         <h4 className="font-bold text-base leading-tight uppercase font-sans text-rose-100">KADI HAIKUTAMBULIKA!</h4>
                         <p className="text-[10px] leading-relaxed text-rose-200 bg-black/20 p-2 rounded-lg">
-                          {manualError || 'Nambari ya QR haikutambulika au haimo katika orodha rasmi ya sherehe hii.'}
+                          {manualError || (isEn ? 'QR code not recognized or not in the official guest list for this event.' : 'Nambari ya QR haikutambulika au haimo katika orodha rasmi ya sherehe hii.')}
                         </p>
                       </div>
                     )}
@@ -1494,7 +1494,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="w-full max-w-xs bg-slate-900 border border-blue-500/30 rounded-2xl p-4.5 space-y-3 shadow-xl">
               <div className="flex items-center gap-2 text-blue-350">
                 <Camera className="w-4 h-4 text-blue-400 shrink-0" />
-                <h4 className="font-bold text-[10.5px] uppercase tracking-wider font-mono">Njia Mbadala ya Uhakiki</h4>
+                <h4 className="font-bold text-[10.5px] uppercase tracking-wider font-mono">{isEn ? 'Alternative Verification' : 'Njia Mbadala ya Uhakiki'}</h4>
               </div>
               <p className="text-[10px] text-slate-350 leading-relaxed font-sans">
                 Kama kamera yako bado inasubiri ruhusa, unaweza <strong>kupiga picha ya kadi (QR)</strong> au kupakia picha kutoka galari ya simu yako hapa chini kuingiza wageni:
@@ -1505,7 +1505,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-550 text-white font-extrabold rounded-xl transition shadow-lg text-center text-[10.5px] uppercase font-mono tracking-wider cursor-pointer active:scale-95"
               >
                 <QrCode className="w-4 h-4" />
-                <span>Pakia / Piga Picha ya QR 📸</span>
+                <span>{isEn ? 'Upload / Take QR Photo 📸' : 'Pakia / Piga Picha ya QR 📸'}</span>
               </label>
               <input 
                 id="qr-image-fallback-upload"
@@ -1527,7 +1527,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 <div className="flex items-start gap-2.5 text-rose-300 border-b border-rose-500/10 pb-2.5">
                   <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 animate-pulse" />
                   <div>
-                    <h5 className="font-bold text-[11px] uppercase tracking-wider font-mono">Maelekezo ya Kamera (Msaada)</h5>
+                    <h5 className="font-bold text-[11px] uppercase tracking-wider font-mono">{isEn ? 'Camera Instructions (Help)' : 'Maelekezo ya Kamera (Msaada)'}</h5>
                     <p className="text-[9.5px] font-sans text-rose-300/80 mt-0.5 font-medium leading-tight">Jinsi ya kuwasha kamera kwenye simu/kifaa kingine:</p>
                   </div>
                 </div>
@@ -1536,7 +1536,9 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   <div className="flex gap-2.5">
                     <span className="flex items-center justify-center w-4 h-4 rounded-full bg-rose-500/15 text-rose-300 text-[9px] font-extrabold shrink-0 mt-0.5 border border-rose-500/25">1</span>
                     <p>
-                      <strong>Toa Ruhusa (Google/Safari):</strong> Gusa alama ya <span className="underline decoration-dotted font-semibold text-rose-200">kufuli au kadi ya mpangilio</span> iliyo upande wa kushoto wa bar ya anwani (juu ya kivinjari chako), badilisha ruhusa ya <strong>Kamera</strong> kuwa <strong>"Allow/Ruhusu"</strong>, kisha ipakie upya (reload) kurasa hii.
+                      {isEn 
+                        ? <><strong>Grant Permission (Google/Safari):</strong> Tap the <span className="underline decoration-dotted font-semibold text-rose-200">lock or settings icon</span> on the left side of the address bar (top of your browser), change <strong>Camera</strong> permission to <strong>"Allow"</strong>, then reload this page.</>
+                        : <><strong>Toa Ruhusa (Google/Safari):</strong> Gusa alama ya <span className="underline decoration-dotted font-semibold text-rose-200">kufuli au kadi ya mpangilio</span> iliyo upande wa kushoto wa bar ya anwani (juu ya kivinjari chako), badilisha ruhusa ya <strong>Kamera</strong> kuwa <strong>"Allow/Ruhusu"</strong>, kisha ipakie upya (reload) kurasa hii.</>}
                     </p>
                   </div>
 
@@ -1550,7 +1552,9 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   <div className="flex gap-2.5">
                     <span className="flex items-center justify-center w-4 h-4 rounded-full bg-rose-500/15 text-rose-300 text-[9px] font-extrabold shrink-0 mt-0.5 border border-rose-500/25">3</span>
                     <p>
-                      <strong>Zima Tab Nyingine:</strong> Hakikisha hakuna kivinjari au tab nyingine inayokaribisha kamera hivi sasa (mfano simu ya video ya WhatsApp, Instagram, n.k.) ili kuachia upatikanaji wa kamera.
+                      {isEn 
+                        ? <><strong>Close Other Tabs:</strong> Ensure no other browser or app is currently using the camera (e.g., WhatsApp video call, Instagram, etc.) to free up camera access.</>
+                        : <><strong>Zima Tab Nyingine:</strong> Hakikisha hakuna kivinjari au tab nyingine inayokaribisha kamera hivi sasa (mfano simu ya video ya WhatsApp, Instagram, n.k.) ili kuachia upatikanaji wa kamera.</>}
                     </p>
                   </div>
 
@@ -1567,7 +1571,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   onClick={() => setRetryCount(prev => prev + 1)}
                   className="w-full py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-extrabold rounded-xl transition shadow-lg text-center text-[10px] uppercase font-mono tracking-wider cursor-pointer"
                 >
-                  Jaribu Tena Kamera 🔄
+                  {isEn ? 'Retry Camera 🔄' : 'Jaribu Tena Kamera 🔄'}
                 </button>
               </motion.div>
             )}
@@ -1577,7 +1581,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
               <div className="w-full max-w-xs bg-black/40 border border-white/10 rounded-2xl p-3.5 space-y-2 text-xs animate-fade-in">
                 <label className="font-bold text-slate-350 flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider" htmlFor="camera-device-select">
                   <Camera className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Chagua Kamera (Active Camera)</span>
+                  <span>{isEn ? 'Choose Camera (Active Camera)' : 'Chagua Kamera (Active Camera)'}</span>
                 </label>
                 <select
                   id="camera-device-select"
@@ -1585,10 +1589,10 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   onChange={(e) => setSelectedDeviceId(e.target.value)}
                   className="w-full border border-white/10 bg-[#050b18] text-white px-2 py-1.5 rounded-lg focus:outline-none text-[10.5px] cursor-pointer"
                 >
-                  <option value="" className="bg-[#050b18] text-slate-400 font-sans">-- Chagua kamera kiotomatiki --</option>
+                  <option value="" className="bg-[#050b18] text-slate-400 font-sans">{isEn ? '-- Select camera automatically --' : '-- Chagua kamera kiotomatiki --'}</option>
                   {devices.map((device, idx) => (
                     <option key={device.deviceId} value={device.deviceId} className="bg-[#050b18] text-white font-sans">
-                      {device.label || `Kamera ${idx + 1}`}
+                      {device.label || (isEn ? `Camera ${idx + 1}` : `Kamera ${idx + 1}`)}
                     </option>
                   ))}
                 </select>
@@ -1628,11 +1632,11 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
               <h3 className="font-bold text-white flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
-                <span>Simulate / Jaribu QR Code Scan (Mlangoni)</span>
+                <span>{isEn ? 'Simulate / Test QR Code Scan' : 'Simulate / Jaribu QR Code Scan (Mlangoni)'}</span>
               </h3>
               
               <p className="text-slate-350 leading-relaxed text-[11px]">
-                Ili kuiga kitendo cha skani kadi mlangoni, chagua mgeni yeyote kutoka kwenye orodha hapa chini, kisha bofya <strong>"Skani Kadi"</strong>. Mfumo utasoma QR ya mgeni huyo na kurekodi takwimu za uingiaji.
+                {isEn ? 'To simulate scanning a card at the gate, select any guest from the list below, then click "Scan Card". The system will read the guest\'s QR and record entry statistics.' : 'Ili kuiga kitendo cha skani kadi mlangoni, chagua mgeni yeyote kutoka kwenye orodha hapa chini, kisha bofya <strong>"Skani Kadi"</strong>. Mfumo utasoma QR ya mgeni huyo na kurekodi takwimu za uingiaji.'}
               </p>
 
               {/* Selector dropdown */}
@@ -1644,10 +1648,10 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   onChange={(e) => setSelectedGuestSimId(e.target.value)}
                   className="w-full border border-white/10 bg-[#050b18] text-white px-3 py-2.5 rounded-xl focus:outline-none text-xs"
                 >
-                  <option value="" className="bg-[#050b18] text-slate-400 font-sans">-- Chagua mgeni hapa --</option>
+                  <option value="" className="bg-[#050b18] text-slate-400 font-sans">{isEn ? '-- Select guest here --' : '-- Chagua mgeni hapa --'}</option>
                   {guests.map(g => (
                     <option key={g.id} value={g.id} className="bg-[#050b18] text-white">
-                      {g.name} ({g.cardType} - {g.checkedIn ? 'Kashafika ✓' : 'Bado'})
+                      {g.name} ({g.cardType} - {g.checkedIn ? (isEn ? 'Arrived ✓' : 'Kashafika ✓') : (isEn ? 'Pending' : 'Bado')})
                     </option>
                   ))}
                 </select>
@@ -1662,7 +1666,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.30)] text-white font-bold rounded-xl transition duration-150 disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 shadow cursor-pointer text-xs"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>Kamilisha Skani ya QR sasa</span>
+                <span>{isEn ? 'Complete QR Scan now' : 'Kamilisha Skani ya QR sasa'}</span>
               </button>
             </div>
 
@@ -1670,11 +1674,11 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
               <h3 className="font-bold text-white flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-emerald-400" />
-                <span>Uhakiki Bila Kadi (Manual Code Recovery)</span>
+                <span>{isEn ? 'Manual Check-in (Without Card)' : 'Uhakiki Bila Kadi (Manual Code Recovery)'}</span>
               </h3>
               
               <p className="text-slate-350 leading-relaxed text-[11px]">
-                Ikiwa mgeni amepoteza kadi yake au hana simu, unaweza kuandika kodi yake hapa chini (mfano: <strong>KY-4509</strong> au kodi yoyote ya mgeni) ili kumuingiza mlangoni.
+                {isEn ? 'If a guest lost their card or phone, you can enter their code here (e.g., <strong>KY-4509</strong> or any code) to check them in manually.' : 'Ikiwa mgeni amepoteza kadi yake au hana simu, unaweza kuandika kodi yake hapa chini (mfano: <strong>KY-4509</strong> au kodi yoyote ya mgeni) ili kumuingiza mlangoni.'}
               </p>
 
               <form onSubmit={handleManualCodeCheckIn} className="space-y-3">
@@ -1697,7 +1701,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                       id="manual-code-submit-btn"
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition cursor-pointer text-xs"
                     >
-                      Uhakiki Kadi
+                      {isEn ? 'Check-in Card' : 'Uhakiki Kadi'}
                     </button>
                   </div>
                 </div>
@@ -1720,7 +1724,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
               <div className="flex items-center gap-1.5 pb-2.5 border-b border-white/10 mb-3 shrink-0">
                 <History className="w-4 h-4 text-emerald-400" />
                 <h3 className="font-bold text-white text-[10px] uppercase tracking-wider">
-                  Skani za Hivi Karibuni
+                  {isEn ? 'Recent Scans' : 'Skani za Hivi Karibuni'}
                 </h3>
               </div>
 
@@ -1729,7 +1733,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 {recentScans.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-3 text-slate-400 space-y-2">
                     <Clock className="w-8 h-8 opacity-20 text-slate-400 animate-pulse" />
-                    <p className="text-[10px] italic">Bado hakuna kadi iliyothibitishwa.</p>
+                    <p className="text-[10px] italic">{isEn ? 'No cards verified yet.' : 'Bado hakuna kadi iliyothibitishwa.'}</p>
                   </div>
                 ) : (
                   recentScans.map((scan) => (
@@ -1780,7 +1784,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="bg-emerald-950/25 border border-emerald-500/15 rounded-2xl p-4 flex justify-between items-center">
               <div>
                 <p className="text-[8.5px] text-emerald-400 font-bold uppercase font-mono tracking-widest">{isEn ? "Confirmed (RSVP)" : "Waliodhibitisha (RSVP)"}</p>
-                <p className="text-lg font-extrabold text-white mt-0.5">{countConfirmedGuests} <span className="text-[10px] text-slate-400 font-normal">Kadi ({countConfirmedSeats} Watu)</span></p>
+                <p className="text-lg font-extrabold text-white mt-0.5">{countConfirmedGuests} <span className="text-[10px] text-slate-400 font-normal">{isEn ? `Cards (${countConfirmedSeats} Pax)` : `Kadi (${countConfirmedSeats} Watu)`}</span></p>
               </div>
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
             </div>
@@ -1788,15 +1792,15 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="bg-blue-950/25 border border-blue-500/15 rounded-2xl p-4 flex justify-between items-center">
               <div>
                 <p className="text-[8.5px] text-blue-400 font-bold uppercase font-mono tracking-widest">{isEn ? "Arrived (Check-in)" : "Waliofika (Check-in)"}</p>
-                <p className="text-lg font-extrabold text-white mt-0.5">{countCheckedIn} <span className="text-[10px] text-slate-400 font-normal">Kadi ({countCheckedInSeats} Watu)</span></p>
+                <p className="text-lg font-extrabold text-white mt-0.5">{countCheckedIn} <span className="text-[10px] text-slate-400 font-normal">{isEn ? `Cards (${countCheckedInSeats} Pax)` : `Kadi (${countCheckedInSeats} Watu)`}</span></p>
               </div>
               <Users className="w-5 h-5 text-blue-400 shrink-0" />
             </div>
 
             <div className="bg-amber-950/25 border border-amber-500/15 rounded-2xl p-4 flex justify-between items-center">
               <div>
-                <p className="text-[8.5px] text-amber-400 font-bold uppercase font-mono tracking-widest">Bado Kufika (Pending)</p>
-                <p className="text-lg font-extrabold text-white mt-0.5">{countPendingGuests} <span className="text-[10px] text-slate-400 font-normal">Kadi ({countPendingSeats} Watu)</span></p>
+                <p className="text-[8.5px] text-amber-400 font-bold uppercase font-mono tracking-widest">{isEn ? 'Pending Arrival' : 'Bado Kufika (Pending)'}</p>
+                <p className="text-lg font-extrabold text-white mt-0.5">{countPendingGuests} <span className="text-[10px] text-slate-400 font-normal">{isEn ? `Cards (${countPendingSeats} Pax)` : `Kadi (${countPendingSeats} Watu)`}</span></p>
               </div>
               <Clock className="w-5 h-5 text-amber-400 shrink-0" />
             </div>
@@ -1817,10 +1821,10 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
 
             <div className="flex bg-slate-900/60 p-1 rounded-xl border border-white/5 text-[9.5px] font-bold w-full md:w-auto overflow-x-auto whitespace-nowrap scrollbar-none">
               {[
-                { id: 'all', label: `Wote (${guests.length})` },
-                { id: 'confirmed', label: `Waliodhibitisha (${countConfirmedGuests})` },
-                { id: 'checked-in', label: `Walioingia (${countCheckedIn})` },
-                { id: 'pending', label: `Bado Kuingia (${countPendingGuests})` }
+                { id: 'all', label: isEn ? `All (${guests.length})` : `Wote (${guests.length})` },
+                { id: 'confirmed', label: isEn ? `Confirmed (${countConfirmedGuests})` : `Waliodhibitisha (${countConfirmedGuests})` },
+                { id: 'checked-in', label: isEn ? `Checked-in (${countCheckedIn})` : `Walioingia (${countCheckedIn})` },
+                { id: 'pending', label: isEn ? `Pending (${countPendingGuests})` : `Bado Kuingia (${countPendingGuests})` }
               ].map((f) => (
                 <button
                   key={f.id}
@@ -1876,7 +1880,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                               type="button"
                               onClick={() => setPhotoGuest(g)}
                               className="w-8 h-8 flex items-center justify-center bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-full transition cursor-pointer"
-                              title="Piga Picha"
+                              title={isEn ? "Take Photo" : "Piga Picha"}
                             >
                               <Camera className="w-3.5 h-3.5" />
                             </button>
@@ -1943,10 +1947,10 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 text-white">
               <h4 className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-2">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                Ufanisi wa Scana
+                {isEn ? 'Scan Efficiency' : 'Ufanisi wa Scana'}
               </h4>
               <p className="text-2xl font-black text-white">100%</p>
-              <p className="text-[10px] text-slate-450 italic">Skani zote zimepita kwa usalama</p>
+              <p className="text-[10px] text-slate-450 italic">{isEn ? 'All scans passed safely' : 'Skani zote zimepita kwa usalama'}</p>
             </div>
           </div>
 
@@ -2025,9 +2029,9 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 <thead className="sticky top-0 bg-[#090f1d] shadow-sm z-10">
                   <tr className="text-slate-500 border-b border-white/5">
                     <th className="px-5 py-2.5 font-bold">{isEn ? "Time" : "Muda (Time)"}</th>
-                    <th className="px-5 py-2.5 font-bold">Mgeni (Guest)</th>
-                    <th className="px-5 py-2.5 font-bold">Kadi (Card)</th>
-                    <th className="px-5 py-2.5 font-bold text-right">Hali (Status)</th>
+                    <th className="px-5 py-2.5 font-bold">{isEn ? 'Guest' : 'Mgeni (Guest)'}</th>
+                    <th className="px-5 py-2.5 font-bold">{isEn ? 'Card' : 'Kadi (Card)'}</th>
+                    <th className="px-5 py-2.5 font-bold text-right">{isEn ? 'Status' : 'Hali (Status)'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -2048,7 +2052,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                   ))}
                   {guests.filter(g => g.checkedIn).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-center py-8 text-slate-500 italic">Logs ni tupu kwa sasa. Skani kadi kuanza kuona uingiaji!</td>
+                      <td colSpan={4} className="text-center py-8 text-slate-500 italic">{isEn ? 'Logs are currently empty. Scan a card to start seeing entries!' : 'Logs ni tupu kwa sasa. Skani kadi kuanza kuona uingiaji!'}</td>
                     </tr>
                   )}
                 </tbody>
@@ -2080,8 +2084,8 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 <span className="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl inline-block mb-3">
                   <Camera className="w-6 h-6 animate-pulse" />
                 </span>
-                <h3 className="text-base font-bold text-white tracking-tight">📸 Picha ya Mwalikwa</h3>
-                <p className="text-slate-400 text-[10.5px] mt-1 leading-normal">Nasa picha ya mgeni <strong>{photoGuest.name}</strong> kwa ajili ya usajili na uhakiki wa usalama mlangoni.</p>
+                <h3 className="text-base font-bold text-white tracking-tight">{isEn ? '📸 Guest Photo' : '📸 Picha ya Mwalikwa'}</h3>
+                <p className="text-slate-400 text-[10.5px] mt-1 leading-normal">{isEn ? `Capture photo of guest ` : `Nasa picha ya mgeni `}<strong>{photoGuest.name}</strong>{isEn ? ` for registration and security verification at the gate.` : ` kwa ajili ya usajili na uhakiki wa usalama mlangoni.`}</p>
               </div>
 
               {/* Viewfinder stream */}
@@ -2136,7 +2140,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                       onClick={handleSaveSnappedPhoto}
                       className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-blue-600 hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] text-white font-bold rounded-xl transition shadow-md cursor-pointer text-center text-[11px]"
                     >
-                      Hifadhi ✓
+                      {isEn ? 'Save ✓' : 'Hifadhi ✓'}
                     </button>
                   </div>
                 ) : (
@@ -2146,7 +2150,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                       onClick={() => setPhotoGuest(null)}
                       className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 font-bold rounded-xl transition cursor-pointer text-center text-[11px]"
                     >
-                      Ghairi
+                      {isEn ? 'Cancel' : 'Ghairi'}
                     </button>
                     <button 
                       type="button"
@@ -2154,7 +2158,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                       onClick={handleCapturePhoto}
                       className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 disabled:opacity-55 disabled:cursor-not-allowed hover:shadow-[0_0_15px_rgba(59,130,246,0.30)] text-white font-bold rounded-xl transition shadow-md cursor-pointer text-center text-[11px]"
                     >
-                      📸 Piga Picha
+                      {isEn ? '📸 Take Photo' : '📸 Piga Picha'}
                     </button>
                   </div>
                 )}
