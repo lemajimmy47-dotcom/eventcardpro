@@ -10,7 +10,8 @@ interface BackupManagerProps {
 }
 
 export default function BackupManager({ eventDetails, eventsList, guests }: BackupManagerProps) {
-  const { isEn } = useLanguage();
+  const { language } = useLanguage();
+  const isEn = language === 'en';
   const [copied, setCopied] = React.useState(false);
 
   const handleExportBackup = () => {

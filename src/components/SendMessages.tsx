@@ -966,9 +966,11 @@ Karibu sana.`);
         <div>
           <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <Send className="w-5 h-5 text-blue-400 animate-pulse" />
-            <span>Sambaza Kadi na Vikumbusho (Messages)</span>
+            <span>{isEn ? "Dispatch Cards & Reminders (Messages)" : "Sambaza Kadi na Vikumbusho (Messages)"}</span>
           </h2>
-          <p className="text-slate-350 mt-0.5">Tuma mialiko au vikumbusho kwa wageni kwa SMS au WhatsApp.</p>
+          <p className="text-slate-350 mt-0.5">
+            {isEn ? "Dispatch invitations or reminders to guests via SMS or WhatsApp." : "Tuma mialiko au vikumbusho kwa wageni kwa SMS au WhatsApp."}
+          </p>
         </div>
 
         <div className="flex gap-2 self-start sm:self-auto font-semibold flex-wrap items-center">
@@ -982,8 +984,8 @@ Karibu sana.`);
             }`}>
               <span className="w-1.5 h-1.5 rounded-full bg-current" />
               <span>{gatewaySettings.senderId}: {
-                gatewaySettings.senderIdStatus === 'approved' ? 'IMETHIBITISHWA' :
-                gatewaySettings.senderIdStatus === 'pending' ? 'INAHAKIKIWA...' : 'IMEKATALIWA'
+                gatewaySettings.senderIdStatus === 'approved' ? (isEn ? 'APPROVED' : 'IMETHIBITISHWA') :
+                gatewaySettings.senderIdStatus === 'pending' ? (isEn ? 'PENDING...' : 'INAHAKIKIWA...') : (isEn ? 'REJECTED' : 'IMEKATALIWA')
               }</span>
             </div>
           )}
@@ -994,7 +996,7 @@ Karibu sana.`);
               className="text-slate-200 border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-2 rounded-xl transition flex items-center gap-1 font-bold text-xs cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset Hali</span>
+              <span>{isEn ? "Reset Status" : "Reset Hali"}</span>
             </button>
           )}
 
@@ -1024,7 +1026,7 @@ Karibu sana.`);
             className="bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.30)] text-white px-4 py-2 rounded-xl transition flex items-center gap-1.5 font-bold shadow disabled:bg-white/10 disabled:text-slate-500 disabled:cursor-not-allowed text-xs cursor-pointer"
           >
             <PlayCircle className="w-4 h-4" />
-            <span>{isSendingAll ? 'Inatuma...' : isScheduling ? 'Weka Ratiba' : 'Tuma Zote'}</span>
+            <span>{isSendingAll ? (isEn ? 'Sending...' : 'Inatuma...') : isScheduling ? (isEn ? 'Schedule Send' : 'Weka Ratiba') : (isEn ? 'Dispatch All' : 'Tuma Zote')}</span>
           </button>
         </div>
       </div>

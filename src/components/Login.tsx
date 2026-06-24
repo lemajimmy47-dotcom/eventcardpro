@@ -76,7 +76,7 @@ export default function Login({ onSuccess, onBack }: LoginProps) {
         onSuccess();
       } else {
         setError(language === 'sw' 
-          ? (language === 'en' ? 'Invalid username or password! For gate security, use username "scanner" and event ID as password.' : 'Jina la mtumiaji au nenosiri si sahihi! Kwa mlinzi mlangoni, weka username kuelekezwa "scanner" na password kuwa ID ya tukio.')
+          ? 'Jina la mtumiaji au nenosiri si sahihi! Kwa mlinzi mlangoni, weka username kuelekezwa "scanner" na password kuwa ID ya tukio.'
           : 'Incorrect username or password! Scanners should use username "scanner" and Event ID as password.');
         setIsLoading(false);
       }

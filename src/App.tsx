@@ -2122,7 +2122,7 @@ function AttendanceSummary({ guests, t, language, setActiveTab, event }: { guest
     { label: t('rsvp.statAttending'), value: attendingCount, color: 'text-emerald-400', icon: CheckCircle2, tab: 'rsvp' },
     { label: t('rsvp.statDeclined'), value: declinedCount, color: 'text-rose-400', icon: X, tab: 'rsvp' },
     { label: t('rsvp.statPending'), value: pendingCount, color: 'text-amber-400', icon: Info, tab: 'rsvp' },
-    { label: 'Walioingia (Checked In)', value: checkedInCount, color: 'text-blue-400', icon: QrCode, tab: 'scan' },
+    { label: t('scan.statChecked'), value: checkedInCount, color: 'text-blue-400', icon: QrCode, tab: 'scan' },
   ];
 
   return (

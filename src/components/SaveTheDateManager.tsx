@@ -156,11 +156,15 @@ Please save the date for the upcoming {event_name} event on {date}.
 
 A formal invitation and admission card will reach you soon.
 
+View Card: {link}
+
 You are warmly welcome!` : `Habari {name}
 
 Tafadhali hifadhi tarehe ya sherehe ya {event_name} itakayofanyika tarehe {date}.
 
 Mwaliko rasmi pamoja na kadi ya kiingilio utakufikia hivi karibuni.
+
+Tazama Kadi: {link}
 
 Karibu sana!`);
           setSelectedFile(null);
@@ -276,7 +280,7 @@ Karibu sana!`);
       const template = stdTemplate || '';
       const contacts = [eventDetails.contact1, eventDetails.contact2, eventDetails.contact3].filter(Boolean).join('\n');
       
-      const compiled = template
+      let compiled = template
         .replace(/{name}/g, guestCleanName)
         .replace(/{host}/g, eventDetails.hostName || 'Familia yetu')
         .replace(/{event_name}/g, eventDetails.name || 'Sherehe yetu')
@@ -295,6 +299,10 @@ Karibu sana!`);
         .replace(/{time}/g, `${eventDetails.time || ""} ${eventDetails.period || ""}`)
         .replace(/{card_number}/g, guestObj?.code || "[Code]")
         .replace(/{card_type}/g, guestObj?.cardType || "DOUBLE");
+
+      if (!stripLink && !compiled.includes(guestLink)) {
+        compiled += `\n\n${isEn ? 'View Card here' : 'Tazama Kadi hapa'}: ${guestLink}`;
+      }
 
       if (stripLink) {
         // Scrub any other URLs completely
@@ -400,7 +408,12 @@ Karibu sana!`);
       }
 
       if (isDirty) {
-        showToast("⚠️ Huwezi kutuma kwa wote wakati una mabadiliko ambayo hayajahifadhiwa! Tafadhali bofya kitufe cha 'Hifadhi Taarifa za Save The Date' kwanza ili picha na ujumbe uhifadhiwe kwenye database.", "error");
+        showToast(
+          isEn 
+            ? "⚠️ You cannot dispatch messages while you have unsaved changes! Please click 'Save Save The Date Config' first to update the database."
+            : "⚠️ Huwezi kutuma kwa wote wakati una mabadiliko ambayo hayajahifadhiwa! Tafadhali bofya kitufe cha 'Hifadhi Taarifa za Save The Date' kwanza ili picha na ujumbe uhifadhiwe kwenye database.", 
+          "error"
+        );
         return;
       }
 
@@ -409,8 +422,10 @@ Karibu sana!`);
                          rsvpFilter === 'pending' ? (isEn ? 'Pending' : 'Bado hawajathibitisha') : (isEn ? 'Declined' : 'Waliokataa');
 
       const proceed = await showConfirm(
-        "Kutuma kwa Kikundi Hiki",
-        `Je, unataka kuanza kutuma ujumbe wa Save The Date kwa wageni ${activeFilteredGuests.length} waliopo kwenye orodha ya [${filterText}] kupitia ${channel.toUpperCase()}?`
+        isEn ? "Dispatch to this Group" : "Kutuma kwa Kikundi Hiki",
+        isEn 
+          ? `Do you want to begin sending Save The Date invitations to the ${activeFilteredGuests.length} guests in the [${filterText}] group via ${channel.toUpperCase()}?`
+          : `Je, unataka kuanza kutuma ujumbe wa Save The Date kwa wageni ${activeFilteredGuests.length} waliopo kwenye orodha ya [${filterText}] kupitia ${channel.toUpperCase()}?`
       );
       if (!proceed) return;
 
@@ -593,8 +608,18 @@ Karibu sana!`);
                 <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-2xl p-4 flex items-start gap-3 text-[11px] leading-relaxed font-sans">
                   <AlertCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
                   <div>
-                    <span className="font-extrabold uppercase block text-amber-305">⚠️ Kadi bado haijahifadhiwa kwenye database!</span>
-                    Umekamilisha kurekebisha picha au maneno kwenye muundo wa Save The Date. Tafadhali bofya kitufe cha kijani cha <strong>"Hifadhi Taarifa za Save The Date"</strong> sasa ili kuhifadhi thabiti, kisha ndio utengeneze au utume viungo kwa wageni.
+                    <span className="font-extrabold uppercase block text-amber-305">
+                      {isEn ? "⚠️ Save The Date Card not yet saved!" : "⚠️ Kadi bado haijahifadhiwa kwenye database!"}
+                    </span>
+                    {isEn ? (
+                      <>
+                        You have edited the Save The Date image style or message. Please click the green button <strong>"Save Save The Date Config"</strong> to commit changes to the database before generating or dispatching links.
+                      </>
+                    ) : (
+                      <>
+                        Umekamilisha kurekebisha picha au maneno kwenye muundo wa Save The Date. Tafadhali bofya kitufe cha kijani cha <strong>"Hifadhi Taarifa za Save The Date"</strong> sasa ili kuhifadhi thabiti, kisha ndio utengeneze au utume viungo kwa wageni.
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (

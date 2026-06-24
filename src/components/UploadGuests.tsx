@@ -1012,7 +1012,9 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
             <Users className="w-5 h-5 text-blue-400" />
             <span>{isEn ? "Upload and Manage Guests" : "Pakia na Simamia Wageni (Upload Guests)"}</span>
           </h2>
-          <p className="text-slate-350 mt-0.5">Tengeneza kadi mwalikwa ya kipekee kwa kila mgeni automatically.</p>
+          <p className="text-slate-350 mt-0.5">
+            {isEn ? "Generate a unique guest invitation card for each guest automatically." : "Tengeneza kadi mwalikwa ya kipekee kwa kila mgeni automatically."}
+          </p>
         </div>
       </div>
 
@@ -1020,12 +1022,16 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
       {saveStatus === 'saving' ? (
         <div className="p-4 rounded-2xl border bg-blue-500/10 border-blue-500/20 text-blue-300 transition-all duration-300 flex items-center space-x-2.5">
           <div className="w-4 h-4 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-          <p className="font-semibold text-xs">Inahifadhi mabadiliko kwenye database kiotomatiki... (Saving changes automatically...)</p>
+          <p className="font-semibold text-xs">
+            {isEn ? "Saving changes to database automatically..." : "Inahifadhi mabadiliko kwenye database kiotomatiki..."}
+          </p>
         </div>
       ) : (
         <div className="p-4 rounded-2xl border bg-emerald-500/10 border-emerald-500/20 text-emerald-300 transition-all duration-300 flex items-center space-x-2.5 animate-fade-in">
           <Check className="w-4 h-4 text-emerald-400" />
-          <p className="font-semibold text-xs">Mabadiliko yote yamehifadhiwa vizuri kwenye mfumo na database! ✓ (All changes saved!)</p>
+          <p className="font-semibold text-xs">
+            {isEn ? "All changes saved successfully to database! ✓" : "Mabadiliko yote yamehifadhiwa vizuri kwenye mfumo na database! ✓"}
+          </p>
         </div>
       )}
 
@@ -1076,12 +1082,12 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
           {saveStatus === 'saving' ? (
             <div className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold text-xs select-none">
               <div className="w-3.5 h-3.5 rounded-full border border-blue-400 border-t-transparent animate-spin" />
-              <span>Inahifadhi kiotomatiki...</span>
+              <span>{isEn ? "Saving automatically..." : "Inahifadhi kiotomatiki..."}</span>
             </div>
           ) : (
             <div className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs select-none">
               <Check className="w-4 h-4 text-emerald-400" />
-              <span>Kimehifadhiwa ✓</span>
+              <span>{isEn ? "All Saved ✓" : "Kimehifadhiwa ✓"}</span>
             </div>
           )}
 
@@ -1090,10 +1096,10 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
               id="clear-all-guests-btn"
               onClick={() => setShowClearConfirm(true)}
               className="flex-1 sm:flex-initial bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/30 text-rose-300 hover:text-white px-4 py-2.5 rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer font-bold"
-              title="Futa wageni wote kwa wakati mmoja"
+              title={isEn ? "Delete all guests at once" : "Futa wageni wote kwa wakati mmoja"}
             >
               <Trash2 className="w-4 h-4" />
-              <span>Futa Wageni Wote</span>
+              <span>{isEn ? "Delete All Guests" : "Futa Wageni Wote"}</span>
             </button>
           )}
 
@@ -1102,10 +1108,10 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
             onClick={() => setIsBulkPreviewOpen(true)}
             disabled={guests.length === 0}
             className="flex-1 sm:flex-initial bg-blue-500/15 border border-blue-500/30 text-blue-300 hover:text-white hover:bg-blue-500/25 px-4 py-2.5 rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Hakiki muonekano wa kila kadi ya kila mgeni haraka"
+            title={isEn ? "Quickly preview each guest's card layout" : "Hakiki muonekano wa kila kadi ya kila mgeni haraka"}
           >
             <ImageIcon className="w-4 h-4" />
-            <span>Hakiki Kadi (Bulk Preview)</span>
+            <span>{isEn ? "Bulk Preview Cards" : "Hakiki Kadi (Bulk Preview)"}</span>
           </button>
 
           <button
@@ -1114,7 +1120,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
             className="flex-1 sm:flex-initial bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] text-white px-4 py-2.5 rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer font-bold"
           >
             <UserPlus className="w-4 h-4" />
-            <span>Mgeni Mmoja</span>
+            <span>{isEn ? "Single Guest" : "Mgeni Mmoja"}</span>
           </button>
           
           <button
@@ -1123,7 +1129,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
             className="flex-1 sm:flex-initial bg-[#050b18] border border-white/15 text-slate-200 hover:text-white hover:bg-white/5 px-4 py-2.5 rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer font-bold"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>Pakia kwa Pamoja</span>
+            <span>{isEn ? "Bulk Upload" : "Pakia kwa Pamoja"}</span>
           </button>
         </div>
 
@@ -1184,7 +1190,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
               {sortedGuests.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-10 text-slate-400 font-sans">
-                    Hakuna mgeni aliyepatikana. Pakia au ongeza wageni kwanza kuanza!
+                    {isEn ? "No guests found. Upload or add guests first to begin!" : "Hakuna mgeni aliyepatikana. Pakia au ongeza wageni kwanza kuanza!"}
                   </td>
                 </tr>
               ) : (
@@ -1994,10 +2000,12 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
               </div>
               <div className="space-y-2">
                 <h3 className="text-base font-bold text-rose-500">
-                  Futa Wageni Wote ⚠️
+                  {isEn ? "Delete All Guests ⚠️" : "Futa Wageni Wote ⚠️"}
                 </h3>
                 <p className="text-xs text-slate-450 leading-normal">
-                  Je, una uhakika unataka kufuta wageni WOTE? Kitendo hiki kitaondoa wageni wote walioandikishwa kwenye jedwali pamoja na kadi zote zilizotengenezwa, na kitendo hiki hakiwezi kurejeshwa.
+                  {isEn 
+                    ? "Are you sure you want to delete ALL guests? This action will remove all registered guests from the table and delete all generated cards. This action cannot be undone." 
+                    : "Je, una uhakika unataka kufuta wageni WOTE? Kitendo hiki kitaondoa wageni wote walioandikishwa kwenye jedwali pamoja na kadi zote zilizotengenezwa, na kitendo hiki hakiwezi kurejeshwa."}
                 </p>
               </div>
               <div className="flex space-x-3 pt-2">
@@ -2006,7 +2014,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                   onClick={() => setShowClearConfirm(false)}
                   className="flex-grow py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-slate-350 transition cursor-pointer"
                 >
-                  Ghairi
+                  {isEn ? "Cancel" : "Ghairi"}
                 </button>
                 <button
                   type="button"
@@ -2016,7 +2024,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                   }}
                   className="flex-grow py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 hover:shadow-[0_0_15px_rgba(244,63,94,0.30)] text-xs font-bold text-white transition cursor-pointer"
                 >
-                  Ndiyo, Futa Wote
+                  {isEn ? "Yes, Delete All" : "Ndiyo, Futa Wote"}
                 </button>
               </div>
             </motion.div>
@@ -2039,10 +2047,12 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
               </div>
               <div className="space-y-2">
                 <h3 className="text-base font-bold text-white">
-                  Futa Mgeni ⚠️
+                  {isEn ? "Delete Guest ⚠️" : "Futa Mgeni ⚠️"}
                 </h3>
                 <p className="text-xs text-slate-400 leading-normal">
-                  Je, una uhakika unataka kumfuta kabisa mgeni: <strong className="text-white font-extrabold">"{confirmDeleteTarget.name}"</strong> kutoka kwenye mfumo? Kitendo hiki hakiwezi kurejeshwa.
+                  {isEn 
+                    ? <>Are you sure you want to permanently delete guest: <strong className="text-white font-extrabold">"{confirmDeleteTarget.name}"</strong>? This action cannot be undone.</>
+                    : <>Je, una uhakika unataka kumfuta kabisa mgeni: <strong className="text-white font-extrabold">"{confirmDeleteTarget.name}"</strong> kutoka kwenye mfumo? Kitendo hiki hakiwezi kurejeshwa.</>}
                 </p>
               </div>
               <div className="flex space-x-3 pt-2">
@@ -2051,7 +2061,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                   onClick={() => setConfirmDeleteTarget(null)}
                   className="flex-grow py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-slate-350 transition cursor-pointer"
                 >
-                  Ghairi
+                  {isEn ? "Cancel" : "Ghairi"}
                 </button>
                 <button
                   type="button"
@@ -2061,7 +2071,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                   }}
                   className="flex-grow py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 hover:shadow-[0_0_15px_rgba(244,63,94,0.30)] text-xs font-bold text-white transition cursor-pointer"
                 >
-                  Ndiyo, Futa
+                  {isEn ? "Yes, Delete" : "Ndiyo, Futa"}
                 </button>
               </div>
             </motion.div>

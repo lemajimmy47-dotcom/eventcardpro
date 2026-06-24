@@ -3,7 +3,8 @@ import { Settings, Save, RefreshCw } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function SMSGatewayConfig() {
-  const { isEn, t } = useLanguage();
+  const { language, t } = useLanguage();
+  const isEn = language === 'en';
   const [gatewaySettings, setGatewaySettings] = useState({
     provider: 'simulation',
     url: '',
@@ -458,7 +459,7 @@ export default function SMSGatewayConfig() {
           <button
             type="button"
             onClick={() => {
-              if (confirm('Una uhakika unataka kufuta mipangilio yote?')) {
+              if (confirm(isEn ? 'Are you sure you want to reset all configurations?' : 'Una uhakika unataka kufuta mipangilio yote?')) {
                 setGatewaySettings({
                   provider: 'simulation',
                   url: '',

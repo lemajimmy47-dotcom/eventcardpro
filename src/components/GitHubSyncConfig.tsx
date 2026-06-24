@@ -13,7 +13,8 @@ interface SyncLog {
 }
 
 export default function GitHubSyncConfig() {
-  const { isEn, t } = useLanguage();
+  const { language, t } = useLanguage();
+  const isEn = language === 'en';
   
   // Settings State
   const [repoUrl, setRepoUrl] = useState('');
