@@ -57,10 +57,13 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
   };
 
   // Sync state when parent settings or event changes
+  // Stringify settings to prevent reference-equality checks from resetting unsaved local adjustments on parent re-renders
+  const settingsStr = JSON.stringify(settings);
   useEffect(() => {
-    setLocalSettings({ ...settings });
-    setSelectedPresetId(settings.imageUrl?.startsWith('data:') ? 'custom-uploaded' : 'send-off');
-  }, [settings, event.id]);
+    const parsed = JSON.parse(settingsStr);
+    setLocalSettings(parsed);
+    setSelectedPresetId(parsed.imageUrl?.startsWith('data:') ? 'custom-uploaded' : 'send-off');
+  }, [settingsStr, event.id]);
 
   // Re-draw canvas on localSettings change or event change
   useEffect(() => {
