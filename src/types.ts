@@ -36,12 +36,23 @@ export interface EventDetails {
     thanks2Sw?: string;
     invitationTemplateSw?: string;
     invitationTemplateEn?: string;
+    contributionSw?: string;
+    contributionEn?: string;
   } | null;
+
+  paymentMethods?: {
+    id: string;
+    provider: string; // 'M-Pesa', 'Tigo Pesa', 'CRDB', etc.
+    type: 'Mobile' | 'Bank' | 'Lipa Namba';
+    number: string;
+    name: string;
+  }[];
 
   // Optional Contribution configuration
   contributionsEnabled?: boolean;
   fundraisingGoal?: number;
   autoRsvpRemindersEnabled?: boolean;
+  contributionDeadline?: string;
 }
 
 export interface ContributionPayment {
@@ -50,42 +61,6 @@ export interface ContributionPayment {
   date: string;
   reference: string;
   notes: string;
-}
-
-export interface ContributionCardTemplate {
-  eventId: string;
-  imageUrl?: string;
-  guestNameX: number;
-  guestNameY: number;
-  guestNameSize: number;
-  guestNameColor: string;
-  pledgeAmountX: number;
-  pledgeAmountY: number;
-  pledgeAmountSize: number;
-  pledgeAmountColor: string;
-  eventNameX: number;
-  eventNameY: number;
-  eventNameSize: number;
-  eventNameColor: string;
-  deadlineX: number;
-  deadlineY: number;
-  deadlineSize: number;
-  deadlineColor: string;
-  qrCodeX: number;
-  qrCodeY: number;
-  qrCodeSize: number;
-  qrCodeColor: string;
-  cardTypeX: number;
-  cardTypeY: number;
-  cardTypeSize: number;
-  cardTypeColor: string;
-  themeId?: string;
-  showEventName?: boolean;
-  showGuestName?: boolean;
-  showPledgeAmount?: boolean;
-  showDeadline?: boolean;
-  showCardType?: boolean;
-  showQrCode?: boolean;
 }
 
 export interface ContributionMessageLog {
@@ -131,6 +106,46 @@ export interface TemplateSettings {
   cardTypeSize: number;
   cardTypeColor?: string; // Custom color for card type badge
   orientation?: 'portrait' | 'landscape';
+}
+
+export interface ContributionCardTemplate {
+  imageUrl?: string;
+  themeId?: string;
+  
+  showEventName?: boolean;
+  eventNameX?: number;
+  eventNameY?: number;
+  eventNameSize?: number;
+  eventNameColor?: string;
+  
+  showGuestName?: boolean;
+  guestNameX?: number;
+  guestNameY?: number;
+  guestNameSize?: number;
+  guestNameColor?: string;
+  
+  showPledgeAmount?: boolean;
+  pledgeAmountX?: number;
+  pledgeAmountY?: number;
+  pledgeAmountSize?: number;
+  pledgeAmountColor?: string;
+  
+  showDeadline?: boolean;
+  deadlineX?: number;
+  deadlineY?: number;
+  deadlineSize?: number;
+  deadlineColor?: string;
+  
+  showCardType?: boolean;
+  cardTypeX?: number;
+  cardTypeY?: number;
+  cardTypeSize?: number;
+  cardTypeColor?: string;
+  
+  showQrCode?: boolean;
+  qrCodeX?: number;
+  qrCodeY?: number;
+  qrCodeSize?: number;
 }
 
 export interface Guest {

@@ -34,11 +34,13 @@ export default function EventReports({
   const [chartMetric, setChartMetric] = useState<'count' | 'value'>('count');
 
   const [systemLogoBase64, setSystemLogoBase64] = useState<string>('');
+  const [systemLogoDims, setSystemLogoDims] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [eventLogoBase64, setEventLogoBase64] = useState<string>('');
+  const [eventLogoDims, setEventLogoDims] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
   useEffect(() => {
     // Utility to load image to base64
-    const loadImgToBase64 = (url: string, callback: (b64: string) => void) => {
+    const loadImgToBase64 = (url: string, callback: (b64: string, dims: { w: number; h: number }) => void) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -50,7 +52,7 @@ export default function EventReports({
           if (ctx) {
             ctx.drawImage(img, 0, 0);
             const dataURL = canvas.toDataURL('image/png');
-            callback(dataURL);
+            callback(dataURL, { w: img.width, h: img.height });
           }
         } catch (e) {
           console.error("Failed to convert image to base64:", e);
@@ -63,11 +65,17 @@ export default function EventReports({
     };
 
     // Load standard system logo
-    loadImgToBase64('/logo.png', (b64) => setSystemLogoBase64(b64));
+    loadImgToBase64('/logo.png', (b64, dims) => {
+      setSystemLogoBase64(b64);
+      setSystemLogoDims(dims);
+    });
 
     // Load custom event cover/logo if it exists
     if (event.eventImgUrl) {
-      loadImgToBase64(event.eventImgUrl, (b64) => setEventLogoBase64(b64));
+      loadImgToBase64(event.eventImgUrl, (b64, dims) => {
+        setEventLogoBase64(b64);
+        setEventLogoDims(dims);
+      });
     }
   }, [event.eventImgUrl]);
 
@@ -265,9 +273,14 @@ export default function EventReports({
     let leftOffset = 15;
     if (systemLogoBase64) {
       try {
-        // Use a landscape aspect ratio for the logo (e.g. 24x10) to prevent squishing
-        doc.addImage(systemLogoBase64, 'PNG', 14, 15, 24, 10);
-        leftOffset = 42;
+        let logoWidth = 24;
+        let logoHeight = 10;
+        if (systemLogoDims.w && systemLogoDims.h) {
+          logoHeight = 10;
+          logoWidth = logoHeight * (systemLogoDims.w / systemLogoDims.h);
+        }
+        doc.addImage(systemLogoBase64, 'PNG', 14, 15, logoWidth, logoHeight);
+        leftOffset = 14 + logoWidth + 4;
       } catch (e) {
         console.error("Error adding system logo to PDF report:", e);
       }
@@ -276,8 +289,20 @@ export default function EventReports({
     let rightOffset = pageWidth - 15;
     if (eventLogoBase64) {
       try {
-        doc.addImage(eventLogoBase64, 'JPEG', pageWidth - 28, 12.5, 15, 15);
-        rightOffset = pageWidth - 32;
+        let logoWidth = 15;
+        let logoHeight = 15;
+        if (eventLogoDims.w && eventLogoDims.h) {
+          const ratio = eventLogoDims.w / eventLogoDims.h;
+          if (ratio > 1) {
+            logoWidth = 15 * ratio;
+            logoHeight = 15;
+          } else {
+            logoWidth = 15;
+            logoHeight = 15 / ratio;
+          }
+        }
+        doc.addImage(eventLogoBase64, 'JPEG', pageWidth - 14 - logoWidth, 12.5, logoWidth, logoHeight);
+        rightOffset = pageWidth - 14 - logoWidth - 4;
       } catch (e) {
         console.error("Error adding event logo to PDF report:", e);
       }
@@ -706,9 +731,14 @@ export default function EventReports({
     let startTextX = 15;
     if (systemLogoBase64) {
       try {
-        // Wider aspect ratio (e.g. 28x12) to match the brand logo without squishing
-        doc.addImage(systemLogoBase64, 'PNG', 14, currentY + 6, 28, 12);
-        startTextX = 46;
+        let logoWidth = 28;
+        let logoHeight = 12;
+        if (systemLogoDims.w && systemLogoDims.h) {
+          logoHeight = 12;
+          logoWidth = logoHeight * (systemLogoDims.w / systemLogoDims.h);
+        }
+        doc.addImage(systemLogoBase64, 'PNG', 14, currentY + 6, logoWidth, logoHeight);
+        startTextX = 14 + logoWidth + 4;
       } catch (e) {
         console.error("Error adding system logo to executive summary:", e);
       }
@@ -717,8 +747,20 @@ export default function EventReports({
     let rightAlignX = pageWidth - 15;
     if (eventLogoBase64) {
       try {
-        doc.addImage(eventLogoBase64, 'JPEG', pageWidth - 28, currentY + 4.5, 15, 15);
-        rightAlignX = pageWidth - 32;
+        let logoWidth = 15;
+        let logoHeight = 15;
+        if (eventLogoDims.w && eventLogoDims.h) {
+          const ratio = eventLogoDims.w / eventLogoDims.h;
+          if (ratio > 1) {
+            logoWidth = 15 * ratio;
+            logoHeight = 15;
+          } else {
+            logoWidth = 15;
+            logoHeight = 15 / ratio;
+          }
+        }
+        doc.addImage(eventLogoBase64, 'JPEG', pageWidth - 14 - logoWidth, currentY + 4.5, logoWidth, logoHeight);
+        rightAlignX = pageWidth - 14 - logoWidth - 4;
       } catch (e) {
         console.error("Error adding event logo to executive summary:", e);
       }
@@ -1270,6 +1312,44 @@ export default function EventReports({
 
       {/* Visual content area */}
       <div className="bg-slate-900/20 border border-white/5 rounded-3xl p-6 shadow-2xl space-y-6" id="printable-event-report-container">
+        
+        {/* Unified Premium Report Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-white/5 gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex -space-x-3 bg-slate-950/60 p-2.5 rounded-2xl border border-white/10 shadow-inner shrink-0">
+              <img src="/logo.png" alt="EventCard Logo" className="h-8 md:h-10 object-contain rounded-lg" referrerPolicy="no-referrer" />
+              {event.eventImgUrl && (
+                <img src={event.eventImgUrl} alt="Event Cover" className="h-8 w-8 md:h-10 md:w-10 rounded-lg object-cover border-2 border-slate-900" referrerPolicy="no-referrer" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-blue-500/10 text-blue-400 text-[9px] font-mono font-bold px-2 py-0.5 rounded-md border border-blue-500/20 uppercase tracking-wider">
+                  {selectedReport === 'Overall' ? (isEn ? "Overall Performance" : "Ripoti ya Jumla") :
+                   selectedReport === 'Attendance_Only' ? (isEn ? "Check-In" : "Waliosema Ndio") :
+                   selectedReport === 'RSVP_Only' ? (isEn ? "RSVP Attendance" : "Kuhudhuria") :
+                   selectedReport === 'RSVP_Pending' ? (isEn ? "RSVP Unresponsive" : "Bado Kujibu") :
+                   selectedReport === 'Outstanding' ? (isEn ? "Outstanding Balances" : "Mwenendo wa Madeni") :
+                   selectedReport === 'FullyPaid' ? (isEn ? "Fully Paid Members" : "Waliolipa Yote") :
+                   selectedReport === 'Pledges' ? (isEn ? "All Active Pledges" : "Ahadi Zote") :
+                   (isEn ? "No Pledge" : "Wasioahidi Bado")}
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono font-black">•</span>
+                <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-widest">{isEn ? "Official Event Ledger" : "Hati Kuu ya Tukio"}</span>
+              </div>
+              <h3 className="text-base md:text-lg font-black tracking-tight text-white uppercase font-mono mt-1">
+                {event.name}
+              </h3>
+            </div>
+          </div>
+          <div className="text-left md:text-right font-mono text-[10px] text-slate-400 space-y-0.5 shrink-0">
+            <p className="font-bold text-slate-300 flex items-center md:justify-end gap-1.5">
+              <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              {isEn ? "VERIFIED REPORT" : "RIPOTI ILIYOTHIBITISHWA"}
+            </p>
+            <p>{isEn ? "Printed on:" : "Tarehe:"} {new Date().toLocaleDateString('sw-TZ', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          </div>
+        </div>
         
         {/* Render 1: Overall Event Report view (requested) */}
         {selectedReport === 'Overall' && (

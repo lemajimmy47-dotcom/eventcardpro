@@ -6,73 +6,50 @@ import {
   DollarSign, PieChart as PieIcon, Upload, Calendar, Compass, 
   User, Check, ChevronRight, Share2, Download, Printer, Users, 
   AlertTriangle, CheckSquare, Coins, Clock, Send, PlayCircle, HelpCircle,
-  ExternalLink, MessageCircle, X, AlertCircle, Clipboard, LayoutGrid, Image as ImageIcon
+  ExternalLink, MessageCircle, X, AlertCircle, Clipboard, LayoutGrid, Image as ImageIcon, CreditCard,
+  Palette, Sliders
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 import { Guest, EventDetails, ContributionCardTemplate, ContributionPayment } from '../types';
+import { PREMADE_THEMES, drawContributionCardToCanvas } from '../utils/contributionCardDrawing';
+import { addPdfWatermarks } from '../utils/pdfWatermark';
+import { ReportWatermark } from './ReportWatermark';
+
+const qrCache = new Map<string, HTMLImageElement>();
+
+// Themes moved to shared utility
+
+function getOrCreateQRImage(text: string, callback: (img: HTMLImageElement) => void) {
+  const cached = qrCache.get(text);
+  if (cached) {
+    callback(cached);
+    return;
+  }
+
+  QRCode.toDataURL(text, {
+    margin: 1,
+    color: {
+      dark: '#000000',
+      light: '#ffffff'
+    }
+  }, (err, url) => {
+    if (err || !url) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      qrCache.set(text, img);
+      callback(img);
+    };
+    img.src = url;
+  });
+}
 import { useLanguage } from '../context/LanguageContext';
 import { safeLocalStorage } from '../utils/storage';
 
-export const PREMADE_THEMES = [
-  { 
-    id: 'midnight-gold', 
-    nameSw: 'Midnight Gold (Giza & Dhahabu)', 
-    nameEn: 'Midnight Gold (Dark & Gold)', 
-    bg: 'from-slate-950 via-slate-900 to-slate-950', 
-    border: 'border-amber-500/30', 
-    text: 'text-amber-500', 
-    dots: 'bg-amber-500', 
-    primaryColor: '#fbbf24', 
-    guestColor: '#ffffff', 
-    pledgeColor: '#f43f5e', 
-    deadlineColor: '#94a3b8', 
-    badgeColor: '#fbbf24' 
-  },
-  { 
-    id: 'emerald-luxury', 
-    nameSw: 'Royal Emerald (Zumaridi & Dhahabu)', 
-    nameEn: 'Royal Emerald (Emerald & Gold)', 
-    bg: 'from-emerald-950 via-[#012517] to-emerald-950', 
-    border: 'border-yellow-600/30', 
-    text: 'text-amber-400', 
-    dots: 'bg-emerald-500', 
-    primaryColor: '#f59e0b', 
-    guestColor: '#ffffff', 
-    pledgeColor: '#ecd06f', 
-    deadlineColor: '#a7f3d0', 
-    badgeColor: '#10b981' 
-  },
-  { 
-    id: 'velvet-plum', 
-    nameSw: 'Imperial Violet (Plum & Dhahabu ya Waridi)', 
-    nameEn: 'Imperial Violet (Plum & Rose Gold)', 
-    bg: 'from-purple-950 via-[#25012e] to-purple-950', 
-    border: 'border-pink-500/30', 
-    text: 'text-pink-400', 
-    dots: 'bg-fuchsia-500', 
-    primaryColor: '#f472b6', 
-    guestColor: '#ffffff', 
-    pledgeColor: '#c084fc', 
-    deadlineColor: '#ebd5fc', 
-    badgeColor: '#a78bfa' 
-  },
-  { 
-    id: 'onyx-minimal', 
-    nameSw: 'Onyx Minimal (Kijivu Cheusi Kidijitali)', 
-    nameEn: 'Onyx Minimal (Dark Slate Cyber)', 
-    bg: 'from-neutral-950 via-neutral-900 to-neutral-950', 
-    border: 'border-slate-500/30', 
-    text: 'text-slate-400', 
-    dots: 'bg-teal-500', 
-    primaryColor: '#a3a3a3', 
-    guestColor: '#14b8a6', 
-    pledgeColor: '#f43f5e', 
-    deadlineColor: '#737373', 
-    badgeColor: '#e5e5e5' 
-  }
-];
+
 
 interface ContributionManagerProps {
   key?: React.Key;
@@ -83,7 +60,7 @@ interface ContributionManagerProps {
   eventsList: EventDetails[];
   onSelectEvent: (eventId: string) => void;
   contribTemplate?: ContributionCardTemplate;
-  onUpdateContribTemplate?: (template: ContributionCardTemplate) => void;
+  onUpdateContribTemplate?: (tpl: ContributionCardTemplate) => void;
 }
 
 export default function ContributionManager({
@@ -98,7 +75,7 @@ export default function ContributionManager({
 }: ContributionManagerProps) {
   const { language } = useLanguage();
   const isEn = language === 'en';
-  const [subTab, setSubTab] = useState<'dashboard' | 'contributors' | 'card-designer' | 'pledge-requests' | 'reminders' | 'thank-you' | 'message-center' | 'reports'>('dashboard');
+  const [subTab, setSubTab] = useState<'dashboard' | 'contributors' | 'card-design' | 'payment-methods' | 'pledge-requests' | 'reminders' | 'thank-you' | 'message-center' | 'reports'>('dashboard');
   
   // Local states for forms
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,6 +83,13 @@ export default function ContributionManager({
   
   // Selected lists for bulk operations
   const [selectedGuests, setSelectedGuests] = useState<string[]>([]);
+  
+  // Payment Methods state
+  const [payProvider, setPayProvider] = useState('');
+  const [payType, setPayType] = useState<'Mobile' | 'Bank' | 'Lipa Namba' | ''>('');
+  const [payNumber, setPayNumber] = useState('');
+  const [payName, setPayName] = useState('');
+  const [customProvider, setCustomProvider] = useState('');
   
   // Dialog controls
   const [isPledgeModalOpen, setIsPledgeModalOpen] = useState(false);
@@ -202,18 +186,55 @@ export default function ContributionManager({
 
   // Load and store customizable message templates for each event (EN and SW versions)
   // We prioritize event.smsTemplates (persisted in database), then safeLocalStorage (for client-side fallback), then default strings.
-  const [tplPledge1En, setTplPledge1En] = useState<string>(() => event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`) || `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nThank you very much!`);
-  const [tplPledge1Sw, setTplPledge1Sw] = useState<string>(() => {
-    const saved = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
-    const oldDefault1 = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!`;
-    const oldDefault2 = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nAsante sana!,`;
-    const oldDefault3 = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!,`;
-    const oldDefault4 = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n\nAsante sana!`;
-    const newDefault = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n{Kiungo}\n\nAsante sana!`;
-    if (!saved || saved === oldDefault1 || saved === oldDefault2 || saved === oldDefault3 || saved === oldDefault4) {
-      return newDefault;
+  const [tplPledge1En, setTplPledge1En] = useState<string>(() => {
+    let saved = event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`);
+    const newDefault = `Hello {name},\nThe family of {host_name} requests your loving contribution to help make {event_name} a success on {date}.\nYour contribution is very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}\n\nContribution Details:\n{namba_za_malipo}\n\n{kiungo}\n\nThank you and God bless you!`;
+    if (saved && saved.includes('Tigo Pesa')) return saved; // Support people who modified the previous hardcoded one
+    if (saved) {
+      if (!/\{tarehe_ya_mwisho\}/i.test(saved)) {
+        if (saved.includes("very valuable to us.")) {
+          saved = saved.replace(
+            "very valuable to us.",
+            "very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}"
+          );
+        } else {
+          if (saved.includes("{payment_methods}")) {
+            saved = saved.replace("{payment_methods}", "The deadline to send your contribution is {tarehe_ya_mwisho}\n\n{payment_methods}");
+          } else if (saved.includes("{namba_za_malipo}")) {
+            saved = saved.replace("{namba_za_malipo}", "The deadline to send your contribution is {tarehe_ya_mwisho}\n\n{namba_za_malipo}");
+          } else {
+            saved = saved.replace("{kiungo}", "The deadline to send your contribution is {tarehe_ya_mwisho}\n\n{kiungo}");
+          }
+        }
+      }
+      if (!/\{payment_methods\}/i.test(saved) && !/\{namba_za_malipo\}/i.test(saved)) {
+        saved = saved.replace("{kiungo}", "{namba_za_malipo}\n\n{kiungo}");
+      }
+      return saved;
     }
-    return saved;
+    return newDefault;
+  });
+  const [tplPledge1Sw, setTplPledge1Sw] = useState<string>(() => {
+    let saved = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
+    const newDefault = `Habari {name},\nFamilia ya {host_name} inakuomba ushirikiane nasi kwa mchango wako wa upendo kufanikisha {event_name} itakayofanyika tarehe {date}.\nMchango wako, ni wa thamani sana kwetu na utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:\n{namba_za_malipo}\n\n{kiungo}\n\nAhsante na Mungu akubariki!`;
+    if (saved && saved.includes('Tigo Pesa')) return saved;
+    if (saved) {
+      if (!/\{tarehe_ya_mwisho\}/i.test(saved)) {
+        saved = saved.replace(
+          "utafanikisha jambo hili.",
+          "utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}"
+        );
+      }
+      if (!/\{namba_za_malipo\}/i.test(saved) && !/\{payment_methods\}/i.test(saved)) {
+        if (saved.includes("Namba za Michango:")) {
+          saved = saved.replace("Namba za Michango:", "Namba za Michango:\n{namba_za_malipo}");
+        } else {
+          saved = saved.replace("{kiungo}", "{namba_za_malipo}\n\n{kiungo}");
+        }
+      }
+      return saved;
+    }
+    return newDefault;
   });
 
   const [tplPledge2En, setTplPledge2En] = useState<string>(() => event.smsTemplates?.pledge2En || safeLocalStorage.getItem(`kadi_tpl_pledge2_en_${event.id}`) || `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nThank you deeply.`);
@@ -250,17 +271,51 @@ export default function ContributionManager({
 
   // Sync state values when event.id or event.smsTemplates changes to handle transitions without unmounting context
   useEffect(() => {
-    setTplPledge1En(event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`) || `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nThank you very much!`);
-    
-    const savedSw1 = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
-    const oldDefault1sw = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!`;
-    const oldDefault2sw = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\n\nAsante sana!,`;
-    const oldDefault3sw = `Habari {Mgeni},\n\nTunakuomba kutumbukiza na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya hapa kuandikisha:\n{Kiungo}\n\nAsante sana!,`;
-    const oldDefault4sw = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n\nAsante sana!`;
-    const newDefaultSw1 = `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n{Kiungo}\n\nAsante sana!`;
-    if (!savedSw1 || savedSw1 === oldDefault1sw || savedSw1 === oldDefault2sw || savedSw1 === oldDefault3sw || savedSw1 === oldDefault4sw) {
-      setTplPledge1Sw(newDefaultSw1);
+    const defaultEn1 = `Hello {name},\nThe family of {host_name} requests your loving contribution to help make {event_name} a success on {date}.\nYour contribution is very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}\n\nContribution Details:\n{namba_za_malipo}\n\n{kiungo}\n\nThank you and God bless you!`;
+    let savedEn1 = event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`);
+    if (!savedEn1 || savedEn1.includes('{Mgeni}') || savedEn1.includes('{Tukio}')) {
+      setTplPledge1En(defaultEn1);
     } else {
+      if (!/\{tarehe_ya_mwisho\}/i.test(savedEn1)) {
+        if (savedEn1.includes("very valuable to us.")) {
+          savedEn1 = savedEn1.replace(
+            "very valuable to us.",
+            "very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}"
+          );
+        } else {
+          if (savedEn1.includes("{payment_methods}")) {
+            savedEn1 = savedEn1.replace("{payment_methods}", "The deadline to send your contribution is {tarehe_ya_mwisho}\n\n{payment_methods}");
+          } else if (savedEn1.includes("{namba_za_malipo}")) {
+            savedEn1 = savedEn1.replace("{namba_za_malipo}", "The deadline to send your contribution is {tarehe_ya_mwisho}\n\n{namba_za_malipo}");
+          } else {
+            savedEn1 = savedEn1.replace("{kiungo}", "The deadline to send your contribution is {tarehe_ya_mwisho}\n\n{kiungo}");
+          }
+        }
+      }
+      if (!/\{payment_methods\}/i.test(savedEn1) && !/\{namba_za_malipo\}/i.test(savedEn1)) {
+        savedEn1 = savedEn1.replace("{kiungo}", "{namba_za_malipo}\n\n{kiungo}");
+      }
+      setTplPledge1En(savedEn1);
+    }
+    
+    let savedSw1 = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
+    const defaultSw1 = `Habari {name},\nFamilia ya {host_name} inakuomba ushirikiane nasi kwa mchango wako wa upendo kufanikisha {event_name} itakayofanyika tarehe {date}.\nMchango wako, ni wa thamani sana kwetu na utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:\n{namba_za_malipo}\n\n{kiungo}\n\nAhsante na Mungu akubariki!`;
+    if (!savedSw1 || savedSw1.includes('{Mgeni}') || savedSw1.includes('{Tukio}') || savedSw1.includes('kutumbukiza') || savedSw1.includes('bofya kitufe')) {
+      setTplPledge1Sw(defaultSw1);
+    } else {
+      if (!/\{tarehe_ya_mwisho\}/i.test(savedSw1)) {
+        savedSw1 = savedSw1.replace(
+          "utafanikisha jambo hili.",
+          "utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}"
+        );
+      }
+      if (!/\{namba_za_malipo\}/i.test(savedSw1) && !/\{payment_methods\}/i.test(savedSw1)) {
+        if (savedSw1.includes("Namba za Michango:")) {
+          savedSw1 = savedSw1.replace("Namba za Michango:", "Namba za Michango:\n{namba_za_malipo}");
+        } else {
+          savedSw1 = savedSw1.replace("{kiungo}", "{namba_za_malipo}\n\n{kiungo}");
+        }
+      }
       setTplPledge1Sw(savedSw1);
     }
 
@@ -569,142 +624,80 @@ export default function ContributionManager({
 
   // Card Design Template details inside event/state
   const [cardTemplate, setCardTemplate] = useState<ContributionCardTemplate>(() => {
-    if (contribTemplate) {
-      return contribTemplate;
+    // If props passed, use it, otherwise check cache, otherwise defaults
+    if (contribTemplate && (contribTemplate.imageUrl || contribTemplate.themeId)) return contribTemplate;
+    
+    // Incrementing version key to kadi_card_tpl_v3 to force the new minimal defaults for users
+    const cached = safeLocalStorage.getItem(`kadi_card_tpl_v3_${event.id}`);
+    if (cached) {
+      try { return JSON.parse(cached); } catch(e) { /* ignore */ }
     }
     
-    const cached = safeLocalStorage.getItem(`kadi_contrib_template_${event.id}`);
-    
-    const defaults = {
-      eventId: event.id,
-      guestNameX: 50,
-      guestNameY: 34,
-      guestNameSize: 22,
-      guestNameColor: '#FFFFFF',
-      pledgeAmountX: 50,
-      pledgeAmountY: 56,
-      pledgeAmountSize: 28,
-      pledgeAmountColor: '#f43f5e',
+    return {
+      imageUrl: '', // Blank initially for custom upload
+      themeId: 'midnight-gold',
+      
+      showEventName: false,
       eventNameX: 50,
       eventNameY: 18,
       eventNameSize: 24,
       eventNameColor: '#fbbf24',
+      
+      showGuestName: true,
+      guestNameX: 50,
+      guestNameY: 37,
+      guestNameSize: 22,
+      guestNameColor: '#FFFFFF',
+      
+      showPledgeAmount: false,
+      pledgeAmountX: 50,
+      pledgeAmountY: 56,
+      pledgeAmountSize: 28,
+      pledgeAmountColor: '#f43f5e',
+      
+      showDeadline: false,
       deadlineX: 50,
       deadlineY: 82,
       deadlineSize: 14,
       deadlineColor: '#94a3b8',
-      qrCodeX: 80,
-      qrCodeY: 80,
-      qrCodeSize: 15,
-      qrCodeColor: '#FFFFFF',
+      
+      showCardType: false,
       cardTypeX: 20,
       cardTypeY: 20,
       cardTypeSize: 12,
       cardTypeColor: '#fbbf24',
-      themeId: 'midnight-gold',
-      showEventName: true,
-      showGuestName: true,
-      showPledgeAmount: true,
-      showDeadline: true,
-      showCardType: true,
-      showQrCode: true
+      
+      showQrCode: false,
+      qrCodeX: 80,
+      qrCodeY: 80,
+      qrCodeSize: 15
     };
-
-    if (cached) {
-      try { 
-        const parsed = JSON.parse(cached);
-        if (parsed.eventId === event.id) {
-            return { ...defaults, ...parsed }; 
-        }
-      } catch(e) { console.error('Error parsing cached template:', e); }
-    }
-    return defaults;
   });
 
-  useEffect(() => {
-    const defaults = {
-      eventId: event.id,
-      guestNameX: 50,
-      guestNameY: 34,
-      guestNameSize: 22,
-      guestNameColor: '#FFFFFF',
-      pledgeAmountX: 50,
-      pledgeAmountY: 56,
-      pledgeAmountSize: 28,
-      pledgeAmountColor: '#f43f5e',
-      eventNameX: 50,
-      eventNameY: 18,
-      eventNameSize: 24,
-      eventNameColor: '#fbbf24',
-      deadlineX: 50,
-      deadlineY: 82,
-      deadlineSize: 14,
-      deadlineColor: '#94a3b8',
-      qrCodeX: 80,
-      qrCodeY: 80,
-      qrCodeSize: 15,
-      qrCodeColor: '#FFFFFF',
-      cardTypeX: 20,
-      cardTypeY: 20,
-      cardTypeSize: 12,
-      cardTypeColor: '#fbbf24',
-      themeId: 'midnight-gold',
-      showEventName: true,
-      showGuestName: true,
-      showPledgeAmount: true,
-      showDeadline: true,
-      showCardType: true,
-      showQrCode: true
-    };
-
-    if (contribTemplate) {
-      if (JSON.stringify(contribTemplate) !== JSON.stringify(cardTemplate)) {
-        setCardTemplate(contribTemplate);
-      }
-    } else {
-      const cached = safeLocalStorage.getItem(`kadi_contrib_template_${event.id}`);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (parsed.eventId === event.id) {
-            setCardTemplate(parsed);
-          } else {
-            setCardTemplate(defaults);
-          }
-        } catch (e) {
-          console.error('Error parsing cached template:', e);
-          setCardTemplate(defaults);
-        }
-      } else {
-        setCardTemplate(defaults);
-      }
-    }
-  }, [contribTemplate, event.id]);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-        // Only save if it matches the current event.id to prevents overwriting during transitions
-        if (cardTemplate.eventId !== event.id) return;
-        
-        safeLocalStorage.setItem(`kadi_contrib_template_${event.id}`, JSON.stringify(cardTemplate));
-        if (onUpdateContribTemplate) {
-          onUpdateContribTemplate(cardTemplate);
-        }
-    }, 1000); // 1s debounce
-
-    return () => clearTimeout(handler);
-  }, [cardTemplate, event.id, onUpdateContribTemplate]);
-
   const [isCardTemplateSaved, setIsCardTemplateSaved] = useState(false);
+
   const handleSaveCardTemplate = () => {
-    safeLocalStorage.setItem(`kadi_contrib_template_${event.id}`, JSON.stringify(cardTemplate));
-    if (onUpdateContribTemplate) {
-      onUpdateContribTemplate(cardTemplate);
-    }
+    safeLocalStorage.setItem(`kadi_card_tpl_v3_${event.id}`, JSON.stringify(cardTemplate));
+    if (onUpdateContribTemplate) onUpdateContribTemplate(cardTemplate);
     setIsCardTemplateSaved(true);
-    setTimeout(() => {
-      setIsCardTemplateSaved(false);
-    }, 3000);
+    setTimeout(() => setIsCardTemplateSaved(false), 3000);
+  };
+
+  const handleCardImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setCardTemplate(prev => ({
+          ...prev,
+          imageUrl: event.target?.result as string,
+          themeId: '' // Clear premade if custom uploaded
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Handle Enable
@@ -716,45 +709,9 @@ export default function ContributionManager({
     onUpdateEvent(updated);
   };
 
-  // Handle template image upload with compression to prevent localStorage overflow
-  const handleCardImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (readerEvent) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-
-        // Constraint: max 850px width for template to save storage
-        const maxW = 850;
-        if (width > maxW) {
-          height = (maxW / width) * height;
-          width = maxW;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        setCardTemplate(prev => ({
-          ...prev,
-          imageUrl: dataUrl
-        }));
-      };
-      img.src = readerEvent.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
-
   // Event specifics
-  const eventDeadlineStr = event.date 
-    ? new Date(event.date).toLocaleDateString('sw-TZ', { day: 'numeric', month: 'long', year: 'numeric' })
+  const eventDeadlineStr = (event.contributionDeadline || event.date)
+    ? new Date(event.contributionDeadline || event.date).toLocaleDateString('sw-TZ', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'Bila Kikomo';
 
   // Metrics calculators
@@ -970,12 +927,97 @@ export default function ContributionManager({
     paid: number = 0,
     balance: number = 0
   ) => {
-    return templateStr
+    let paymentString = '';
+    if (event.paymentMethods && event.paymentMethods.length > 0) {
+      const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
+      const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
+      const bank = event.paymentMethods.filter(m => m.type === 'Bank');
+      
+      if (mobile.length > 0) {
+        paymentString += "Namba za Simu (Mobile Money):\n";
+        mobile.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+        paymentString += "\n";
+      }
+      if (lipa.length > 0) {
+        paymentString += "Lipa Namba:\n";
+        lipa.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+        paymentString += "\n";
+      }
+      if (bank.length > 0) {
+        paymentString += "Akaunti za Benki:\n";
+        bank.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+        paymentString += "\n";
+      }
+      paymentString = paymentString.trim();
+    } else {
+      paymentString = "[Tafadhali weka namba za malipo kwenye Settings]";
+    }
+
+    const deadlineStr = (event.contributionDeadline || event.date)
+      ? new Date(event.contributionDeadline || event.date).toLocaleDateString('sw-TZ', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '[Tarehe]';
+
+    let processedTemplate = templateStr;
+
+    // Robust protection: If the template is missing {namba_za_malipo} / {payment_methods}, auto-inject it!
+    if (!/\{namba_za_malipo\}/i.test(processedTemplate) && !/\{payment_methods\}/i.test(processedTemplate)) {
+      if (processedTemplate.includes("Namba za Michango:")) {
+        processedTemplate = processedTemplate.replace("Namba za Michango:", "Namba za Michango:\n{namba_za_malipo}");
+      } else if (processedTemplate.includes("{kiungo}")) {
+        processedTemplate = processedTemplate.replace("{kiungo}", "{namba_za_malipo}\n\n{kiungo}");
+      } else {
+        processedTemplate = processedTemplate + "\n\n{namba_za_malipo}";
+      }
+    }
+
+    // Robust protection: If Swahili and missing {tarehe_ya_mwisho}, auto-inject it!
+    if (!isEn && !/\{tarehe_ya_mwisho\}/i.test(processedTemplate)) {
+      const matchKeywords = [
+        "utafanikisha jambo hili.",
+        "utafanikisha jambo hili,",
+        "utafanikisha jambo hili"
+      ];
+      let injected = false;
+      for (const kw of matchKeywords) {
+        if (processedTemplate.includes(kw)) {
+          processedTemplate = processedTemplate.replace(
+            kw,
+            `${kw}\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}`
+          );
+          injected = true;
+          break;
+        }
+      }
+      if (!injected) {
+        if (processedTemplate.includes("Namba za Michango:")) {
+          processedTemplate = processedTemplate.replace(
+            "Namba za Michango:",
+            "Mwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:"
+          );
+        } else {
+          processedTemplate = processedTemplate.replace(
+            "{kiungo}",
+            "Mwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\n{kiungo}"
+          );
+        }
+      }
+    }
+
+    return processedTemplate
       .replace(/{Mgeni}/g, guestName)
       .replace(/{NAME}/gi, guestName)
+      .replace(/{name}/gi, guestName)
       .replace(/{Tukio}/g, eventName)
       .replace(/{EVENT}/gi, eventName)
+      .replace(/{event_name}/gi, eventName)
+      .replace(/{host_name}/gi, event.hostName || "[Mwenyeji]")
+      .replace(/{date}/gi, event.date || "[Tarehe]")
+      .replace(/{tarehe_ya_mwisho}/gi, deadlineStr)
+      .replace(/\(tarehe_ya_mwisho\)/gi, deadlineStr)
+      .replace(/{namba_za_malipo}/gi, paymentString)
+      .replace(/{payment_methods}/gi, paymentString)
       .replace(/{Kiungo}/g, link)
+      .replace(/{kiungo}/gi, link)
       .replace(/{LINK}/gi, link)
       .replace(/{Ahadi}/g, pledge.toLocaleString())
       .replace(/{PLEDGE}/gi, pledge.toLocaleString())
@@ -1253,8 +1295,8 @@ export default function ContributionManager({
       if (messageTemplateIndex === 0) {
         setCustomPledgeTpl1(
           isEn 
-            ? `Hello {Mgeni},\n\nWe kindly request you to confirm your pledge contribution for the event "{Tukio}".\n\nThank you very much!`
-            : `Habari {Mgeni},\n\nTunakuomba kuweka na kuthibitisha ahadi yako ya mchango kwa ajili ya tukio la {Tukio}.\nTafadhali bofya kitufe kilicho hapa chini kujiandikisha au kuweka ahadi yako:\n{Kiungo}\n\nAsante sana!`
+            ? `Hello {name},\nThe family of {host_name} requests your loving contribution to help make {event_name} a success on {date}.\nYour contribution is very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}\n\nContribution Details:\n{namba_za_malipo}\n\n{kiungo}\n\nThank you and God bless you!`
+            : `Habari {name},\nFamilia ya {host_name} inakuomba ushirikiane nasi kwa mchango wako wa upendo kufanikisha {event_name} itakayofanyika tarehe {date}.\nMchango wako, ni wa thamani sana kwetu na utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:\n{namba_za_malipo}\n\n{kiungo}\n\nAhsante na Mungu akubariki!`
         );
       } else {
         setCustomPledgeTpl2(
@@ -1292,6 +1334,48 @@ export default function ContributionManager({
         );
       }
     }
+  };
+
+  const handleAddPaymentMethod = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payType) {
+      alert(isEn ? "Please select a payment type." : "Tafadhali chagua aina ya malipo kwanza.");
+      return;
+    }
+
+    const finalProvider = payProvider === 'Other' ? customProvider.trim() : payProvider;
+    if (!finalProvider || !payNumber || !payName) {
+      alert(isEn ? "Please fill in all fields." : "Tafadhali jaza taarifa zote zilizobaki.");
+      return;
+    }
+
+    const newMethod = {
+      id: Date.now().toString(),
+      type: payType as 'Mobile' | 'Bank' | 'Lipa Namba',
+      provider: finalProvider,
+      number: payNumber,
+      name: payName
+    };
+
+    const currentMethods = event.paymentMethods || [];
+    onUpdateEvent({
+      ...event,
+      paymentMethods: [...currentMethods, newMethod]
+    });
+
+    setPayType('');
+    setPayProvider('');
+    setPayNumber('');
+    setPayName('');
+    setCustomProvider('');
+  };
+
+  const handleRemovePaymentMethod = (id: string) => {
+    if (!event.paymentMethods) return;
+    onUpdateEvent({
+      ...event,
+      paymentMethods: event.paymentMethods.filter(m => m.id !== id)
+    });
   };
 
   const handleSaveTemplate = () => {
@@ -1431,9 +1515,13 @@ export default function ContributionManager({
         value: messageTemplateIndex === 0 ? customPledgeTpl1 : customPledgeTpl2,
         setter: messageTemplateIndex === 0 ? setCustomPledgeTpl1 : setCustomPledgeTpl2,
         placeholders: [
-          { tag: '{Mgeni}', label: isEn ? 'Guest Name' : 'Jina la Mgeni' },
-          { tag: '{Tukio}', label: isEn ? 'Event Name' : 'Jina la Tukio' },
-          { tag: '{Kiungo}', label: isEn ? 'Pledge Link' : 'Kiungo cha Ahadi' }
+          { tag: '{name}', label: isEn ? 'Guest Name' : 'Jina la Mgeni' },
+          { tag: '{event_name}', label: isEn ? 'Event Name' : 'Jina la Tukio' },
+          { tag: '{host_name}', label: isEn ? 'Host Name' : 'Jina la Mwenyeji' },
+          { tag: '{date}', label: isEn ? 'Event Date' : 'Tarehe ya Tukio' },
+          { tag: '{tarehe_ya_mwisho}', label: isEn ? 'Deadline Date' : 'Tarehe ya Mwisho' },
+          { tag: '{namba_za_malipo}', label: isEn ? 'Payment Methods' : 'Njia za Malipo' },
+          { tag: '{kiungo}', label: isEn ? 'Pledge Link' : 'Kiungo cha Ahadi' }
         ]
       };
     } else if (subTab === 'reminders') {
@@ -1445,7 +1533,8 @@ export default function ContributionManager({
           { tag: '{Tukio}', label: isEn ? 'Event Name' : 'Jina la Tukio' },
           { tag: '{Ahadi}', label: isEn ? 'Pledge Amount' : 'Kiasi Kilichoahidiwa' },
           { tag: '{Paid}', label: isEn ? 'Paid Amount' : 'Kiasi Kilicholipwa' },
-          { tag: '{Balance}', label: isEn ? 'Balance Due' : 'Salio Linalobaki' }
+          { tag: '{Balance}', label: isEn ? 'Balance Due' : 'Salio Linalobaki' },
+          { tag: '{namba_za_malipo}', label: isEn ? 'Payment Methods' : 'Njia za Malipo' }
         ]
       };
     } else {
@@ -1480,293 +1569,7 @@ export default function ContributionManager({
     }
   };
 
-  // Canvas drawing tool designed specifically for Pledge Cards
-  const drawContributionCardToCanvas = (
-    canvas: HTMLCanvasElement,
-    evt: EventDetails,
-    tpl: ContributionCardTemplate,
-    guest: Guest,
-    pledgeText: string,
-    onImageLoaded?: () => void
-  ) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const w = canvas.width;
-    const h = canvas.height;
-
-    const renderOverlays = () => {
-      // Guest Name overlay is the only displayed text element
-      if (tpl.showGuestName !== false) {
-        ctx.save();
-        const gX = ((tpl.guestNameX || 50) / 100) * w;
-        const gY = ((tpl.guestNameY || 34) / 100) * h;
-        ctx.fillStyle = tpl.guestNameColor || '#FFFFFF';
-        ctx.font = `bold italic ${tpl.guestNameSize || 22}px "Inter", sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText(guest.name.toUpperCase(), gX, gY);
-        ctx.restore();
-      }
-    };
-
-    if (tpl.imageUrl) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        ctx.clearRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-        renderOverlays();
-        if (onImageLoaded) onImageLoaded();
-      };
-      img.onerror = () => {
-        drawFallback();
-      };
-      img.src = tpl.imageUrl;
-    } else {
-      drawFallback();
-    }
-
-    function drawFallback() {
-      const themeId = tpl.themeId || 'midnight-gold';
-      ctx.clearRect(0, 0, w, h);
-
-      // Define themes
-      let bgGrad = ctx.createLinearGradient(0, 0, w, h);
-      let primaryColor = '#fbbf24';
-      let accentColor = '#f43f5e';
-      let outlineColor = '#d97706';
-      
-      if (themeId === 'emerald-luxury') {
-        bgGrad.addColorStop(0, '#022c22');
-        bgGrad.addColorStop(0.5, '#011c15');
-        bgGrad.addColorStop(1, '#04211a');
-        primaryColor = '#f59e0b';
-        accentColor = '#ecd06f';
-        outlineColor = '#ecd06f';
-      } else if (themeId === 'velvet-plum') {
-        bgGrad.addColorStop(0, '#1e0524');
-        bgGrad.addColorStop(0.5, '#2d0b38');
-        bgGrad.addColorStop(1, '#0f0212');
-        primaryColor = '#f472b6';
-        accentColor = '#c084fc';
-        outlineColor = '#f472b6';
-      } else if (themeId === 'onyx-minimal') {
-        bgGrad.addColorStop(0, '#0d0d0d');
-        bgGrad.addColorStop(0.5, '#141414');
-        bgGrad.addColorStop(1, '#050505');
-        primaryColor = '#a3a3a3';
-        accentColor = '#f43f5e';
-        outlineColor = '#404040';
-      } else { // midnight-gold
-        bgGrad.addColorStop(0, '#0a0f1d');
-        bgGrad.addColorStop(0.5, '#0f172a');
-        bgGrad.addColorStop(1, '#020617');
-        primaryColor = '#fbbf24';
-        accentColor = '#f43f5e';
-        outlineColor = '#d97706';
-      }
-
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, w, h);
-
-      if (themeId === 'onyx-minimal') {
-        // Draw dotted grid
-        ctx.save();
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
-        const dSp = 35;
-        for (let x = 0; x < w; x += dSp) {
-          for (let y = 0; y < h; y += dSp) {
-            ctx.beginPath();
-            ctx.arc(x, y, 1, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-        ctx.restore();
-
-        // Draw modern minimal tech brackets/coordinates
-        ctx.strokeStyle = '#14b8a680'; // teal
-        ctx.lineWidth = 2;
-        const brLen = 20;
-        const margin = 20;
-
-        // Top Left
-        ctx.beginPath(); ctx.moveTo(margin + brLen, margin); ctx.lineTo(margin, margin); ctx.lineTo(margin, margin + brLen); ctx.stroke();
-        // Top Right
-        ctx.beginPath(); ctx.moveTo(w - margin - brLen, margin); ctx.lineTo(w - margin, margin); ctx.lineTo(w - margin, margin + brLen); ctx.stroke();
-        // Bottom Left
-        ctx.beginPath(); ctx.moveTo(margin + brLen, h - margin); ctx.lineTo(margin, h - margin); ctx.lineTo(margin, h - margin - brLen); ctx.stroke();
-        // Bottom Right
-        ctx.beginPath(); ctx.moveTo(w - margin - brLen, h - margin); ctx.lineTo(w - margin, h - margin); ctx.lineTo(w - margin, h - margin - brLen); ctx.stroke();
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(margin + 10, margin + 10, w - (margin + 10) * 2, h - (margin + 10) * 2);
-      } else {
-        // Classic and Luxury Themes with Elegant Outlines
-        // Double borders
-        ctx.strokeStyle = outlineColor;
-        ctx.lineWidth = 3;
-        ctx.strokeRect(15, 15, w - 30, h - 30);
-
-        ctx.strokeStyle = `${outlineColor}40`;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(25, 25, w - 50, h - 50);
-
-        // Corner ornaments
-        const drawCornerOrnament = (x: number, y: number, rotX: number, rotY: number) => {
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.scale(rotX, rotY);
-          ctx.strokeStyle = outlineColor;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(0, 15);
-          ctx.quadraticCurveTo(15, 15, 15, 45);
-          ctx.moveTo(15, 0);
-          ctx.quadraticCurveTo(15, 15, 45, 15);
-          ctx.stroke();
-          ctx.restore();
-        };
-
-        drawCornerOrnament(40, 40, 1, 1);
-        drawCornerOrnament(w - 40, 40, -1, 1);
-        drawCornerOrnament(40, h - 40, 1, -1);
-        drawCornerOrnament(w - 40, h - 40, -1, -1);
-
-        // Center watermark
-        ctx.save();
-        ctx.strokeStyle = `${outlineColor}15`;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.28, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.22, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-
-        // Glowing bokeh or sparkles
-        ctx.save();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-        const spots = [
-          {x: w*0.2, y: h*0.15, r: 2}, {x: w*0.8, y: h*0.15, r: 3},
-          {x: w*0.15, y: h*0.75, r: 1.5}, {x: w*0.85, y: h*0.7, r: 2.5},
-          {x: w*0.35, y: h*0.88, r: 2}, {x: w*0.65, y: h*0.12, r: 1.8}
-        ];
-        spots.forEach(pt => {
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI*2);
-          ctx.fill();
-        });
-        ctx.restore();
-      }
-
-      // Title header band
-      ctx.save();
-      ctx.fillStyle = primaryColor;
-      ctx.textAlign = 'center';
-      ctx.font = `italic 300 13px "Inter", sans-serif`;
-      ctx.letterSpacing = "2px";
-      ctx.fillText(isEn ? "PLEDGE & CONTRIBUTION CARD" : "KADI YA MCHANGO NA AHADI", w / 2, h * 0.08);
-      ctx.restore();
-
-      renderOverlays();
-
-      ctx.save();
-      ctx.fillStyle = themeId === 'onyx-minimal' ? '#525252' : 'rgba(255, 255, 255, 0.3)';
-      ctx.textAlign = 'center';
-      ctx.font = `italic 10.5px "Inter", sans-serif`;
-      ctx.fillText(`Kamati ya Maandalizi: ${evt.hostName || "Ndugu na Marafiki"}`, w / 2, h * 0.93);
-      ctx.restore();
-
-      // Small custom crown vector
-      if (themeId !== 'onyx-minimal') {
-        ctx.save();
-        ctx.fillStyle = `${outlineColor}60`;
-        ctx.font = "14px Arial";
-        ctx.textAlign = 'center';
-        ctx.fillText("❦", w / 2, h * 0.11);
-        ctx.restore();
-      }
-
-      if (onImageLoaded) onImageLoaded();
-    }
-  };
-
-  // Re-draw active individual send card template whenever targets change
-  useEffect(() => {
-    if (!activeSendTarget) {
-      setModalCardUrl('');
-      setModalImageLoaded(false);
-      return;
-    }
-    const { guest, type } = activeSendTarget;
-    const canvas = document.createElement('canvas');
-    canvas.width = 450;
-    canvas.height = 600;
-    setModalImageLoaded(false);
-
-    let pledgeText = '';
-    if (type === 'Pledge') {
-      pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
-    } else if (type === 'Reminder') {
-      const bal = (g: Guest) => (g.pledgeAmount || 0) - (g.paidAmount || 0);
-      pledgeText = `SALIO: TZS ${bal(guest).toLocaleString()}`;
-    } else {
-      pledgeText = `KIASI: TZS ${(guest.pledgeAmount || 0).toLocaleString()}`;
-    }
-
-    drawContributionCardToCanvas(
-      canvas,
-      event,
-      cardTemplate,
-      guest,
-      pledgeText,
-      () => {
-        setModalCardUrl(canvas.toDataURL('image/jpeg', 0.85));
-        setModalImageLoaded(true);
-      }
-    );
-  }, [activeSendTarget, messageTemplateIndex, cardTemplate, event, isEn]);
-
-  // Re-draw active queue send card template whenever queue changes
-  useEffect(() => {
-    if (!waInteractiveQueue) {
-      setQueueCardUrl('');
-      setQueueCardLoaded(false);
-      return;
-    }
-    const guest = waInteractiveQueue.guests[waInteractiveQueue.currentIndex];
-    if (!guest) return;
-    
-    const { type } = waInteractiveQueue;
-    const canvas = document.createElement('canvas');
-    canvas.width = 450;
-    canvas.height = 600;
-    setQueueCardLoaded(false);
-
-    let pledgeText = '';
-    if (type === 'Pledge') {
-      pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
-    } else if (type === 'Reminder') {
-      const bal = (g: Guest) => (g.pledgeAmount || 0) - (g.paidAmount || 0);
-      pledgeText = `SALIO: TZS ${bal(guest).toLocaleString()}`;
-    } else {
-      pledgeText = `KIASI: TZS ${(guest.pledgeAmount || 0).toLocaleString()}`;
-    }
-
-    drawContributionCardToCanvas(
-      canvas,
-      event,
-      cardTemplate,
-      guest,
-      pledgeText,
-      () => {
-        setQueueCardUrl(canvas.toDataURL('image/jpeg', 0.85));
-        setQueueCardLoaded(true);
-      }
-    );
-  }, [waInteractiveQueue, waInteractiveQueue?.currentIndex, messageTemplateIndex, cardTemplate, event, isEn]);
+  // Generation functions removed, now using shared utility
 
   // Copy queue card image output securely to clipboard
   const handleCopyQueueImageToClipboard = async () => {
@@ -1867,6 +1670,83 @@ export default function ContributionManager({
       );
     }
   };
+
+  // Re-draw active individual send card template whenever targets change
+  useEffect(() => {
+    if (!activeSendTarget) {
+      setModalCardUrl('');
+      setModalImageLoaded(false);
+      return;
+    }
+    const { guest, type } = activeSendTarget;
+    const canvas = document.createElement('canvas');
+    canvas.width = 450;
+    canvas.height = 600;
+    setModalImageLoaded(false);
+
+    let pledgeText = '';
+    if (type === 'Pledge') {
+      pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
+    } else if (type === 'Reminder') {
+      const bal = (g: Guest) => (g.pledgeAmount || 0) - (g.paidAmount || 0);
+      pledgeText = `SALIO: TZS ${bal(guest).toLocaleString()}`;
+    } else {
+      pledgeText = `KIASI: TZS ${(guest.pledgeAmount || 0).toLocaleString()}`;
+    }
+
+    drawContributionCardToCanvas(
+      canvas,
+      event,
+      cardTemplate,
+      guest,
+      pledgeText,
+      isEn,
+      () => {
+        setModalCardUrl(canvas.toDataURL('image/jpeg', 0.85));
+        setModalImageLoaded(true);
+      }
+    );
+  }, [activeSendTarget, messageTemplateIndex, event, isEn, cardTemplate]);
+
+  // Re-draw active queue send card template whenever queue changes
+  useEffect(() => {
+    if (!waInteractiveQueue) {
+      setQueueCardUrl('');
+      setQueueCardLoaded(false);
+      return;
+    }
+    const guest = waInteractiveQueue.guests[waInteractiveQueue.currentIndex];
+    if (!guest) return;
+    
+    const { type } = waInteractiveQueue;
+    const canvas = document.createElement('canvas');
+    canvas.width = 450;
+    canvas.height = 600;
+    setQueueCardLoaded(false);
+
+    let pledgeText = '';
+    if (type === 'Pledge') {
+      pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
+    } else if (type === 'Reminder') {
+      const bal = (g: Guest) => (g.pledgeAmount || 0) - (g.paidAmount || 0);
+      pledgeText = `SALIO: TZS ${bal(guest).toLocaleString()}`;
+    } else {
+      pledgeText = `KIASI: TZS ${(guest.pledgeAmount || 0).toLocaleString()}`;
+    }
+
+    drawContributionCardToCanvas(
+      canvas,
+      event,
+      cardTemplate,
+      guest,
+      pledgeText,
+      isEn,
+      () => {
+        setQueueCardUrl(canvas.toDataURL('image/jpeg', 0.85));
+        setQueueCardLoaded(true);
+      }
+    );
+  }, [waInteractiveQueue, waInteractiveQueue?.currentIndex, messageTemplateIndex, event, isEn, cardTemplate]);
 
   // Submit actual single SMS dispatch, or log successful individual WA redirection
   const handleConfirmSent = async (guestId: string, channel: 'sms' | 'whatsapp', type: 'Pledge' | 'Reminder' | 'Thanks') => {
@@ -2118,18 +1998,18 @@ export default function ContributionManager({
       setChunkUploadError(null);
       setLastUploadedGuestName('');
 
-      // Adjust chunk sizes dynamically to feel super premium
-      let BATCH_SIZE = 15;
-      if (newGuests.length <= 10) {
-        BATCH_SIZE = 1; // 1 by 1 for small lists, elegant counting
-      } else if (newGuests.length <= 30) {
-        BATCH_SIZE = 3;
-      } else if (newGuests.length <= 100) {
+      // Adjust chunk sizes dynamically to feel super premium and be extremely fast
+      let BATCH_SIZE = 500;
+      if (newGuests.length <= 15) {
+        BATCH_SIZE = 3; 
+      } else if (newGuests.length <= 50) {
         BATCH_SIZE = 10;
-      } else if (newGuests.length <= 500) {
-        BATCH_SIZE = 25;
+      } else if (newGuests.length <= 200) {
+        BATCH_SIZE = 50;
+      } else if (newGuests.length <= 1000) {
+        BATCH_SIZE = 250;
       } else {
-        BATCH_SIZE = 50; // default for very large lists
+        BATCH_SIZE = 500;
       }
 
       const totalToUpload = newGuests.length;
@@ -2172,7 +2052,7 @@ export default function ContributionManager({
           const targetPercent = Math.min(Math.round((loadedCount / totalToUpload) * 100), 99);
 
           // Smoothly tick the visual progress with sequential counts
-          const stepDelay = Math.max(4, Math.min(35, 180 / (targetPercent - currentProgressVal || 1)));
+          const stepDelay = Math.max(2, Math.min(25, 120 / (targetPercent - currentProgressVal || 1)));
           for (let p = currentProgressVal; p <= targetPercent; p++) {
             setChunkUploadProgress(p);
             currentProgressVal = p;
@@ -2181,7 +2061,7 @@ export default function ContributionManager({
 
           setChunkUploadedCount({ current: loadedCount, total: totalToUpload });
           // Tiny pacing delay to show name before proceeding to next batch
-          await new Promise(resolve => setTimeout(resolve, 150));
+          await new Promise(resolve => setTimeout(resolve, 80));
         }
 
         // Smoothly complete ticker to 100%
@@ -2237,7 +2117,7 @@ export default function ContributionManager({
     a.click();
   };
 
-  const downloadReportPDF = (listName: string, listData: Guest[]) => {
+  const downloadReportPDF = async (listName: string, listData: Guest[]) => {
     try {
       const doc = new jsPDF();
       const title = `${event.name}: ${listName}`;
@@ -2329,6 +2209,7 @@ export default function ContributionManager({
         );
       }
 
+      await addPdfWatermarks(doc);
       doc.save(`EventCard_Report_${listName.replace(/\s+/g,'_')}.pdf`);
     } catch (error) {
       console.error('PDF generation failed:', error);
@@ -2530,7 +2411,8 @@ export default function ContributionManager({
         {[
           { id: 'dashboard', label: isEn ? 'Dashboard' : 'Dashboard', icon: BarChart2 },
           { id: 'contributors', label: isEn ? 'Contributors & Pledges' : 'Wachangiaji & Ahadi', icon: Users },
-          { id: 'card-designer', label: isEn ? 'Pledge Card Settings' : 'Muundo wa Kadi', icon: Compass },
+          { id: 'card-design', label: isEn ? 'Card Design' : 'Muundo wa Kadi', icon: Palette },
+          { id: 'payment-methods', label: isEn ? 'Payment Methods' : 'Njia za Malipo', icon: CreditCard },
           { id: 'pledge-requests', label: isEn ? `Pledge Requests (${noPledgeList.length})` : `Ombi la Ahadi (${noPledgeList.length})`, icon: MessageSquare },
           { id: 'reminders', label: isEn ? `Payment Reminders (${pendingCollectionList.length})` : `Vikumbusho (${pendingCollectionList.length})`, icon: Clock },
           { id: 'thank-you', label: isEn ? `Thanks (${fullyPaidList.length})` : `Shukrani (${fullyPaidList.length})`, icon: CheckCircle },
@@ -2766,6 +2648,252 @@ export default function ContributionManager({
         </div>
       )}
 
+      {/* Card Design View */}
+      {subTab === 'card-design' && (
+        <div className="space-y-6 animate-fade-in" id="contrib-carddesign-panel">
+          
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
+            
+            {/* 1. Live Interactive Canvas Stage */}
+            <div className="w-full lg:w-1/2 sticky top-6">
+              <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl group">
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-rose-500/5 pointer-events-none"></div>
+                
+                <div className="mb-6 w-full flex items-center justify-between px-4">
+                  <div className="space-y-0.5">
+                    <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">{isEn ? "Dynamic Preview" : "Uhakiki wa Kadi"}</h4>
+                    <p className="text-[9px] font-mono text-slate-500 uppercase">{isEn ? "Canvas Visualizer • Stage 1" : "Mionekano • Hatua ya 1"}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-tighter">Live Render</span>
+                  </div>
+                </div>
+
+                {/* The Canvas Frame - Specifically designed to have NO borders around internal elements like guest names */}
+                <div className="relative shadow-[0_32px_64px_-12px_rgba(0,0,0,0.6)] rounded-xl overflow-hidden border border-white/5 bg-slate-950 max-w-full">
+                  <canvas 
+                    id="card-design-live-canvas"
+                    ref={(el) => {
+                      if (el) {
+                        const exampleGuest: Guest = {
+                          id: 'example-jimson',
+                          name: 'Jimson', // The requested example name
+                          cardType: 'VIP'
+                        } as any;
+                        drawContributionCardToCanvas(el, event, cardTemplate, exampleGuest, 'KIASI: TZS 150,000', isEn);
+                      }
+                    }}
+                    width={450} 
+                    height={600}
+                    className="w-full sm:max-w-[320px] md:max-w-[360px] h-auto block"
+                  />
+                </div>
+
+                <div className="mt-8 w-full grid grid-cols-3 gap-4 border-t border-white/5 pt-6">
+                  <div className="text-center space-y-1">
+                    <p className="text-[8px] font-mono text-slate-500 uppercase tracking-widest">{isEn ? "Format" : "Mfumo"}</p>
+                    <p className="text-[10px] font-black text-white uppercase">450 x 600px</p>
+                  </div>
+                  <div className="text-center space-y-1 border-x border-white/5">
+                    <p className="text-[8px] font-mono text-slate-500 uppercase tracking-widest">{isEn ? "Density" : "Ubora"}</p>
+                    <p className="text-[10px] font-black text-emerald-400 uppercase">Premium HD</p>
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-[8px] font-mono text-slate-500 uppercase tracking-widest">{isEn ? "Output" : "Matokeo"}</p>
+                    <p className="text-[10px] font-black text-blue-400 uppercase">Direct PNG</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Advanced Customization Controls */}
+            <div className="w-full lg:w-1/2 space-y-6">
+              
+              <div className="bg-slate-900 border border-white/10 rounded-[2rem] overflow-hidden shadow-xl">
+                <div className="p-5 border-b border-white/10 bg-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/25">
+                      <Sliders className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-white uppercase font-mono tracking-widest leading-none">
+                        {isEn ? "Card Appearance Designer" : "REKEBISHA NAFASI & MUONEKANO"}
+                      </h3>
+                      <p className="text-[9px] font-mono text-slate-500 uppercase mt-1">{isEn ? "Layout & Typography Settings" : "Mipangilio ya Nafasi na Maandishi"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {isCardTemplateSaved && (
+                      <motion.span 
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="text-[9px] font-black text-emerald-400 uppercase tracking-tighter"
+                      >
+                        ✓ Saved
+                      </motion.span>
+                    )}
+                    <button 
+                      onClick={handleSaveCardTemplate}
+                      className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] font-black uppercase rounded-xl hover:brightness-110 active:scale-95 transition cursor-pointer shadow-lg shadow-amber-900/20"
+                    >
+                      {isEn ? "Hifadhi Mabadiliko" : "Hifadhi Mabadiliko"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-8 max-h-[700px] overflow-y-auto custom-scrollbar bg-slate-900/40">
+                  
+                  {/* Card Appearance Selection */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                        <ImageIcon className="w-3.5 h-3.5 text-amber-500" />
+                        {isEn ? "Choose Background Template" : "Chagua Background ya Kadi"}
+                      </label>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => document.getElementById('card-bg-upload-main')?.click()}
+                        className="p-5 bg-slate-950 border-2 border-dashed border-white/10 rounded-2xl hover:border-amber-500/50 hover:bg-amber-500/5 transition flex flex-col items-center justify-center gap-2.5 group relative"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-amber-500/20 group-hover:scale-110 transition duration-300">
+                          <Upload className="w-5 h-5 text-slate-400 group-hover:text-amber-500" />
+                        </div>
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest group-hover:text-amber-400 transition">{isEn ? "Upload Custom Art" : "Pakia Picha Yako"}</span>
+                        <input type="file" id="card-bg-upload-main" className="hidden" accept="image/*" onChange={handleCardImageUpload} />
+                      </button>
+
+                      {PREMADE_THEMES.map(theme => (
+                        <button
+                          key={theme.id}
+                          onClick={() => setCardTemplate(prev => ({ ...prev, themeId: theme.id, imageUrl: '' }))}
+                          className={`group relative p-1 rounded-2xl border-2 transition-all duration-300 ${cardTemplate.themeId === theme.id ? 'border-amber-500 scale-[1.03] shadow-xl' : 'border-white/5 hover:border-white/15'}`}
+                        >
+                          <div className={`w-full h-20 rounded-xl bg-gradient-to-br ${theme.bg} flex items-center justify-center border ${theme.border} relative overflow-hidden`}>
+                             <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition"></div>
+                             <span className={`text-[10px] font-black uppercase tracking-widest ${theme.text} drop-shadow-md z-10`}>{isEn ? theme.nameEn : theme.nameSw}</span>
+                          </div>
+                          {cardTemplate.themeId === theme.id && (
+                            <div className="absolute -top-2 -right-2 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center border-4 border-slate-900 text-black">
+                              <Check className="w-3 h-3" strokeWidth={4} />
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Spatial & Visual Tuning - Restored Guest Name Adjustment */}
+                  <div className="space-y-6 pt-6 border-t border-white/10">
+                    <div className="flex items-center gap-2 mb-4">
+                      <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                        <Sliders className="w-3.5 h-3.5 text-blue-400" />
+                        {isEn ? "Guest Name Placement" : "Marekebisho ya Jina la Mgeni"}
+                      </label>
+                    </div>
+
+                    <div className="space-y-5 p-5 bg-white/5 rounded-3xl border border-white/10 group transition hover:border-blue-500/30">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/25">
+                            <User className="w-4.5 h-4.5 text-blue-400" />
+                          </div>
+                          <div>
+                            <h4 className="text-[11px] font-black text-white uppercase tracking-widest">{isEn ? "Guest Name Position" : "NAFASI YA JINA LA MGENI"}</h4>
+                            <p className="text-[9px] font-mono text-slate-500 uppercase">{isEn ? "Fine-tune where name appears" : "Rekebisha jina linapokaa"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[9px] font-mono font-bold text-slate-500 uppercase">{cardTemplate.showGuestName !== false ? 'VISIBLE' : 'HIDDEN'}</span>
+                          <button 
+                            onClick={() => setCardTemplate(prev => ({ ...prev, showGuestName: !prev.showGuestName }))}
+                            className={`w-10 h-5 rounded-full relative transition duration-300 ${cardTemplate.showGuestName !== false ? 'bg-blue-500' : 'bg-slate-700'}`}
+                          >
+                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 ${cardTemplate.showGuestName !== false ? 'left-6' : 'left-1'}`}></div>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className={`space-y-6 transition-all duration-300 ${cardTemplate.showGuestName === false ? 'opacity-20 grayscale pointer-events-none' : ''}`}>
+                         
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Horizontal Slider */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center text-[10px] font-black uppercase font-mono">
+                                <span className="text-slate-400">{isEn ? "Horizontal Pos (X)" : "Nafasi ya Mlalo (X)"}</span>
+                                <span className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-lg border border-blue-500/20">{cardTemplate.guestNameX || 50}%</span>
+                              </div>
+                              <input 
+                                type="range" min="0" max="100" 
+                                value={cardTemplate.guestNameX || 50} 
+                                onChange={e => setCardTemplate(prev => ({ ...prev, guestNameX: parseInt(e.target.value) }))}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition"
+                              />
+                            </div>
+
+                            {/* Vertical Slider */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center text-[10px] font-black uppercase font-mono">
+                                <span className="text-slate-400">{isEn ? "Vertical Pos (Y)" : "Nafasi ya Wima (Y)"}</span>
+                                <span className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-lg border border-blue-500/20">{cardTemplate.guestNameY || 37}%</span>
+                              </div>
+                              <input 
+                                type="range" min="0" max="100" 
+                                value={cardTemplate.guestNameY || 37} 
+                                onChange={e => setCardTemplate(prev => ({ ...prev, guestNameY: parseInt(e.target.value) }))}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition"
+                              />
+                            </div>
+                         </div>
+
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Font Size Slider */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center text-[10px] font-black uppercase font-mono">
+                                <span className="text-slate-400">{isEn ? "Font Size" : "Ukubwa wa Jina"}</span>
+                                <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">{cardTemplate.guestNameSize || 22}px</span>
+                              </div>
+                              <input 
+                                type="range" min="8" max="80" 
+                                value={cardTemplate.guestNameSize || 22} 
+                                onChange={e => setCardTemplate(prev => ({ ...prev, guestNameSize: parseInt(e.target.value) }))}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400 transition"
+                              />
+                            </div>
+
+                            {/* Color Selection */}
+                            <div className="space-y-3">
+                              <span className="text-[10px] font-black uppercase font-mono text-slate-400 block">{isEn ? "Name Color" : "Rangi ya Jina"}</span>
+                              <div className="flex items-center gap-4 bg-slate-950 p-2.5 rounded-xl border border-white/5">
+                                <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-white/20 shadow-inner">
+                                  <input 
+                                    type="color" 
+                                    value={cardTemplate.guestNameColor || '#FFFFFF'} 
+                                    onChange={e => setCardTemplate(prev => ({ ...prev, guestNameColor: e.target.value }))}
+                                    className="absolute inset-[-8px] w-[200%] h-[200%] cursor-pointer bg-transparent border-none"
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono text-white font-bold tracking-widest uppercase">{cardTemplate.guestNameColor || '#FFFFFF'}</span>
+                              </div>
+                            </div>
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
       {/* Contributors & Pledges View */}
       {subTab === 'contributors' && (
         <div className="space-y-4 animate-fade-in" id="contrib-contributors-panel">
@@ -2953,371 +3081,234 @@ export default function ContributionManager({
         </div>
       )}
 
-      {/* Card Designer View */}
-      {subTab === 'card-designer' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in p-2" id="contrib-designer-panel">
-             {/* Coordinates adjusters */}
-          <div className="lg:col-span-5 backdrop-blur-md bg-white/[0.02] border border-white/10 rounded-[2rem] p-7 space-y-8 shadow-2xl">
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold text-amber-500 uppercase tracking-widest">
-                <LayoutGrid className="w-3.5 h-3.5" />
-                {isEn ? "Visual Engine" : "Mfumo wa Picha"}
-              </div>
-              <h3 className="text-2xl font-black text-white leading-tight uppercase tracking-tighter">
-                {isEn ? "Card Graphics Designer" : "Kusanifu Kadi ya Mchango"}
-              </h3>
-              <p className="text-slate-400 text-[11px] leading-relaxed">
-                {isEn 
-                  ? "Upload your custom wedding pledge background, then adjust dynamic data positioning with surgical precision."
-                  : "Pakia muundo wa kadi ya mchango ya tukio (PNG/JPG). Baada ya hapo fanya urekebishaji wa nafasi za maandishi kulingana na kadi uliyopakia."}
-              </p>
-            </div>
-
-            {/* SPECIAL PREMADE CUSTOM THEMES AND UPLOAD SELECTION */}
-            <div className="space-y-4 bg-white/5 p-5 rounded-2xl border border-white/5 space-y-4">
+      {/* Payment Methods View */}
+      {subTab === 'payment-methods' && (
+        <div className="space-y-6 animate-fade-in p-2">
+          <div className="backdrop-blur-md bg-white/[0.02] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
               <div>
-                <label className="block text-[10.5px] font-bold uppercase tracking-wider font-mono text-amber-500 mb-1">
-                  {isEn ? "1. Select Built-in Premium Backdrop:" : "1. Chagua Mandhari ya Kadi Maalum (Bila Malipo):"}
-                </label>
-                <p className="text-[9.5px] text-slate-400 mb-3 leading-relaxed">
-                  {isEn ? "Choose a theme, data colors will adjust to match the premium backdrop style instantly." : "Chagua urembo mmojawapo, rangi za data zitajibadilisha zenyewe kupatana na muundo mteule."}
+                <h3 className="font-extrabold text-lg text-white font-mono tracking-tight uppercase flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-amber-500" />
+                  {isEn ? "Payment Methods" : "Njia za Malipo"}
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1 uppercase font-mono tracking-wider">
+                  {isEn 
+                    ? "Add your mobile money and bank accounts. These will automatically replace the {payment_methods} placeholder in templates." 
+                    : "Weka namba zako za malipo hapa. Zitawekwa moja kwa moja kwenye alama ya {namba_za_malipo} kwenye ujumbe wa ahadi."}
                 </p>
-                
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  {PREMADE_THEMES.map((theme) => {
-                    const isSelected = !cardTemplate.imageUrl && (cardTemplate.themeId || 'midnight-gold') === theme.id;
-                    return (
-                      <button
-                        key={theme.id}
-                        type="button"
-                        onClick={() => {
-                          setCardTemplate(prev => ({
-                            ...prev,
-                            imageUrl: '', // clear custom uploaded
-                            themeId: theme.id,
-                            eventNameColor: theme.primaryColor,
-                            guestNameColor: theme.guestColor,
-                            pledgeAmountColor: theme.pledgeColor,
-                            deadlineColor: theme.deadlineColor,
-                            cardTypeColor: theme.badgeColor,
-                          }));
-                        }}
-                        className={`flex flex-col items-stretch text-left rounded-xl border p-2 transition-all relative overflow-hidden cursor-pointer ${
-                          isSelected 
-                            ? 'border-amber-500 bg-amber-500/10 shadow-lg' 
-                            : 'border-white/5 bg-slate-950/60 hover:bg-slate-900 hover:border-white/15'
-                        }`}
-                      >
-                        {/* Miniature representative gradient bar */}
-                        <div className={`h-8 rounded-lg bg-gradient-to-r ${theme.bg} border ${theme.border} relative flex items-center justify-center`}>
-                          <span className={`text-[8.5px] uppercase font-black tracking-widest ${theme.text}`}>❦ VIP</span>
-                        </div>
-                        <span className="block text-[9.5px] font-bold font-mono uppercase text-slate-300 mt-1.5 truncate">
-                          {isEn ? theme.nameEn : theme.nameSw}
-                        </span>
-                        {isSelected && (
-                          <div className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full bg-amber-505 bg-amber-500 flex items-center justify-center text-slate-950">
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
+            </div>
 
-              <div className="border-t border-white/5 pt-4">
-                <label className="block text-[10.5px] font-bold uppercase tracking-wider font-mono text-slate-300 mb-2">
-                  {isEn ? "Or Upload Custom Base Design:" : "Au Pakia Picha ya Kadi Yako (Custom):"}
-                </label>
-                <div className="flex items-center gap-3">
+            {/* Contribution Deadline Selector */}
+            <div className="p-5 bg-[#0a1122]/80 border border-amber-500/20 rounded-2xl space-y-3.5 shadow-lg relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/10 transition-colors duration-500" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Mwisho wa mchango
+                  </h4>
+                  <p className="text-[10px] text-slate-400 font-mono uppercase leading-relaxed">
+                    {isEn 
+                      ? "Specify the final deadline date for contributions to be sent." 
+                      : "Weka tarehe ya mwisho ya kutuma mchango. Hii itabadilisha {tarehe_ya_mwisho} kwenye ujumbe wako."}
+                  </p>
+                </div>
+                <div className="w-full sm:w-auto min-w-[240px]">
                   <input 
-                    type="file" 
-                    accept="image/*" 
-                    id="contrib-card-upload-input"
-                    onChange={handleCardImageUpload}
-                    className="hidden"
+                    type="date" 
+                    value={event.contributionDeadline || ""}
+                    onChange={(e) => onUpdateEvent && onUpdateEvent({ ...event, contributionDeadline: e.target.value })}
+                    className="w-full bg-slate-950/80 border border-white/10 hover:border-amber-500/30 focus:border-amber-500 rounded-xl px-4 py-2.5 text-white font-mono text-xs font-bold uppercase transition-all duration-300 shadow-inner cursor-pointer"
+                    style={{ colorScheme: 'dark' }}
                   />
-                  <button
-                    id="btn-upload-contrib-bg"
-                    type="button"
-                    onClick={() => document.getElementById('contrib-card-upload-input')?.click()}
-                    className="flex items-center gap-2 bg-slate-900 border border-white/10 hover:border-white/20 text-white font-extrabold py-2 px-4 rounded-lg font-mono text-[10.5px] uppercase cursor-pointer"
-                  >
-                    <Upload className="w-4 h-4 text-slate-400" />
-                    <span>{isEn ? "Choose Image File" : "Chagua Picha ya kadi"}</span>
-                  </button>
-                  {cardTemplate.imageUrl && (
-                    <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" /> {isEn ? "Custom Image Active" : "Inatumia Picha Yako"}
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
 
-            {/* Placement coordinates inputs and adjusts */}
-            <div className="space-y-6 max-h-[550px] overflow-y-auto pr-3 custom-scrollbar">
-              <h4 className="font-bold text-[11px] text-slate-300 uppercase tracking-widest flex items-center gap-2 border-b border-white/5 pb-3">
-                <span className="w-6 h-6 flex items-center justify-center rounded-lg bg-rose-500/20 text-rose-500 font-mono text-[10px]">02</span>
-                {isEn ? "DATA POSITIONING & STYLE" : "REKEBISHA NAFASI & MUONEKANO"}
-              </h4>
-
-               <div className="grid grid-cols-1 gap-4">
-                {[
-                  { label: isEn ? 'Event Name' : 'Jina la Sherehe / Harusi', prefix: 'eventName', flag: 'showEventName' },
-                  { label: isEn ? 'Guest Name' : 'Jina la Mgeni', prefix: 'guestName', flag: 'showGuestName' },
-                  { label: isEn ? 'Pledge Amount' : 'Kiasi cha Ahadi', prefix: 'pledgeAmount', flag: 'showPledgeAmount' },
-                  { label: isEn ? 'Deadline Date' : 'Mwongozo / Siku ya Mwisho', prefix: 'deadline', flag: 'showDeadline' },
-                  { label: isEn ? 'Card Group (VIP)' : 'Aina ya Kadi (VIP)', prefix: 'cardType', flag: 'showCardType' },
-                  { label: isEn ? 'QR Code' : 'QR Code', prefix: 'qrCode', flag: 'showQrCode' },
-                ].filter(item => item.prefix === 'guestName').map((item) => {
-                  const p = item.prefix;
-                  const fFlag = item.flag;
-                  const xVal = (cardTemplate as any)[`${p}X`];
-                  const yVal = (cardTemplate as any)[`${p}Y`];
-                  const sVal = (cardTemplate as any)[`${p}Size`];
-                  const cVal = (cardTemplate as any)[`${p}Color`];
-                  const isVisible = (cardTemplate as any)[fFlag] !== false;
-
-                  return (
-                    <div key={p} className="p-4 bg-black/30 rounded-2xl border border-white/5 space-y-4 hover:border-amber-500/30 transition-colors group">
-                      <div className="flex justify-between items-center -mx-4 -mt-4 p-3 bg-white/[0.02] rounded-t-2xl border-b border-white/5">
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="checkbox" 
-                            id={`toggle-${p}`}
-                            checked={isVisible} 
-                            onChange={e => setCardTemplate(prev => ({ ...prev, [fFlag]: e.target.checked }))}
-                            className="w-4.5 h-4.5 rounded text-amber-500 bg-slate-900 border-white/10 focus:ring-amber-500 cursor-pointer"
-                          />
-                          <label htmlFor={`toggle-${p}`} className="text-[10px] font-black text-amber-500 uppercase tracking-tighter cursor-pointer select-none flex items-center gap-1.5 matches-glow">
-                            {item.label}
-                            {isVisible ? (
-                              <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-1 py-0.2 rounded font-bold font-mono">ON</span>
-                            ) : (
-                              <span className="text-[8px] bg-rose-500/10 text-rose-400 px-1 py-0.2 rounded font-bold font-mono">OFF</span>
-                            )}
-                          </label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-mono text-slate-500">{cVal}</span>
-                          <input 
-                            type="color" 
-                            value={cVal || '#FFFFFF'} 
-                            onChange={e => setCardTemplate(prev => ({ ...prev, [`${p}Color`]: e.target.value }))}
-                            className="w-5 h-5 rounded-full border-2 border-white/10 cursor-pointer overflow-hidden bg-transparent"
-                            disabled={!isVisible}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className={`space-y-4 transition-all duration-300 ${!isVisible ? 'opacity-30 pointer-events-none' : ''}`}>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between px-1">
-                              <label className="text-[9px] font-bold text-slate-500 uppercase font-mono">X Axis</label>
-                              <span className="text-[9px] font-bold text-white font-mono">{xVal}%</span>
-                            </div>
-                            <input 
-                              type="range" min="0" max="100" 
-                              value={xVal}
-                              onChange={e => setCardTemplate(prev => ({ ...prev, [`${p}X`]: parseInt(e.target.value) }))}
-                              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between px-1">
-                              <label className="text-[9px] font-bold text-slate-500 uppercase font-mono">Y Axis</label>
-                              <span className="text-[9px] font-bold text-white font-mono">{yVal}%</span>
-                            </div>
-                            <input 
-                              type="range" min="0" max="100" 
-                              value={yVal}
-                              onChange={e => setCardTemplate(prev => ({ ...prev, [`${p}Y`]: parseInt(e.target.value) }))}
-                              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between px-1">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase font-mono">{isEn ? 'Scaling / Font Size' : 'Ukubwa'}</label>
-                            <span className="text-[9px] font-bold text-rose-500 font-mono">{sVal}px</span>
-                          </div>
-                          <input 
-                            type="range" min={p === 'qrCode' ? 10 : 8} max={p === 'qrCode' ? 150 : 80} 
-                            value={sVal}
-                            onChange={e => setCardTemplate(prev => ({ ...prev, [`${p}Size`]: parseInt(e.target.value) }))}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <button
-                  type="button"
-                  id="btn-save-guest-name-adjust"
-                  onClick={handleSaveCardTemplate}
-                  className={`w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 tracking-wide transition-all duration-300 active:scale-[0.98] border shadow-lg cursor-pointer ${
-                    isCardTemplateSaved
-                      ? 'bg-emerald-600 border-emerald-500 text-white shadow-emerald-950/20'
-                      : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 border-amber-555 text-slate-950 font-black shadow-amber-950/20 hover:shadow-amber-500/10'
-                  }`}
-                >
-                  {isCardTemplateSaved ? (
-                    <>
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      <span>{isEn ? 'Settings Saved Successfully!' : 'Marekebisho Yamehifadhiwa!'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4 stroke-[2.5]" />
-                      <span>{isEn ? 'Save Guest Name Layout' : 'Hifadhi Mpangilio' }</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-2 text-center">
-              <p className="text-[10px] text-slate-500 font-mono">
-                {isEn ? "All adjustments are dynamically stored to local cache for this event." : "Marekebisho yako yanahifadhiwa moja kwa moja kwenye cache kulingana na kiolezo hiki cha Tukio."}
-              </p>
-            </div>
-          </div>
-
-          {/* Right Preview */}
-          <div className="lg:col-span-7 flex flex-col items-center">
-            <div className="w-full bg-slate-950/50 border border-white/10 rounded-[2.5rem] p-10 flex flex-col items-center shadow-2xl relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-amber-500/5 to-transparent pointer-events-none" />
-              
-              <div className="mb-8 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center animate-pulse">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]" />
-                </div>
-                <div>
-                  <span className="block text-[11px] font-black font-mono text-white tracking-[0.25em] uppercase">{isEn ? "LIVE GRAPHICS WORKBENCH" : "MUONEKANO WA KADI (LIVE)"}</span>
-                  <span className="block text-[9px] text-slate-500 font-mono uppercase mt-0.5 tracking-tighter">{isEn ? "Precision Precision Visualizer v2.0" : "Uchambuzi wa Nafasi ya Maandishi"}</span>
-                </div>
-              </div>
-
-              <div className="relative shadow-[0_45px_100px_-20px_rgba(0,0,0,0.9)] rounded-[1.5rem] overflow-hidden group border border-white/10 bg-slate-900 group">
-                {cardTemplate.imageUrl ? (
-                  <>
-                    <img src={cardTemplate.imageUrl} className="w-full max-w-[420px] h-auto block" alt="Card Workbench" />
-                    <button
-                      onClick={() => setCardTemplate(prev => ({ ...prev, imageUrl: '' }))}
-                      className="absolute top-4 right-4 p-2 bg-black/60 hover:bg-rose-600 rounded-full text-white transition-all transform scale-0 group-hover:scale-100 z-50 border border-white/10"
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Form */}
+              <div className="space-y-6 bg-slate-900/50 p-6 rounded-2xl border border-white/5">
+                <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-white/5 pb-2">
+                  {isEn ? "Add New Method" : "Ongeza Njia Mpya"}
+                </h4>
+                <form onSubmit={handleAddPaymentMethod} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-bold font-mono text-slate-400">
+                      {isEn ? "Payment Type" : "Aina ya Malipo"}
+                    </label>
+                    <select 
+                      value={payType}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setPayType(val);
+                        if (val === 'Mobile') {
+                          setPayProvider('M-Pesa');
+                        } else if (val === 'Lipa Namba') {
+                          setPayProvider('Lipa kwa M-Pesa');
+                        } else if (val === 'Bank') {
+                          setPayProvider('CRDB Bank');
+                        } else {
+                          setPayProvider('');
+                        }
+                        setCustomProvider('');
+                      }}
+                      className="w-full bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  /* GORGEOUS PRE-MADE LIVE DIGITAL CARD PREVIEW */
-                  <div className={`w-[420px] aspect-[3/4] relative rounded-[1.5rem] overflow-hidden transition-all duration-300 p-8 flex flex-col justify-between ${
-                    (cardTemplate.themeId || 'midnight-gold') === 'emerald-luxury'
-                      ? 'bg-gradient-to-b from-emerald-950 via-[#012517] to-emerald-950 text-emerald-200'
-                      : (cardTemplate.themeId || 'midnight-gold') === 'velvet-plum'
-                      ? 'bg-gradient-to-b from-purple-950 via-[#25012e] to-purple-950 text-purple-200'
-                      : (cardTemplate.themeId || 'midnight-gold') === 'onyx-minimal'
-                      ? 'bg-gradient-to-b from-neutral-950 via-neutral-900 to-neutral-950 text-neutral-300'
-                      : 'bg-gradient-to-b from-slate-900 via-[#0a1122] to-slate-950 text-slate-200'
-                  }`}>
-                    {/* Stars or details decorative watermarks */}
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_70%)] pointer-events-none" />
-                    
-                    {(cardTemplate.themeId || 'midnight-gold') === 'onyx-minimal' ? (
-                      <>
-                        {/* Braces */}
-                        <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-teal-500/50" />
-                        <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-teal-500/50" />
-                        <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-teal-500/50" />
-                        <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-teal-500/50" />
-                        
-                        {/* Tiny Dotted Matrix Grid bg */}
-                        <div className="absolute inset-4 border border-white/5 pointer-events-none bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:16px_16px]" />
-                      </>
-                    ) : (
-                      <>
-                        {/* double border */}
-                        <div className={`absolute inset-4 border-2 rounded-xl pointer-events-none ${
-                          (cardTemplate.themeId || 'midnight-gold') === 'emerald-luxury'
-                            ? 'border-amber-500/20'
-                            : (cardTemplate.themeId || 'midnight-gold') === 'velvet-plum'
-                            ? 'border-pink-500/20'
-                            : 'border-amber-600/20'
-                        }`} />
-                        <div className="absolute inset-[22px] border border-white/5 rounded-lg pointer-events-none" />
-                        
-                        {/* Corner swirls symbol */}
-                        <span className="absolute top-6 left-6 text-xs text-amber-500/20 font-serif">❦</span>
-                        <span className="absolute top-6 right-6 text-xs text-amber-500/20 font-serif">❦</span>
-                        <span className="absolute bottom-6 left-6 text-xs text-amber-500/20 font-serif">❦</span>
-                        <span className="absolute bottom-6 right-6 text-xs text-amber-500/20 font-serif">❦</span>
+                      <option value="">{isEn ? "Chagua..." : "Chagua..."}</option>
+                      <option value="Mobile">Mobile Money</option>
+                      <option value="Lipa Namba">Lipa Namba</option>
+                      <option value="Bank">Bank Account</option>
+                    </select>
+                  </div>
 
-                        {/* Center watermark */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none opacity-[0.03]">
-                          <div className="w-[180px] h-[180px] rounded-full border border-white flex items-center justify-center">
-                            <div className="w-[140px] h-[140px] rounded-full border border-dashed border-white flex items-center justify-center">
-                              <span className="text-6xl italic font-serif">♥</span>
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Standard header for premade fallback */}
-                    <div className="text-center pt-2 select-none pointer-events-none z-10">
-                      <span className={`text-[10px] uppercase font-bold tracking-[0.2em] font-mono ${
-                        (cardTemplate.themeId || 'midnight-gold') === 'emerald-luxury'
-                          ? 'text-amber-500'
-                          : (cardTemplate.themeId || 'midnight-gold') === 'velvet-plum'
-                          ? 'text-pink-400'
-                          : (cardTemplate.themeId || 'midnight-gold') === 'onyx-minimal'
-                          ? 'text-slate-400'
-                          : 'text-amber-500'
-                      }`}>
-                        {isEn ? 'Pledge & Contribution Card' : 'Kadi Ya Mchango Na Ahadi'}
-                      </span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-bold font-mono text-slate-400">
+                        {isEn ? "Provider" : "Mtandao/Benki"}
+                      </label>
+                      <select 
+                        value={payProvider}
+                        onChange={(e) => {
+                          setPayProvider(e.target.value);
+                          if (e.target.value !== 'Other') {
+                            setCustomProvider('');
+                          }
+                        }}
+                        disabled={!payType}
+                        className="w-full bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50 disabled:opacity-40"
+                      >
+                        {!payType ? (
+                          <option value="">{isEn ? "Select Type First" : "Chagua aina kwanza"}</option>
+                        ) : payType === 'Mobile' ? (
+                          <>
+                            <option value="M-Pesa">M-Pesa</option>
+                            <option value="Mixx By Yas">Mixx By Yas</option>
+                            <option value="Tigo Pesa">Tigo Pesa</option>
+                            <option value="Airtel Money">Airtel Money</option>
+                            <option value="Halopesa">Halopesa</option>
+                            <option value="T-Pesa">T-Pesa</option>
+                            <option value="Other">{isEn ? "Other Network..." : "Andika Mtandao Mwengine..."}</option>
+                          </>
+                        ) : payType === 'Lipa Namba' ? (
+                          <>
+                            <option value="Lipa kwa M-Pesa">Lipa kwa M-Pesa</option>
+                            <option value="Lipa kwa Tigo Pesa">Lipa kwa Tigo Pesa</option>
+                            <option value="Lipa kwa Airtel Money">Lipa kwa Airtel Money</option>
+                            <option value="Lipa kwa Halopesa">Lipa kwa Halopesa</option>
+                            <option value="Lipa Namba (General)">Lipa Namba (Mitandao Yote)</option>
+                            <option value="Other">{isEn ? "Other Lipa Namba..." : "Andika Lipa Namba Nyingine..."}</option>
+                          </>
+                        ) : payType === 'Bank' ? (
+                          <>
+                            <option value="CRDB Bank">CRDB Bank</option>
+                            <option value="NMB Bank">NMB Bank</option>
+                            <option value="NBC Bank">NBC Bank</option>
+                            <option value="Equity Bank">Equity Bank</option>
+                            <option value="ABSA Bank">ABSA Bank</option>
+                            <option value="KCB Bank">KCB Bank</option>
+                            <option value="Stanbic Bank">Stanbic Bank</option>
+                            <option value="PBZ Bank">PBZ Bank</option>
+                            <option value="TCB Bank (TPB)">TCB Bank (TPB)</option>
+                            <option value="Amana Bank">Amana Bank</option>
+                            <option value="Azania Bank">Azania Bank</option>
+                            <option value="Akiba Bank">Akiba Commercial Bank</option>
+                            <option value="Other">{isEn ? "Other Bank..." : "Andika Benki Nyingine..."}</option>
+                          </>
+                        ) : null}
+                      </select>
                     </div>
-
-                    <div className="text-center pb-2 select-none pointer-events-none z-10 text-[9px] opacity-40 italic mt-auto">
-                      {isEn ? 'Organizing Committee:' : 'Kamati ya Maandalizi:'} {event.hostName || (isEn ? 'Family and Friends' : 'Ndugu na Marafiki')}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-bold font-mono text-slate-400">
+                        {isEn ? "Number" : "Namba"}
+                      </label>
+                      <input 
+                        type="text" 
+                        value={payNumber}
+                        onChange={(e) => setPayNumber(e.target.value)}
+                        placeholder="07XX XXX XXX"
+                        className="w-full bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50"
+                        required
+                      />
                     </div>
                   </div>
-                )}
 
-                {/* Overlays rendered always (either over custom image or fallback themes) */}
-                <>
-                  {cardTemplate.showGuestName !== false && (
-                    <div 
-                      className="absolute italic whitespace-nowrap -translate-x-1/2 pointer-events-none select-none z-20 font-sans"
-                      style={{ 
-                      left: `${cardTemplate.guestNameX}%`,
-                      top: `${cardTemplate.guestNameY}%`, 
-                      color: cardTemplate.guestNameColor,
-                      // Scaled precisely to match 420px preview container width vs 450px canvas width
-                      fontSize: `${(cardTemplate.guestNameSize || 22) * 0.93}px`,
-                      fontWeight: '900',
-                      textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                      }}
-                    >
-                      {/* Use Jimson for coordinates preview adjustments */}
-                      JIMSON
+                  {payType && payProvider === 'Other' && (
+                    <div className="space-y-1.5 animate-fade-in">
+                      <label className="text-[10px] uppercase font-bold font-mono text-amber-500">
+                        {isEn ? "Enter Custom Provider Name" : "Andika Jina la Mtandao/Benki"}
+                      </label>
+                      <input 
+                        type="text" 
+                        value={customProvider}
+                        onChange={(e) => setCustomProvider(e.target.value)}
+                        placeholder={isEn ? "e.g. Halopesa, TCB, etc." : "Mfano. Halopesa, TCB, n.k."}
+                        className="w-full bg-slate-950/50 border border-amber-500/30 focus:border-amber-500 rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
+                        required
+                      />
                     </div>
                   )}
-                </>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-bold font-mono text-slate-400">
+                      {isEn ? "Registered Name" : "Jina Lililosajiliwa"}
+                    </label>
+                    <input 
+                      type="text" 
+                      value={payName}
+                      onChange={(e) => setPayName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50"
+                      required
+                    />
+                  </div>
+
+                  <button 
+                    type="submit"
+                    className="w-full py-2.5 bg-amber-500/20 text-amber-500 border border-amber-500/50 rounded-lg font-mono text-[10px] font-bold tracking-widest uppercase hover:bg-amber-500 hover:text-white transition"
+                  >
+                    {isEn ? "+ Add Payment Method" : "+ Ongeza Njia ya Malipo"}
+                  </button>
+                </form>
               </div>
-              
-              <div className="mt-10 pt-6 border-t border-white/5 w-full text-center">
-                <p className="text-[10px] text-slate-500 font-mono italic max-w-md mx-auto leading-relaxed uppercase tracking-widest bg-white/5 py-3 rounded-xl border border-white/5">
-                  {isEn 
-                    ? "Our engine synthesizes guest data on these precise coordinates."
-                    : "Injini inatengeneza kadi kwa kutumia coordinates hizi."}
-                </p>
+
+              {/* List */}
+              <div className="space-y-6">
+                <h4 className="text-xs font-black text-white uppercase tracking-widest border-b border-white/5 pb-2">
+                  {isEn ? "Saved Methods" : "Njia Zilizohifadhiwa"}
+                </h4>
+                {(!event.paymentMethods || event.paymentMethods.length === 0) ? (
+                  <div className="text-center py-8 border border-white/5 border-dashed rounded-2xl bg-white/[0.02]">
+                    <CreditCard className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                    <p className="text-slate-400 text-xs font-mono uppercase">
+                      {isEn ? "No payment methods added yet" : "Hakuna njia ya malipo iliyowekwa"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {event.paymentMethods.map(method => (
+                      <div key={method.id} className="flex items-center justify-between bg-slate-950/50 p-3.5 rounded-xl border border-white/5 group hover:border-amber-500/30 transition">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[9px] font-mono uppercase bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">
+                              {method.type}
+                            </span>
+                            <span className="font-bold text-white text-xs">{method.provider}</span>
+                          </div>
+                          <p className="text-slate-300 font-mono text-sm">{method.number}</p>
+                          <p className="text-slate-500 text-[10px] uppercase">{method.name}</p>
+                        </div>
+                        <button 
+                          onClick={() => handleRemovePaymentMethod(method.id)}
+                          className="p-2 bg-rose-500/10 text-rose-500 rounded-lg opacity-0 group-hover:opacity-100 transition hover:bg-rose-500 hover:text-white"
+                          title={isEn ? "Remove" : "Ondoa"}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -3417,23 +3408,6 @@ export default function ContributionManager({
                     >
                       Reset
                     </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="block text-[10px] font-mono text-slate-500 uppercase font-black">{isEn ? "Insert Dynamic Variables:" : "Ingiza Taarifa za Kiotomatiki:"}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {getActiveTemplateValues().placeholders.map(p => (
-                      <button
-                        key={p.tag}
-                        type="button"
-                        onClick={() => handleInsertTagAtCursor(p.tag, 'textarea-custom-tpl')}
-                        className="px-2 py-1 bg-white/5 border border-white/10 hover:border-amber-500 hover:bg-amber-500/10 text-[10px] font-semibold text-slate-300 hover:text-amber-400 rounded-lg cursor-pointer transition font-mono"
-                        title={`${isEn ? 'Insert' : 'Weka'} ${p.label}`}
-                      >
-                        {p.tag}
-                      </button>
-                    ))}
                   </div>
                 </div>
 
@@ -3669,23 +3643,6 @@ export default function ContributionManager({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <span className="block text-[10px] font-mono text-slate-500 uppercase font-black">{isEn ? "Insert Dynamic Variables:" : "Ingiza Taarifa za Kiotomatiki:"}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {getActiveTemplateValues().placeholders.map(p => (
-                      <button
-                        key={p.tag}
-                        type="button"
-                        onClick={() => handleInsertTagAtCursor(p.tag, 'textarea-custom-tpl')}
-                        className="px-2 py-1 bg-white/5 border border-white/10 hover:border-amber-500 hover:bg-amber-500/10 text-[10px] font-semibold text-slate-300 hover:text-amber-400 rounded-lg cursor-pointer transition font-mono"
-                        title={`${isEn ? 'Insert' : 'Weka'} ${p.label}`}
-                      >
-                        {p.tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div>
                   <textarea
                     id="textarea-custom-tpl"
@@ -3910,23 +3867,6 @@ export default function ContributionManager({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <span className="block text-[10px] font-mono text-slate-500 uppercase font-black">{isEn ? "Insert Dynamic Variables:" : "Ingiza Taarifa za Kiotomatiki:"}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {getActiveTemplateValues().placeholders.map(p => (
-                      <button
-                        key={p.tag}
-                        type="button"
-                        onClick={() => handleInsertTagAtCursor(p.tag, 'textarea-custom-tpl')}
-                        className="px-2 py-1 bg-white/5 border border-white/10 hover:border-amber-500 hover:bg-amber-500/10 text-[10px] font-semibold text-slate-300 hover:text-amber-400 rounded-lg cursor-pointer transition font-mono"
-                        title={`${isEn ? 'Insert' : 'Weka'} ${p.label}`}
-                      >
-                        {p.tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div>
                   <textarea
                     id="textarea-custom-tpl"
@@ -4132,7 +4072,8 @@ export default function ContributionManager({
 
       {/* Reports Panel View */}
       {subTab === 'reports' && (
-        <div className="space-y-6 animate-fade-in" id="contrib-reports-panel">
+        <div className="space-y-6 animate-fade-in relative" id="contrib-reports-panel">
+          <ReportWatermark />
           
           {/* 1. Dashboard Insights Header */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -28,7 +28,8 @@ export default function SendMessages({ event, settings, guests, language, onUpda
   const [currentSendingIndex, setCurrentSendingIndex] = useState(-1);
   const [sendLogs, setSendLogs] = useState<string[]>([]);
   const [sendingProgress, setSendingProgress] = useState(0);
-  const [messageType, setMessageType] = useState<'invitation' | 'reminder' | 'contribution'>('invitation');
+  const [messageType, setMessageType] = useState<'invitation' | 'reminder' | 'thank-you'>('invitation');
+  const [thankYouAudience, setThankYouAudience] = useState<'all' | 'confirmed' | 'attended'>('attended');
 
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleTime, setScheduleTime] = useState('');
@@ -144,45 +145,7 @@ export default function SendMessages({ event, settings, guests, language, onUpda
   }, [sendSmsLink]);
 
   // Template Editing states
-  const [invitationTemplateSw, setInvitationTemplateSw] = useState<string>(() => {
-    if (event?.smsTemplates?.invitationTemplateSw) {
-      return event.smsTemplates.invitationTemplateSw;
-    }
-    const key = event?.id ? `kadi_message_template_${event.id}_sw` : 'kadi_message_template_sw';
-    const saved = safeLocalStorage.getItem(key) || safeLocalStorage.getItem('kadi_message_template_sw') || safeLocalStorage.getItem('kadi_message_template');
-    if (saved) {
-      return saved;
-    }
-    return `Habari {name},
-Familia ya {host_name} kwa kushirikiana na Kamati ya Maandalizi, wanayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
-
-TAARIFA ZA SHEREHE
-Tarehe: {date}
-Ukumbi: {venue}
-Muda: {time}
-Kadi Na: {card_number}
-Aina ya Kadi: {card_type}
-
-Bofya kiungo hiki ili kuona kadi yako ya mwaliko, ramani ya ukumbi, na kuthibitisha mahudhurio yako (RSVP):
-{kiungo}
-
-Mawasiliano:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
-
-Karibu sana.`;
-  });
-
-  const [invitationTemplateEn, setInvitationTemplateEn] = useState<string>(() => {
-    if (event?.smsTemplates?.invitationTemplateEn) {
-      return event.smsTemplates.invitationTemplateEn;
-    }
-    const key = event?.id ? `kadi_message_template_${event.id}_en` : 'kadi_message_template_en';
-    const saved = safeLocalStorage.getItem(key) || safeLocalStorage.getItem('kadi_message_template_en');
-    if (saved) {
-      return saved;
-    }
-    return `Hello {name},
+  const oldDefaultEn = `Hello {name},
 The family of {host_name} together with the Organizing Committee, are pleased to welcome you to join us for {event_name}.
 
 EVENT DETAILS
@@ -200,24 +163,26 @@ Contacts:
 {contact_2_name} - {contact_2_phone}
 
 You are warmly welcome!`;
-  });
 
-  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
-  const [isTemplateSaving, setIsTemplateSaving] = useState(false);
-  const [templateSavedSuccess, setTemplateSavedSuccess] = useState(false);
+  const newDefaultEn = `Hello {name},
+The family of {host_name} , are pleased to welcome you to join us for {event_name}.
 
-  // Sync state when event.id changes or database config updates
-  useEffect(() => {
-    if (event?.id) {
-      const savedSw = event.smsTemplates?.invitationTemplateSw || safeLocalStorage.getItem(`kadi_message_template_${event.id}_sw`);
-      if (savedSw) {
-        setInvitationTemplateSw(savedSw);
-      } else {
-        const fallbackSw = safeLocalStorage.getItem('kadi_message_template_sw') || safeLocalStorage.getItem('kadi_message_template');
-        if (fallbackSw) {
-          setInvitationTemplateSw(fallbackSw);
-        } else {
-          setInvitationTemplateSw(`Habari {name},
+EVENT DETAILS
+Date: {date}
+Venue: {venue}
+Time: {time}
+Card No: {card_number}
+Card Type: {card_type}
+
+{Link}
+
+Contacts:
+{contact_1_name} - {contact_1_phone}
+{contact_2_name} - {contact_2_phone}
+
+You are warmly welcome!`;
+
+  const oldDefaultSw = `Habari {name},
 Familia ya {host_name} kwa kushirikiana na Kamati ya Maandalizi, wanayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
 
 TAARIFA ZA SHEREHE
@@ -234,36 +199,131 @@ Mawasiliano:
 {contact_1_name} - {contact_1_phone}
 {contact_2_name} - {contact_2_phone}
 
-Karibu sana.`);
-        }
-      }
+Karibu sana.`;
 
-      const savedEn = event.smsTemplates?.invitationTemplateEn || safeLocalStorage.getItem(`kadi_message_template_${event.id}_en`);
-      if (savedEn) {
-        setInvitationTemplateEn(savedEn);
-      } else {
-        const fallbackEn = safeLocalStorage.getItem('kadi_message_template_en');
-        if (fallbackEn) {
-          setInvitationTemplateEn(fallbackEn);
-        } else {
-          setInvitationTemplateEn(`Hello {name},
-The family of {host_name} together with the Organizing Committee, are pleased to welcome you to join us for {event_name}.
+  const oldDefaultSw2 = `Habari {name},
+Familia ya {host_name} kwa kushirikiana na Kamati ya Maandalizi, wanayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
+
+TAARIFA ZA SHEREHE
+
+Tarehe: {date}
+Ukumbi: {venue}
+Muda: {time}
+Kadi Na: {card_number}
+Aina ya Kadi: {card_type}
+
+Uwepo wako ni wa thamani kubwa kwetu na utachangia kuifanya siku hii kuwa ya furaha na kumbukumbu nzuri.
+
+Ikiwa namba hii ipo WhatsApp, kadi yako ya mwaliko imetumwa huko pia.
+
+Mawasiliano:
+{contact_1_name} - {contact_1_phone}
+{contact_2_name} - {contact_2_phone}
+
+Karibu sana.`;
+
+  const oldDefaultEn2 = `Hello {name},
+The family of {host_name} in collaboration with the Organizing Committee, are pleased to welcome you to participate in {event_name}.
 
 EVENT DETAILS
+
 Date: {date}
 Venue: {venue}
 Time: {time}
 Card No: {card_number}
 Card Type: {card_type}
 
-Please click this link to view your special invitation card and confirm your attendance (RSVP):
-{kiungo}
+Your presence is highly valued and will contribute to making this day joyous and memorable.
 
-Contacts:
+If this number is on WhatsApp, your invitation card has been sent there as well.
+
+Contact:
 {contact_1_name} - {contact_1_phone}
 {contact_2_name} - {contact_2_phone}
 
-You are warmly welcome!`);
+You are warmly welcome.`;
+
+  const newDefaultSw = `Habari {name},
+Familia ya {host_name} , inayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
+
+TAARIFA ZA SHEREHE
+Tarehe: {date}
+Ukumbi: {venue}
+Muda: {time}
+Kadi Na: {card_number}
+Aina ya Kadi: {card_type}
+
+{Link}
+
+Mawasiliano:
+{contact_1_name} - {contact_1_phone}
+{contact_2_name} - {contact_2_phone}
+
+Karibu sana!`;
+
+  const upgradeTemplate = (text: string | null | undefined, newText: string, oldTexts: string[]): string => {
+    if (!text) return newText;
+    const cleanText = text.trim().replace(/\\r\\n/g, '\\n');
+    for (const oldText of oldTexts) {
+      if (cleanText === oldText.trim().replace(/\\r\\n/g, '\\n')) return newText;
+    }
+    return text;
+  };
+
+  const [invitationTemplateSw, setInvitationTemplateSw] = useState<string>(() => {
+    const fromEvent = event?.smsTemplates?.invitationTemplateSw;
+    if (fromEvent) {
+      return upgradeTemplate(fromEvent, newDefaultSw, [oldDefaultSw, oldDefaultSw2]);
+    }
+    const key = event?.id ? `kadi_message_template_${event.id}_sw_v2` : 'kadi_message_template_sw_v2';
+    const saved = safeLocalStorage.getItem(key);
+    if (saved) {
+      return upgradeTemplate(saved, newDefaultSw, [oldDefaultSw, oldDefaultSw2]);
+    }
+    return newDefaultSw;
+  });
+
+  const [invitationTemplateEn, setInvitationTemplateEn] = useState<string>(() => {
+    const fromEvent = event?.smsTemplates?.invitationTemplateEn;
+    if (fromEvent) {
+      return upgradeTemplate(fromEvent, newDefaultEn, [oldDefaultEn, oldDefaultEn2]);
+    }
+    const key = event?.id ? `kadi_message_template_${event.id}_en_v2` : 'kadi_message_template_en_v2';
+    const saved = safeLocalStorage.getItem(key);
+    if (saved) {
+      return upgradeTemplate(saved, newDefaultEn, [oldDefaultEn, oldDefaultEn2]);
+    }
+    return newDefaultEn;
+  });
+
+  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
+  const [isTemplateSaving, setIsTemplateSaving] = useState(false);
+  const [templateSavedSuccess, setTemplateSavedSuccess] = useState(false);
+
+  // Sync state when event.id changes or database config updates
+  useEffect(() => {
+    if (event?.id) {
+      const savedSw = event.smsTemplates?.invitationTemplateSw || safeLocalStorage.getItem(`kadi_message_template_${event.id}_sw`);
+      if (savedSw) {
+        setInvitationTemplateSw(upgradeTemplate(savedSw, newDefaultSw, [oldDefaultSw, oldDefaultSw2]));
+      } else {
+        const fallbackSw = safeLocalStorage.getItem('kadi_message_template_sw') || safeLocalStorage.getItem('kadi_message_template');
+        if (fallbackSw) {
+          setInvitationTemplateSw(upgradeTemplate(fallbackSw, newDefaultSw, [oldDefaultSw, oldDefaultSw2]));
+        } else {
+          setInvitationTemplateSw(newDefaultSw);
+        }
+      }
+
+      const savedEn = event.smsTemplates?.invitationTemplateEn || safeLocalStorage.getItem(`kadi_message_template_${event.id}_en`);
+      if (savedEn) {
+        setInvitationTemplateEn(upgradeTemplate(savedEn, newDefaultEn, [oldDefaultEn, oldDefaultEn2]));
+      } else {
+        const fallbackEn = safeLocalStorage.getItem('kadi_message_template_en');
+        if (fallbackEn) {
+          setInvitationTemplateEn(upgradeTemplate(fallbackEn, newDefaultEn, [oldDefaultEn, oldDefaultEn2]));
+        } else {
+          setInvitationTemplateEn(newDefaultEn);
         }
       }
     }
@@ -277,9 +337,13 @@ You are warmly welcome!`);
     if (event?.id) {
       safeLocalStorage.setItem(`kadi_message_template_${event.id}_sw`, invitationTemplateSw);
       safeLocalStorage.setItem(`kadi_message_template_${event.id}_en`, invitationTemplateEn);
+      safeLocalStorage.setItem(`kadi_thanks_template_${event.id}_sw`, thankYouTemplateSw);
+      safeLocalStorage.setItem(`kadi_thanks_template_${event.id}_en`, thankYouTemplateEn);
     }
     safeLocalStorage.setItem('kadi_message_template_sw', invitationTemplateSw);
     safeLocalStorage.setItem('kadi_message_template_en', invitationTemplateEn);
+    safeLocalStorage.setItem('kadi_thanks_template_sw', thankYouTemplateSw);
+    safeLocalStorage.setItem('kadi_thanks_template_en', thankYouTemplateEn);
 
     // Save to general database state
     if (onUpdateEvent && event) {
@@ -288,7 +352,9 @@ You are warmly welcome!`);
         smsTemplates: {
           ...(event.smsTemplates || {}),
           invitationTemplateSw,
-          invitationTemplateEn
+          invitationTemplateEn,
+          thanks1Sw: thankYouTemplateSw,
+          thanks1En: thankYouTemplateEn
         }
       });
     }
@@ -314,20 +380,86 @@ You are warmly welcome!`);
     safeLocalStorage.setItem('kadi_message_template_en', invitationTemplateEn);
   }, [invitationTemplateEn, event?.id]);
 
-  const activeTemplateValue = language === 'en' ? invitationTemplateEn : invitationTemplateSw;
+  const [thankYouTemplateSw, setThankYouTemplateSw] = useState<string>(() => {
+    if (event?.smsTemplates?.thanks1Sw) {
+      return event.smsTemplates.thanks1Sw;
+    }
+    const key = event?.id ? `kadi_thanks_template_${event.id}_sw` : 'kadi_thanks_template_sw';
+    const saved = safeLocalStorage.getItem(key);
+    if (saved) return saved;
+    return `Habari {name},
+Familia ya {host_name} inapenda kutoa shukrani za dhati kwa kuhudhuria {event_name}.
+Ushiriki wako umefanya sherehe yetu kuwa ya kipekee na yenye baraka.
+
+Asante sana na Mungu akubariki!`;
+  });
+
+  const [thankYouTemplateEn, setThankYouTemplateEn] = useState<string>(() => {
+    if (event?.smsTemplates?.thanks1En) {
+      return event.smsTemplates.thanks1En;
+    }
+    const key = event?.id ? `kadi_thanks_template_${event.id}_en` : 'kadi_thanks_template_en';
+    const saved = safeLocalStorage.getItem(key);
+    if (saved) return saved;
+    return `Hello {name},
+The family of {host_name} would like to express our deepest gratitude for attending {event_name}.
+Your presence made our event truly special and blessed.
+
+Thank you very much and God bless you!`;
+  });
+
+  useEffect(() => {
+    if (event?.id) {
+      safeLocalStorage.setItem(`kadi_thanks_template_${event.id}_sw`, thankYouTemplateSw);
+
+    }
+    safeLocalStorage.setItem('kadi_thanks_template_sw', thankYouTemplateSw);
+  }, [thankYouTemplateSw, event?.id]);
+
+  useEffect(() => {
+    if (event?.id) {
+      safeLocalStorage.setItem(`kadi_thanks_template_${event.id}_en`, thankYouTemplateEn);
+    }
+    safeLocalStorage.setItem('kadi_thanks_template_en', thankYouTemplateEn);
+  }, [thankYouTemplateEn, event?.id]);
+
+  const activeTemplateValue = messageType === 'thank-you' 
+    ? (language === 'en' ? thankYouTemplateEn : thankYouTemplateSw)
+    : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
+    
   const setActiveTemplateValue = (val: string) => {
-    if (language === 'en') {
-      setInvitationTemplateEn(val);
+    if (messageType === 'thank-you') {
+      if (language === 'en') {
+        setThankYouTemplateEn(val);
+      } else {
+        setThankYouTemplateSw(val);
+      }
     } else {
-      setInvitationTemplateSw(val);
+      if (language === 'en') {
+        setInvitationTemplateEn(val);
+      } else {
+        setInvitationTemplateSw(val);
+      }
     }
   };
 
   // Load gateway configurations from API
   useEffect(() => {
     fetch('/api/sms-settings')
-      .then(res => {
-        if (!res.ok) throw new Error("Hairuhusu kusoma");
+      .then(async (res) => {
+        const contentType = res.headers.get("content-type");
+        if (!res.ok) {
+          if (contentType && contentType.includes("application/json")) {
+            const errData = await res.json();
+            throw new Error(errData.error || "Hairuhusu kusoma");
+          }
+          throw new Error(`Server returned error ${res.status}`);
+        }
+        if (!contentType || !contentType.includes("application/json")) {
+          const text = await res.text();
+          console.error("Non-JSON response from /api/sms-settings:", text.substring(0, 200));
+          throw new Error("Server returned non-JSON response. This might happen if the server is restarting.");
+        }
         return res.json();
       })
       .then(data => {
@@ -335,7 +467,11 @@ You are warmly welcome!`);
           setGatewaySettings(prev => ({ ...prev, ...data }));
         }
       })
-      .catch(err => console.error("Error fetching SMS/WA gateway settings:", err));
+      .catch(err => {
+        console.error("Error fetching SMS/WA gateway settings:", err);
+        // Silently ignore during initial mount if it's a common restart issue, 
+        // or show a subtle notification if needed.
+      });
   }, []);
 
   const insertPlaceholder = (tag: string) => {
@@ -363,48 +499,58 @@ You are warmly welcome!`);
   };
 
    const executeResetTemplate = () => {
-    if (language === 'en') {
-      setInvitationTemplateEn(`Hello {name},
-The family of {host_name} in collaboration with the Organizing Committee, are pleased to welcome you to participate in {event_name}.
+    if (messageType === 'thank-you') {
+      if (language === 'en') {
+        setThankYouTemplateEn(`Hello {name},
+The family of {host_name} would like to express our deepest gratitude for attending {event_name}.
+Your presence made our event truly special and blessed.
+
+Thank you very much and God bless you!`);
+      } else {
+        setThankYouTemplateSw(`Habari {name},
+Familia ya {host_name} inapenda kutoa shukrani za dhati kwa kuhudhuria {event_name}.
+Ushiriki wako umefanya sherehe yetu kuwa ya kipekee na yenye baraka.
+
+Asante sana na Mungu akubariki!`);
+      }
+    } else {
+      if (language === 'en') {
+        setInvitationTemplateEn(`Hello {name},
+The family of {host_name} , are pleased to welcome you to join us for {event_name}.
 
 EVENT DETAILS
-
 Date: {date}
 Venue: {venue}
 Time: {time}
 Card No: {card_number}
 Card Type: {card_type}
 
-Your presence is highly valued and will contribute to making this day joyous and memorable.
+{Link}
 
-If this number is on WhatsApp, your invitation card has been sent there as well.
-
-Contact:
+Contacts:
 {contact_1_name} - {contact_1_phone}
 {contact_2_name} - {contact_2_phone}
 
-You are warmly welcome.`);
-    } else {
-      setInvitationTemplateSw(`Habari {name},
-Familia ya {host_name} kwa kushirikiana na Kamati ya Maandalizi, wanayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
+You are warmly welcome!`);
+      } else {
+        setInvitationTemplateSw(`Habari {name},
+Familia ya {host_name} , inayo furaha kubwa kukukaribisha kushiriki katika {event_name}.
 
 TAARIFA ZA SHEREHE
-
 Tarehe: {date}
 Ukumbi: {venue}
 Muda: {time}
 Kadi Na: {card_number}
 Aina ya Kadi: {card_type}
 
-Uwepo wako ni wa thamani kubwa kwetu na utachangia kuifanya siku hii kuwa ya furaha na kumbukumbu nzuri.
-
-Ikiwa namba hii ipo WhatsApp, kadi yako ya mwaliko imetumwa huko pia.
+{Link}
 
 Mawasiliano:
 {contact_1_name} - {contact_1_phone}
 {contact_2_name} - {contact_2_phone}
 
-Karibu sana.`);
+Karibu sana!`);
+      }
     }
   };
 
@@ -470,9 +616,19 @@ Karibu sana.`);
       if (messageType === 'save_the_date') {
         return g.rsvpStatus === 'Atahudhuria';
       }
+      if (messageType === 'thank-you') {
+        if (thankYouAudience === 'attended') {
+          return g.checkedIn === true;
+        }
+        if (thankYouAudience === 'confirmed') {
+          return g.rsvpStatus === 'Atahudhuria';
+        }
+        // If 'all', return true
+        return true;
+      }
       return true;
     });
-  }, [guests, messageType]);
+  }, [guests, messageType, thankYouAudience]);
 
   // Status Metrics - Memoized
   const { countSmsSent, countWhatsappSent, countPending } = React.useMemo(() => {
@@ -486,7 +642,9 @@ Karibu sana.`);
     const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://eventcard.co.tz';
     const appUrl = `${currentOrigin}/?invite=${g.code || g.id}&eventId=${event.id}&lang=${language}`;
 
-    let text = language === 'en' ? invitationTemplateEn : invitationTemplateSw;
+    let text = messageType === 'thank-you' 
+      ? (language === 'en' ? thankYouTemplateEn : thankYouTemplateSw)
+      : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
     const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
 
     const replacements: { [key: string]: string } = {
@@ -530,8 +688,9 @@ Karibu sana.`);
       '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
       '{vazi}': event.dressCode || "[Vazi]",
       '{dressCode}': event.dressCode || "[Dress Code]",
-      '{kiungo}': isSms ? "" : appUrl,
-      '{inviteUrl}': isSms ? "" : appUrl,
+      '{Link}': (isSms || messageType === 'thank-you') ? "" : appUrl,
+      '{kiungo}': (isSms || messageType === 'thank-you') ? "" : appUrl,
+      '{inviteUrl}': (isSms || messageType === 'thank-you') ? "" : appUrl,
       '{namba_mwaliko}': g.code || "[Code]",
       '{card_number}': g.code || "[Code]",
       '{inviteCode}': g.code || "[Code]",
@@ -559,7 +718,7 @@ Karibu sana.`);
 
     text = text.trim();
 
-    if (isSms) {
+    if (isSms || messageType === 'thank-you') {
       // Prevent any URLs or links from ever being added, and scrub any potential links in custom templates
       text = text.replace(/https?:\/\/[^\s]+/gi, "");
       text = text.replace(/[a-zA-Z0-9.-]+\.co\.tz[^\s]*/gi, "");
@@ -623,7 +782,9 @@ Karibu sana.`);
       // Extract template params dynamically for official Meta WhatsApp template matching
       let templateParams: string[] | undefined = undefined;
       if (channel === 'whatsapp') {
-        const rawTemplate = language === 'en' ? invitationTemplateEn : invitationTemplateSw;
+        const rawTemplate = messageType === 'thank-you' 
+          ? (language === 'en' ? thankYouTemplateEn : thankYouTemplateSw)
+          : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
         const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://eventcard.co.tz';
         const appUrl = `${currentOrigin}/?invite=${target.code || target.id}&eventId=${event.id}&lang=${language}`;
         const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
@@ -669,8 +830,9 @@ Karibu sana.`);
           '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
           '{vazi}': event.dressCode || "[Vazi]",
           '{dressCode}': event.dressCode || "[Dress Code]",
-          '{kiungo}': appUrl,
-          '{inviteUrl}': appUrl,
+          '{Link}': messageType === 'thank-you' ? "" : appUrl,
+          '{kiungo}': messageType === 'thank-you' ? "" : appUrl,
+          '{inviteUrl}': messageType === 'thank-you' ? "" : appUrl,
           '{namba_mwaliko}': target.code || "[Code]",
           '{card_number}': target.code || "[Code]",
           '{inviteCode}': target.code || "[Code]",
@@ -1032,22 +1194,50 @@ Karibu sana.`);
       </div>
 
       {/* Message Type Selector */}
-      <div className="flex items-center space-x-2 border-b border-white/10 pb-2">
-        {[
-          { id: 'invitation', label: 'Invitations' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setMessageType(tab.id as any)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer ${
-              messageType === tab.id 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'text-slate-400 hover:bg-white/5 border border-transparent'
-            }`}
-          >
-            <span>{tab.label}</span>
-          </button>
-        ))}
+      <div className="flex flex-col space-y-3 border-b border-white/10 pb-4">
+        <div className="flex items-center space-x-2">
+          {[
+            { id: 'invitation', label: language === 'en' ? 'Invitations' : 'Mialiko' },
+            { id: 'thank-you', label: language === 'en' ? 'Thank You' : 'Shukrani' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setMessageType(tab.id as any)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer ${
+                messageType === tab.id 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'text-slate-400 hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {messageType === 'thank-you' && (
+          <div className="flex items-center space-x-2 bg-white/5 p-2 rounded-xl border border-white/10 w-full sm:w-auto overflow-x-auto">
+            <span className="text-xs text-slate-400 font-medium px-2 whitespace-nowrap">
+              {language === 'en' ? 'Filter by:' : 'Chuja kwa:'}
+            </span>
+            {[
+              { id: 'attended', label: language === 'en' ? 'Attended Guests' : 'Walioshiriki Kwenye Kadi' },
+              { id: 'confirmed', label: language === 'en' ? 'Confirmed RSVP' : 'Waliothibitisha (Atahudhuria)' },
+              { id: 'all', label: language === 'en' ? 'All Invited' : 'Wote Walioalikwa' }
+            ].map(filter => (
+              <button
+                key={filter.id}
+                onClick={() => setThankYouAudience(filter.id as any)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap cursor-pointer ${
+                  thankYouAudience === filter.id
+                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    : 'text-slate-400 hover:bg-white/5 border border-transparent'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Numerical Sending Metrics cards wrapper */}
@@ -1153,10 +1343,14 @@ Karibu sana.`);
             <MessageCircle className="w-5 h-5 text-blue-400" />
             <div>
               <h3 className="text-sm font-bold text-white">
-                Hariri Muundo wa Mwaliko (Edit Invitation Template)
+                {messageType === 'thank-you' 
+                  ? 'Hariri Muundo wa Shukrani (Edit Thank You Template)' 
+                  : 'Hariri Muundo wa Mwaliko (Edit Invitation Template)'}
               </h3>
               <p className="text-[10px] text-slate-400">
-                Badilisha maandishi ya mwaliko yatakayotumwa kwa kila mgeni kwa kutumia mifano ya mabano dynamic.
+                {messageType === 'thank-you'
+                  ? 'Badilisha maandishi ya shukrani yatakayotumwa kwa kila mgeni.'
+                  : 'Badilisha maandishi ya mwaliko yatakayotumwa kwa kila mgeni kwa kutumia mifano ya mabano dynamic.'}
               </p>
             </div>
           </div>

@@ -196,7 +196,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
               }
             ];
 
-        const payload = {
+        const payload: any = {
           messaging_product: "whatsapp",
           recipient_type: "individual",
           to: formattedPhone,
@@ -205,15 +205,19 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
             name: templateName,
             language: {
               code: templateLang
-            },
-            components: [
-              {
-                type: "body",
-                parameters: parameters
-              }
-            ]
+            }
           }
         };
+
+        // Standard hello_world template does not take parameters
+        if (templateName !== 'hello_world') {
+          payload.template.components = [
+            {
+              type: "body",
+              parameters: parameters
+            }
+          ];
+        }
 
         const metaUrl = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
         let response;
@@ -238,6 +242,15 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         const respText = await response.text();
         console.log("[Meta WhatsApp Resp]:", respText);
         if (!response.ok) {
+          try {
+            const errObj = JSON.parse(respText);
+            if (errObj.error && errObj.error.code === 190 && errObj.error.type === "OAuthException") {
+              throw new Error(`Hitilafu ya Meta WhatsApp: Token yako imepitwa na wakati (expired) au si sahihi. Tafadhali nenda kwenye "Mipangilio" kisha weka "Meta Access Token" mpya na sahihi.`);
+            }
+          } catch(e: any) {
+            if (e.message.includes("Hitilafu ya Meta WhatsApp")) throw e;
+            // Ignore JSON parse error
+          }
           throw new Error(`Meta API failed: ${respText}`);
         }
         return respText;
@@ -1274,7 +1287,7 @@ async function startServer() {
       currentLogs = [{
           id: 'log-' + Date.now() + Math.random().toString(36).substr(2, 5),
           timestamp: new Date().toISOString(),
-          user: 'Admin',
+          user: 'Jimson',
           action: 'Ametuma Ujumbe (Sent SMS)',
           details: `Ametuma SMS kwa wageni ${phones.length}`,
           ipAddress: clientIp
@@ -1441,10 +1454,10 @@ async function startServer() {
         id: "sync-" + Date.now(),
         timestamp: new Date().toISOString(),
         commitHash: Math.random().toString(16).substring(2, 9),
-        commitMessage: "Milio na tawi upya: Auto force-pull triggered via admin settings dashboard",
-        author: "Admin via Dashboard",
+        commitMessage: "Milio na tawi upya: Auto force-pull triggered via settings dashboard",
+        author: "Jimson via Dashboard",
         status: "success" as const,
-        details: `Git pull origin ${current.branch || "main"} completed successfully.\nProcessing files mapping...\nSuccessfully compiled applet.\nWeb container hot-restarted on port 3000.`
+        details: `Git pull origin ${current.branch || "main"} completed successfully.\nAll services are fully synced!`
       };
 
       const updatedLogs = [newLog, ...(current.logs || [])];

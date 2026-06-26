@@ -124,21 +124,7 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                 </a>
               </div>
 
-              {/* Trust/Live Counters */}
-              <div className="pt-6 grid grid-cols-3 gap-4 border-t border-white/10 font-mono text-xs text-slate-450">
-                <div>
-                  <span className="block text-2xl font-bold text-white">4,800+</span>
-                  {t('landing.statSent')}
-                </div>
-                <div>
-                  <span className="block text-2xl font-bold text-blue-400">98.4%</span>
-                  {t('landing.statRsvped')}
-                </div>
-                <div>
-                  <span className="block text-2xl font-bold text-purple-400">0%</span>
-                  {t('landing.statSavePaper')}
-                </div>
-              </div>
+              {/* Trust/Live Counters REMOVED per user request */}
             </motion.div>
 
             {/* Right side: Mockup Showcase / Interactive graphics with custom client-logo */}
@@ -194,26 +180,7 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                 </div>
               </div>
 
-              {/* Floating badges */}
-              <div className="absolute top-20 -left-6 bg-white/5 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/10 flex items-center space-x-2 animate-bounce">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-semibold">
-                  <CheckCircle className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-450">{language === 'sw' ? 'Mgeni Amejibu' : 'Guest Replied'}</p>
-                  <p className="text-xs font-bold font-sans text-white">{language === 'sw' ? 'Atahudhuria ✓' : 'Attending ✓'}</p>
-                </div>
-              </div>
-
-              <div className="absolute bottom-20 -right-6 bg-white/5 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/10 flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-semibold">
-                  <MessageSquare className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-450">{language === 'sw' ? 'Imetuma Salama' : 'Sent Smoothly'}</p>
-                  <p className="text-xs font-bold font-sans text-white">WhatsApp & SMS</p>
-                </div>
-              </div>
+              {/* Floating badges REMOVED per user request */}
             </motion.div>
           </div>
         </section>

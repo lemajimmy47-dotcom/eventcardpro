@@ -56,7 +56,7 @@ import GuestSaveTheDatePage from './components/GuestSaveTheDatePage';
 import GuestPledgeSubmissionPage from './components/GuestPledgeSubmissionPage';
 import AuditLogsPage from './components/AuditLogsPage';
 import { safeLocalStorage } from './utils/storage';
-import { EventDetails, Guest, TemplateSettings, UserAccount, CommitteeMember, CommitteeNotification } from './types';
+import { EventDetails, Guest, TemplateSettings, UserAccount, CommitteeMember, CommitteeNotification, ContributionCardTemplate } from './types';
 
 // Types for navigation
 type AppTab = 
@@ -153,6 +153,7 @@ export default function App() {
     guest: Guest;
     event: EventDetails;
     settings: TemplateSettings;
+    pledgeTemplate?: ContributionCardTemplate;
     saveTheDate?: any;
   } | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
@@ -332,7 +333,7 @@ export default function App() {
           activeEventId: updates.eventDetails.id
         } : {
           id: "account",
-          username: user?.username || 'Admin',
+          username: 'Jimson',
           activeEventId: updates.eventDetails.id,
           walletBalance: 0,
           transactions: []
@@ -345,7 +346,7 @@ export default function App() {
         sanitizedUpdates.auditLog = {
           id: 'log-' + Date.now(),
           timestamp: new Date().toISOString(),
-          user: user?.username || 'Admin',
+          user: 'Jimson',
           action: actionDesc,
           details: detailsDesc || 'Mabadiliko yamefanyika kwenye mfumo.'
         };
@@ -576,10 +577,6 @@ export default function App() {
         ? parsed 
         : { username: 'Jimson', role: 'admin' };
 
-      if (userObj.username.toLowerCase() === 'admin') {
-        userObj.username = 'Jimson';
-      }
-
       setUser(userObj);
       safeLocalStorage.setItem('kadi_user', JSON.stringify(userObj));
     } catch (e) {
@@ -672,7 +669,7 @@ export default function App() {
       );
     } else if (isPledgeView) {
       // For pledges, optionally try loading customized template from same browser, or fallback to default
-      const localTplRaw = safeLocalStorage.getItem(`kadi_contrib_template_${guestInviteData.event.id}`);
+      const localTplRaw = safeLocalStorage.getItem(`kadi_card_tpl_v3_${guestInviteData.event.id}`);
       let payloadTpl = undefined;
       if (localTplRaw) {
         try { payloadTpl = JSON.parse(localTplRaw); } catch(e) {}
@@ -682,7 +679,7 @@ export default function App() {
         <GuestPledgeSubmissionPage 
           guest={guestInviteData.guest} 
           event={guestInviteData.event} 
-          template={(guestInviteData as any).pledgeTemplate || payloadTpl}
+          template={guestInviteData.pledgeTemplate || payloadTpl}
           onPledgeSubmit={(amount) => {
              // The GuestPledgeSubmissionPage already updates the state locally or via API
              setGuestInviteData({
@@ -1057,22 +1054,8 @@ export default function App() {
           return (
             <div className="text-white font-sans relative flex flex-col space-y-6 pb-12" id="dashboard-dark-root">
               
-              {/* Top Support Banner Row */}
-              <div className="flex justify-center items-center w-full pb-4 border-b border-white/10 -mt-2" id="support-banner">
-                <a 
-                  href="https://wa.me/255712345678"
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center space-x-2 text-slate-400 hover:text-white text-xs font-semibold tracking-wide transition-colors"
-                  id="support-wa-link"
-                >
-                  <span>{language === 'sw' ? 'Msaada / Support:' : 'Support Hotline:'}</span>
-                  <span className="flex items-center space-x-1 font-bold text-emerald-400 hover:underline">
-                    <MessageSquare className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
-                    <span>WhatsApp</span>
-                  </span>
-                </a>
-              </div>
+              {/* Top Support Banner Row - REMOVED per user request */}
+      
 
               {/* Real-time RSVP notification alert block (dark glass style) */}
               <AnimatePresence>

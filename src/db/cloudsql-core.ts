@@ -98,9 +98,12 @@ export async function seedFromBackupFile(): Promise<boolean> {
           mapsLink: ev.mapsLink ? String(ev.mapsLink) : null,
           eventImgUrl: ev.eventImgUrl ? String(ev.eventImgUrl) : null,
           messageLogs: ev.messageLogs || null,
+          smsTemplates: ev.smsTemplates || null,
+          paymentMethods: ev.paymentMethods || null,
           contributionsEnabled: ev.contributionsEnabled === true,
           fundraisingGoal: typeof ev.fundraisingGoal === "number" ? ev.fundraisingGoal : 0,
           autoRsvpRemindersEnabled: ev.autoRsvpRemindersEnabled === true,
+          contributionDeadline: ev.contributionDeadline ? String(ev.contributionDeadline) : null,
         }).onConflictDoNothing();
       }
     }
@@ -129,9 +132,12 @@ export async function seedFromBackupFile(): Promise<boolean> {
         mapsLink: ed.mapsLink ? String(ed.mapsLink) : null,
         eventImgUrl: ed.eventImgUrl ? String(ed.eventImgUrl) : null,
         messageLogs: ed.messageLogs || null,
+        smsTemplates: ed.smsTemplates || null,
+        paymentMethods: ed.paymentMethods || null,
         contributionsEnabled: ed.contributionsEnabled === true,
         fundraisingGoal: typeof ed.fundraisingGoal === "number" ? ed.fundraisingGoal : 0,
         autoRsvpRemindersEnabled: ed.autoRsvpRemindersEnabled === true,
+        contributionDeadline: ed.contributionDeadline ? String(ed.contributionDeadline) : null,
       }).onConflictDoNothing();
     }
 
@@ -350,9 +356,11 @@ export async function fetchFullStateFromDB(): Promise<any> {
       eventImgUrl: e.eventImgUrl || "",
       messageLogs: e.messageLogs || [],
       smsTemplates: e.smsTemplates || null,
+      paymentMethods: (e as any).paymentMethods || [],
       contributionsEnabled: e.contributionsEnabled || false,
       fundraisingGoal: e.fundraisingGoal || 0,
       autoRsvpRemindersEnabled: e.autoRsvpRemindersEnabled || false,
+      contributionDeadline: e.contributionDeadline || "",
     }));
 
     // Find active event details (last edited or event-starter, or the first event in list)
@@ -545,9 +553,11 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
           eventImgUrl: ev.eventImgUrl ? String(ev.eventImgUrl) : null,
           messageLogs: ev.messageLogs || null,
           smsTemplates: ev.smsTemplates || null,
+          paymentMethods: ev.paymentMethods || null,
           contributionsEnabled: ev.contributionsEnabled === true,
           fundraisingGoal: typeof ev.fundraisingGoal === "number" ? ev.fundraisingGoal : 0,
           autoRsvpRemindersEnabled: ev.autoRsvpRemindersEnabled === true,
+          contributionDeadline: ev.contributionDeadline ? String(ev.contributionDeadline) : null,
         }));
 
       if (values.length > 0) {
@@ -573,9 +583,11 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             eventImgUrl: sql`EXCLUDED.event_img_url`,
             messageLogs: sql`EXCLUDED.message_logs`,
             smsTemplates: sql`EXCLUDED.sms_templates`,
+            paymentMethods: sql`EXCLUDED.payment_methods`,
             contributionsEnabled: sql`EXCLUDED.contributions_enabled`,
             fundraisingGoal: sql`EXCLUDED.fundraising_goal`,
             autoRsvpRemindersEnabled: sql`EXCLUDED.auto_rsvp_reminders_enabled`,
+            contributionDeadline: sql`EXCLUDED.contribution_deadline`,
           },
         });
       }
@@ -727,31 +739,23 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
 
     // 3.6. Save Template Settings
     if (data.templateSettings && typeof data.templateSettings === "object") {
-      Object.assign(data.templateSettings, data.templateSettings); // Stabilize
-      for (const [key, t] of Object.entries(data.templateSettings)) {
+      // Normalize to map if it's currently a flat object
+      let normalizedMap: Record<string, any> = {};
+      const isLegacyFlat = ('imageUrl' in data.templateSettings) && !('default' in data.templateSettings);
+      
+      if (isLegacyFlat) {
+        normalizedMap['default'] = { ...data.templateSettings };
+      } else {
+        normalizedMap = { ...data.templateSettings };
+      }
+
+      for (const [key, t] of Object.entries(normalizedMap)) {
         if (!t || typeof t !== "object") continue;
         const tsObj = t as any;
-        await db.insert(schema.templateSettings).values({
-          id: String(key),
-          imageUrl: String(tsObj.imageUrl || ""),
-          textColor: tsObj.textColor ? String(tsObj.textColor) : "#333333",
-          fontFamily: tsObj.fontFamily ? String(tsObj.fontFamily) : "Inter",
-          guestNameX: typeof tsObj.guestNameX === "number" ? tsObj.guestNameX : 50,
-          guestNameY: typeof tsObj.guestNameY === "number" ? tsObj.guestNameY : 50,
-          guestNameSize: typeof tsObj.guestNameSize === "number" ? tsObj.guestNameSize : 24,
-          guestNameColor: tsObj.guestNameColor ? String(tsObj.guestNameColor) : null,
-          qrCodeX: typeof tsObj.qrCodeX === "number" ? tsObj.qrCodeX : 50,
-          qrCodeY: typeof tsObj.qrCodeY === "number" ? tsObj.qrCodeY : 70,
-          qrCodeSize: typeof tsObj.qrCodeSize === "number" ? tsObj.qrCodeSize : 120,
-          qrCodeColor: tsObj.qrCodeColor ? String(tsObj.qrCodeColor) : null,
-          cardTypeX: typeof tsObj.cardTypeX === "number" ? tsObj.cardTypeX : 50,
-          cardTypeY: typeof tsObj.cardTypeY === "number" ? tsObj.cardTypeY : 25,
-          cardTypeSize: typeof tsObj.cardTypeSize === "number" ? tsObj.cardTypeSize : 16,
-          cardTypeColor: tsObj.cardTypeColor ? String(tsObj.cardTypeColor) : null,
-          orientation: tsObj.orientation ? String(tsObj.orientation) : "portrait",
-        }).onConflictDoUpdate({
-          target: schema.templateSettings.id,
-          set: {
+
+        try {
+          await db.insert(schema.templateSettings).values({
+            id: String(key),
             imageUrl: String(tsObj.imageUrl || ""),
             textColor: tsObj.textColor ? String(tsObj.textColor) : "#333333",
             fontFamily: tsObj.fontFamily ? String(tsObj.fontFamily) : "Inter",
@@ -768,8 +772,30 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             cardTypeSize: typeof tsObj.cardTypeSize === "number" ? tsObj.cardTypeSize : 16,
             cardTypeColor: tsObj.cardTypeColor ? String(tsObj.cardTypeColor) : null,
             orientation: tsObj.orientation ? String(tsObj.orientation) : "portrait",
-          }
-        });
+          }).onConflictDoUpdate({
+            target: schema.templateSettings.id,
+            set: {
+              imageUrl: sql`EXCLUDED.image_url`,
+              textColor: sql`EXCLUDED.text_color`,
+              fontFamily: sql`EXCLUDED.font_family`,
+              guestNameX: sql`EXCLUDED.guest_name_x`,
+              guestNameY: sql`EXCLUDED.guest_name_y`,
+              guestNameSize: sql`EXCLUDED.guest_name_size`,
+              guestNameColor: sql`EXCLUDED.guest_name_color`,
+              qrCodeX: sql`EXCLUDED.qr_code_x`,
+              qrCodeY: sql`EXCLUDED.qr_code_y`,
+              qrCodeSize: sql`EXCLUDED.qr_code_size`,
+              qrCodeColor: sql`EXCLUDED.qr_code_color`,
+              cardTypeX: sql`EXCLUDED.card_type_x`,
+              cardTypeY: sql`EXCLUDED.card_type_y`,
+              cardTypeSize: sql`EXCLUDED.card_type_size`,
+              cardTypeColor: sql`EXCLUDED.card_type_color`,
+              orientation: sql`EXCLUDED.orientation`,
+            }
+          });
+        } catch (err) {
+          console.error(`[CloudSQL] syncStateToRelationalDB (template_settings) failed for key ${key}:`, err);
+        }
       }
     }
 

@@ -221,8 +221,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                 {language === 'sw' ? '2. Badilisha Nafasi za Vipengele' : '2. Element Positions & Alignment'}
               </h3>
               
-              {/* Responsive Sub-tab Selector */}
-              <div className="flex bg-slate-950/80 p-1 rounded-xl border border-white/10 self-start sm:self-auto shrink-0 shadow-inner">
+              {/* Tabs hidden per user request to only keep Guest Name adjustment */}
+              <div className="hidden">
                 <button
                   type="button"
                   id="tab-btn-name"

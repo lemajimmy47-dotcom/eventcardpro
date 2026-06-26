@@ -398,7 +398,7 @@ export default function EventDetailsForm({ initialData, isAlreadySaved, onSave, 
           </div>
 
           {/* Date, Time & Period Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
             
             {/* Date */}
             <div className="space-y-1">
@@ -412,7 +412,23 @@ export default function EventDetailsForm({ initialData, isAlreadySaved, onSave, 
                 required
                 value={getFieldHelp('date', '').value}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full bg-[#050b18] border border-[#1b253b] rounded-xl px-4 py-2.5 text-white focus:outline-[#2563eb] cursor-pointer"
+                className="w-full bg-[#050b18] border border-[#1b253b] rounded-xl px-4 py-2.5 text-white focus:outline-[#2563eb] cursor-pointer font-bold text-xs"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+
+            {/* Contribution Deadline */}
+            <div className="space-y-1">
+              <label className="font-semibold text-slate-300 flex items-center gap-1" htmlFor="input-contribution-deadline">
+                <Calendar className="w-3.5 h-3.5 text-rose-400" />
+                <span>{language === 'sw' ? 'Mwisho wa Michango' : 'Pledge Deadline'}</span>
+              </label>
+              <input 
+                id="input-contribution-deadline"
+                type="date"
+                value={formData.contributionDeadline || ''}
+                onChange={(e) => setFormData({ ...formData, contributionDeadline: e.target.value })}
+                className="w-full bg-[#050b18] border border-[#1b253b] rounded-xl px-4 py-2.5 text-white focus:outline-[#2563eb] cursor-pointer font-bold text-xs"
                 style={{ colorScheme: 'dark' }}
               />
             </div>

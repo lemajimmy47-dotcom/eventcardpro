@@ -142,18 +142,18 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     setChunkUploadError(null);
     setLastUploadedGuestName('');
     
-    // Dynamically adjust batch size to ensure a smooth visual countdown with percentages
-    let BATCH_SIZE = 15;
-    if (newGuestsList.length <= 10) {
-      BATCH_SIZE = 1; // 1 by 1 for small lists, elegant counting
-    } else if (newGuestsList.length <= 30) {
-      BATCH_SIZE = 3;
-    } else if (newGuestsList.length <= 100) {
+    // Dynamically adjust batch size to ensure extremely fast upload while keeping a satisfying visual progress
+    let BATCH_SIZE = 500;
+    if (newGuestsList.length <= 15) {
+      BATCH_SIZE = 3; 
+    } else if (newGuestsList.length <= 50) {
       BATCH_SIZE = 10;
-    } else if (newGuestsList.length <= 500) {
-      BATCH_SIZE = 25;
+    } else if (newGuestsList.length <= 200) {
+      BATCH_SIZE = 50;
+    } else if (newGuestsList.length <= 1000) {
+      BATCH_SIZE = 250;
     } else {
-      BATCH_SIZE = 50; // default for very large lists
+      BATCH_SIZE = 500;
     }
     
     const totalToUpload = newGuestsList.length;
@@ -200,7 +200,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
         const targetPercent = Math.min(Math.round((loadedCount / totalToUpload) * 100), 99);
         
         // Smoothly tick the visual progress with sequential counts
-        const stepDelay = Math.max(4, Math.min(35, 180 / (targetPercent - currentProgressVal || 1)));
+        const stepDelay = Math.max(2, Math.min(25, 120 / (targetPercent - currentProgressVal || 1)));
         for (let p = currentProgressVal; p <= targetPercent; p++) {
           setChunkUploadProgress(p);
           currentProgressVal = p;
@@ -209,7 +209,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
         
         setChunkUploadedCount({ current: loadedCount, total: totalToUpload });
         // Tiny pacing delay to show name before proceeding to next batch
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await new Promise(resolve => setTimeout(resolve, 80));
       }
       
       // Smoothly roll from the current progress value up to 100%

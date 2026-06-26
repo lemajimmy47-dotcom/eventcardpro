@@ -60,7 +60,7 @@ export default function Login({ onSuccess, onBack }: LoginProps) {
       const trimmedUser = username.trim().toLowerCase();
       const trimmedPass = password.trim();
 
-      if ((trimmedUser === 'admin' || trimmedUser === 'jimson') && (trimmedPass === 'admin' || trimmedPass === 'jimson')) {
+      if (trimmedUser === 'jimson' && (trimmedPass === 'jimson' || trimmedPass === 'admin')) {
         safeLocalStorage.removeItem('eventcard_scanner_mode');
         safeLocalStorage.removeItem('eventcard_scanner_event_id');
         onSuccess();
@@ -106,7 +106,7 @@ export default function Login({ onSuccess, onBack }: LoginProps) {
       const trimmedUser = username.trim().toLowerCase();
       const trimmedPass = password.trim();
 
-      if ((trimmedUser === 'admin' || trimmedUser === 'jimson') && (trimmedPass === 'admin' || trimmedPass === 'jimson')) {
+      if (trimmedUser === 'jimson' && (trimmedPass === 'jimson' || trimmedPass === 'admin')) {
         safeLocalStorage.removeItem('eventcard_scanner_mode');
         safeLocalStorage.removeItem('eventcard_scanner_event_id');
         onSuccess();

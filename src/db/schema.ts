@@ -21,9 +21,11 @@ export const events = pgTable("events", {
   eventImgUrl: text("event_img_url"),
   messageLogs: jsonb("message_logs"),
   smsTemplates: jsonb("sms_templates"),
+  paymentMethods: jsonb("payment_methods"),
   contributionsEnabled: boolean("contributions_enabled").default(false),
   fundraisingGoal: integer("fundraising_goal").default(0),
   autoRsvpRemindersEnabled: boolean("auto_rsvp_reminders_enabled").default(false),
+  contributionDeadline: text("contribution_deadline"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
