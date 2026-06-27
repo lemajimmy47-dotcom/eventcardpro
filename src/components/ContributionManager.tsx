@@ -246,11 +246,27 @@ export default function ContributionManager({
   const [tplRem2En, setTplRem2En] = useState<string>(() => event.smsTemplates?.rem2En || safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
   const [tplRem2Sw, setTplRem2Sw] = useState<string>(() => event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
 
+  const defaultThanksSw = `Habari {{1}},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {{2}}.\n\nAsante sana na Mungu akubariki!`;
+  
+  const isBadThanksTemplate = (val: string | null | undefined) => {
+    if (!val) return false;
+    const lower = val.toLowerCase();
+    return lower.includes("namba za simu") || lower.includes("m-pesa") || lower.includes("mixx by yas") || lower.includes("mobile money") || lower.includes("kuhudhuria");
+  };
+
   const [tplThanks1En, setTplThanks1En] = useState<string>(() => event.smsTemplates?.thanks1En || safeLocalStorage.getItem(`kadi_tpl_thanks1_en_${event.id}`) || `Hello {Mgeni},\n\nWe would like to thank you with immense gratitude for fully completing your contribution pledge for our event "{Tukio}".\n\nThank you so much and God bless you!`);
-  const [tplThanks1Sw, setTplThanks1Sw] = useState<string>(() => event.smsTemplates?.thanks1Sw || safeLocalStorage.getItem(`kadi_tpl_thanks1_sw_${event.id}`) || `Habari {Mgeni},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {Tukio}.\n\nAsante sana na Mungu akubariki!`);
+  const [tplThanks1Sw, setTplThanks1Sw] = useState<string>(() => {
+    const val = event.smsTemplates?.thanks1Sw || safeLocalStorage.getItem(`kadi_tpl_thanks1_sw_${event.id}`);
+    if (isBadThanksTemplate(val)) return defaultThanksSw;
+    return val || defaultThanksSw;
+  });
 
   const [tplThanks2En, setTplThanks2En] = useState<string>(() => event.smsTemplates?.thanks2En || safeLocalStorage.getItem(`kadi_tpl_thanks2_en_${event.id}`) || `Dear {Mgeni},\n\nWe have successfully recorded your contribution in full.\n\nYour presence and priceless support are deeply appreciated as they play a huge role in making "{Tukio}" a reality.\n\nBlessings to you!`);
-  const [tplThanks2Sw, setTplThanks2Sw] = useState<string>(() => event.smsTemplates?.thanks2Sw || safeLocalStorage.getItem(`kadi_tpl_thanks2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTujasajili and tumepokea mchango wako kikamilifu.\n\nTunathamini sana mchango wako na support yako ya hali ya juu katika kufanikisha tukio letu la {Tukio}.\n\nUbarikiwe sana muno!`);
+  const [tplThanks2Sw, setTplThanks2Sw] = useState<string>(() => {
+    const val = event.smsTemplates?.thanks2Sw || safeLocalStorage.getItem(`kadi_tpl_thanks2_sw_${event.id}`);
+    if (isBadThanksTemplate(val)) return defaultThanksSw;
+    return val || defaultThanksSw;
+  });
 
   // Active templates based on system language
   const customPledgeTpl1 = isEn ? tplPledge1En : tplPledge1Sw;
@@ -261,9 +277,9 @@ export default function ContributionManager({
   const setCustomReminderTpl1 = isEn ? setTplRem1En : setTplRem1Sw;
   const customReminderTpl2 = isEn ? tplRem2En : tplRem2Sw;
   const setCustomReminderTpl2 = isEn ? setTplRem2En : setTplRem2Sw;
-  const customThanksTpl1 = isEn ? tplThanks1En : tplThanks1Sw;
+  const customThanksTpl1 = isEn ? tplThanks1En : (isBadThanksTemplate(tplThanks1Sw) ? defaultThanksSw : tplThanks1Sw);
   const setCustomThanksTpl1 = isEn ? setTplThanks1En : setTplThanks1Sw;
-  const customThanksTpl2 = isEn ? tplThanks2En : tplThanks2Sw;
+  const customThanksTpl2 = isEn ? tplThanks2En : (isBadThanksTemplate(tplThanks2Sw) ? defaultThanksSw : tplThanks2Sw);
   const setCustomThanksTpl2 = isEn ? setTplThanks2En : setTplThanks2Sw;
 
   // Track the event ID for which templates are currently loaded in state memory to avoid race condition wipes
@@ -329,10 +345,12 @@ export default function ContributionManager({
     setTplRem2Sw(event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
 
     setTplThanks1En(event.smsTemplates?.thanks1En || safeLocalStorage.getItem(`kadi_tpl_thanks1_en_${event.id}`) || `Hello {Mgeni},\n\nWe would like to thank you with immense gratitude for fully completing your contribution pledge for our event "{Tukio}".\n\nThank you so much and God bless you!`);
-    setTplThanks1Sw(event.smsTemplates?.thanks1Sw || safeLocalStorage.getItem(`kadi_tpl_thanks1_sw_${event.id}`) || `Habari {Mgeni},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {Tukio}.\n\nAsante sana na Mungu akubariki!`);
+    const valThanks1 = event.smsTemplates?.thanks1Sw || safeLocalStorage.getItem(`kadi_tpl_thanks1_sw_${event.id}`);
+    setTplThanks1Sw(isBadThanksTemplate(valThanks1) ? defaultThanksSw : (valThanks1 || defaultThanksSw));
 
     setTplThanks2En(event.smsTemplates?.thanks2En || safeLocalStorage.getItem(`kadi_tpl_thanks2_en_${event.id}`) || `Dear {Mgeni},\n\nWe have successfully recorded your contribution in full.\n\nYour presence and priceless support are deeply appreciated as they play a huge role in making "{Tukio}" a reality.\n\nBlessings to you!`);
-    setTplThanks2Sw(event.smsTemplates?.thanks2Sw || safeLocalStorage.getItem(`kadi_tpl_thanks2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTujasajili and tumepokea mchango wako kikamilifu.\n\nTunathamini sana mchango wako na support yako ya hali ya juu katika kufanikisha tukio letu la {Tukio}.\n\nUbarikiwe sana muno!`);
+    const valThanks2 = event.smsTemplates?.thanks2Sw || safeLocalStorage.getItem(`kadi_tpl_thanks2_sw_${event.id}`);
+    setTplThanks2Sw(isBadThanksTemplate(valThanks2) ? defaultThanksSw : (valThanks2 || defaultThanksSw));
     
     lastLoadedEventIdRef.current = event.id;
   }, [event.id, event.smsTemplates]);
@@ -925,7 +943,8 @@ export default function ContributionManager({
     link: string = '',
     pledge: number = 0,
     paid: number = 0,
-    balance: number = 0
+    balance: number = 0,
+    templateType: 'Pledge' | 'Reminder' | 'Thanks' = 'Pledge'
   ) => {
     let paymentString = '';
     if (event.paymentMethods && event.paymentMethods.length > 0) {
@@ -960,45 +979,47 @@ export default function ContributionManager({
     let processedTemplate = templateStr;
 
     // Robust protection: If the template is missing {namba_za_malipo} / {payment_methods}, auto-inject it!
-    if (!/\{namba_za_malipo\}/i.test(processedTemplate) && !/\{payment_methods\}/i.test(processedTemplate)) {
-      if (processedTemplate.includes("Namba za Michango:")) {
-        processedTemplate = processedTemplate.replace("Namba za Michango:", "Namba za Michango:\n{namba_za_malipo}");
-      } else if (processedTemplate.includes("{kiungo}")) {
-        processedTemplate = processedTemplate.replace("{kiungo}", "{namba_za_malipo}\n\n{kiungo}");
-      } else {
-        processedTemplate = processedTemplate + "\n\n{namba_za_malipo}";
-      }
-    }
-
-    // Robust protection: If Swahili and missing {tarehe_ya_mwisho}, auto-inject it!
-    if (!isEn && !/\{tarehe_ya_mwisho\}/i.test(processedTemplate)) {
-      const matchKeywords = [
-        "utafanikisha jambo hili.",
-        "utafanikisha jambo hili,",
-        "utafanikisha jambo hili"
-      ];
-      let injected = false;
-      for (const kw of matchKeywords) {
-        if (processedTemplate.includes(kw)) {
-          processedTemplate = processedTemplate.replace(
-            kw,
-            `${kw}\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}`
-          );
-          injected = true;
-          break;
+    if (templateType === 'Pledge') {
+      if (!/\{namba_za_malipo\}/i.test(processedTemplate) && !/\{payment_methods\}/i.test(processedTemplate)) {
+        if (processedTemplate.includes("Namba za Michango:")) {
+          processedTemplate = processedTemplate.replace("Namba za Michango:", "Namba za Michango:\n{namba_za_malipo}");
+        } else if (processedTemplate.includes("{kiungo}")) {
+          processedTemplate = processedTemplate.replace("{kiungo}", "{namba_za_malipo}\n\n{kiungo}");
+        } else {
+          processedTemplate = processedTemplate + "\n\n{namba_za_malipo}";
         }
       }
-      if (!injected) {
-        if (processedTemplate.includes("Namba za Michango:")) {
-          processedTemplate = processedTemplate.replace(
-            "Namba za Michango:",
-            "Mwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:"
-          );
-        } else {
-          processedTemplate = processedTemplate.replace(
-            "{kiungo}",
-            "Mwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\n{kiungo}"
-          );
+
+      // Robust protection: If Swahili and missing {tarehe_ya_mwisho}, auto-inject it!
+      if (!isEn && !/\{tarehe_ya_mwisho\}/i.test(processedTemplate)) {
+        const matchKeywords = [
+          "utafanikisha jambo hili.",
+          "utafanikisha jambo hili,",
+          "utafanikisha jambo hili"
+        ];
+        let injected = false;
+        for (const kw of matchKeywords) {
+          if (processedTemplate.includes(kw)) {
+            processedTemplate = processedTemplate.replace(
+              kw,
+              `${kw}\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}`
+            );
+            injected = true;
+            break;
+          }
+        }
+        if (!injected) {
+          if (processedTemplate.includes("Namba za Michango:")) {
+            processedTemplate = processedTemplate.replace(
+              "Namba za Michango:",
+              "Mwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:"
+            );
+          } else {
+            processedTemplate = processedTemplate.replace(
+              "{kiungo}",
+              "Mwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\n{kiungo}"
+            );
+          }
         }
       }
     }
@@ -1007,24 +1028,32 @@ export default function ContributionManager({
       .replace(/{Mgeni}/g, guestName)
       .replace(/{NAME}/gi, guestName)
       .replace(/{name}/gi, guestName)
+      .replace(/\{\{1\}\}/g, guestName)
       .replace(/{Tukio}/g, eventName)
       .replace(/{EVENT}/gi, eventName)
       .replace(/{event_name}/gi, eventName)
+      .replace(/\{\{2\}\}/g, eventName)
       .replace(/{host_name}/gi, event.hostName || "[Mwenyeji]")
       .replace(/{date}/gi, event.date || "[Tarehe]")
       .replace(/{tarehe_ya_mwisho}/gi, deadlineStr)
       .replace(/\(tarehe_ya_mwisho\)/gi, deadlineStr)
+      .replace(/\{\{6\}\}/g, deadlineStr)
       .replace(/{namba_za_malipo}/gi, paymentString)
       .replace(/{payment_methods}/gi, paymentString)
+      .replace(/\{\{7\}\}/g, paymentString)
       .replace(/{Kiungo}/g, link)
       .replace(/{kiungo}/gi, link)
       .replace(/{LINK}/gi, link)
+      .replace(/\{\{8\}\}/g, link)
       .replace(/{Ahadi}/g, pledge.toLocaleString())
       .replace(/{PLEDGE}/gi, pledge.toLocaleString())
+      .replace(/\{\{3\}\}/g, pledge.toLocaleString())
       .replace(/{Paid}/g, paid.toLocaleString())
       .replace(/{PAID}/gi, paid.toLocaleString())
+      .replace(/\{\{4\}\}/g, paid.toLocaleString())
       .replace(/{Balance}/g, balance.toLocaleString())
-      .replace(/{BALANCE}/gi, balance.toLocaleString());
+      .replace(/{BALANCE}/gi, balance.toLocaleString())
+      .replace(/\{\{5\}\}/g, balance.toLocaleString());
   };
 
   const pledgeRequestTemplates = [
@@ -1047,13 +1076,13 @@ export default function ContributionManager({
       id: 'rem-1',
       title: isEn ? 'Payment Reminder (Template 1)' : 'Kumbusho (Kiolezo cha 1)',
       text: (name: string, evName: string, pledge: number, paid: number, bal: number) => 
-        formatTemplate(customReminderTpl1, name, evName, '', pledge, paid, bal)
+        formatTemplate(customReminderTpl1, name, evName, '', pledge, paid, bal, 'Reminder')
     },
     {
       id: 'rem-2',
       title: isEn ? 'Payment Reminder (Template 2)' : 'Kumbusho (Kiolezo cha 2)',
       text: (name: string, evName: string, pledge: number, paid: number, bal: number) => 
-        formatTemplate(customReminderTpl2, name, evName, '', pledge, paid, bal)
+        formatTemplate(customReminderTpl2, name, evName, '', pledge, paid, bal, 'Reminder')
     }
   ];
 
@@ -1062,13 +1091,13 @@ export default function ContributionManager({
       id: 'th-1',
       title: isEn ? 'Shukrani (Template 1)' : 'Shukrani (Kiolezo cha 1)',
       text: (name: string, evName: string) => 
-        formatTemplate(customThanksTpl1, name, evName)
+        formatTemplate(customThanksTpl1, name, evName, '', 0, 0, 0, 'Thanks')
     },
     {
       id: 'th-2',
       title: isEn ? 'Shukrani (Template 2)' : 'Shukrani (Kiolezo cha 2)',
       text: (name: string, evName: string) => 
-        formatTemplate(customThanksTpl2, name, evName)
+        formatTemplate(customThanksTpl2, name, evName, '', 0, 0, 0, 'Thanks')
     }
   ];
 
@@ -1324,13 +1353,13 @@ export default function ContributionManager({
         setCustomThanksTpl1(
           isEn
             ? `Hello {Mgeni},\n\nWe would like to thank you with immense gratitude for fully completing your contribution pledge for our event "{Tukio}".\n\nThank you so much and God bless you!`
-            : `Habari {Mgeni},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {Tukio}.\n\nAsante sana na Mungu akubariki!`
+            : `Habari {{1}},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {{2}}.\n\nAsante sana na Mungu akubariki!`
         );
       } else {
         setCustomThanksTpl2(
           isEn
             ? `Dear {Mgeni},\n\nWe have successfully recorded your contribution in full.\n\nYour presence and priceless support are deeply appreciated as they play a huge role in making "{Tukio}" a reality.\n\nBlessings to you!`
-            : `Ndugu {Mgeni},\n\nTujasajili na tumepokea mchango wako kikamilifu.\n\nTunathamini sana mchango wako na support yako ya hali ya juu katika kufanikisha tukio letu la {Tukio}.\n\nUbarikiwe sana muno!`
+            : `Habari {{1}},\n\nTunakushukuru kwa upendo mkubwa kwa kukamilisha mchango wako kikamilifu kwa ajili ya kufanikisha tukio letu la {{2}}.\n\nAsante sana na Mungu akubariki!`
         );
       }
     }
@@ -1680,8 +1709,9 @@ export default function ContributionManager({
     }
     const { guest, type } = activeSendTarget;
     const canvas = document.createElement('canvas');
-    canvas.width = 450;
-    canvas.height = 600;
+    const scaleFactor = 3;
+    canvas.width = 450 * scaleFactor;
+    canvas.height = 600 * scaleFactor;
     setModalImageLoaded(false);
 
     let pledgeText = '';
@@ -1720,8 +1750,9 @@ export default function ContributionManager({
     
     const { type } = waInteractiveQueue;
     const canvas = document.createElement('canvas');
-    canvas.width = 450;
-    canvas.height = 600;
+    const scaleFactor = 3;
+    canvas.width = 450 * scaleFactor;
+    canvas.height = 600 * scaleFactor;
     setQueueCardLoaded(false);
 
     let pledgeText = '';
@@ -2374,7 +2405,7 @@ export default function ContributionManager({
               {isEn ? "ACTIVE EVENT" : "KAZI KAZI"}
             </span>
             <span className="text-slate-400 text-xs font-mono">
-              {isEn ? `Active Ceremony: ${event.name || '[Untitled]'}` : `Tukio hai: {event.name || '[Bila Jina]'}`}
+              {isEn ? `Active Ceremony: ${event.name || '[Untitled]'}` : `Tukio hai: ${event.name || '[Bila Jina]'}`}
             </span>
           </div>
           <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2" id="contrib-main-panel-title">
@@ -2684,8 +2715,8 @@ export default function ContributionManager({
                         drawContributionCardToCanvas(el, event, cardTemplate, exampleGuest, 'KIASI: TZS 150,000', isEn);
                       }
                     }}
-                    width={450} 
-                    height={600}
+                    width={450 * 3} 
+                    height={600 * 3}
                     className="w-full sm:max-w-[320px] md:max-w-[360px] h-auto block"
                   />
                 </div>
@@ -4639,12 +4670,21 @@ export default function ContributionManager({
                         <span className="text-[10px] font-mono text-slate-500">{isEn ? 'Constructing pledge card design...' : 'Inasawir kadi yako sasa...'}</span>
                       </div>
                     ) : (
-                      <img 
-                        src={modalCardUrl} 
-                        className="w-full h-full object-contain animate-fade-in" 
-                        alt="Personalized Pledge Design Card" 
-                        id="pledge-preview-image"
-                      />
+                      <>
+                        <img 
+                          src={modalCardUrl} 
+                          className="w-full h-full object-contain animate-fade-in" 
+                          alt="Personalized Pledge Design Card" 
+                          id="pledge-preview-image"
+                        />
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center select-none z-30 overflow-hidden">
+                          <div className="transform -rotate-45 border-2 border-white/20 rounded-xl px-4 py-1.5 bg-black/20 shadow-inner backdrop-blur-[1px]">
+                            <span className="text-white/30 font-black text-sm tracking-[0.2em] uppercase whitespace-nowrap select-none">
+                              PREVIEW MODE
+                            </span>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
 
@@ -5039,11 +5079,20 @@ export default function ContributionManager({
                           <span className="text-[9.5px] font-mono text-slate-500 uppercase tracking-widest">{isEn ? "Synthesizing card..." : "Inaundwa..."}</span>
                         </div>
                       ) : (
-                        <img 
-                          src={queueCardUrl} 
-                          className="w-full h-full object-contain animate-fade-in" 
-                          alt="Personalized Guest Pledge Card" 
-                        />
+                        <>
+                          <img 
+                            src={queueCardUrl} 
+                            className="w-full h-full object-contain animate-fade-in" 
+                            alt="Personalized Guest Pledge Card" 
+                          />
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center select-none z-30 overflow-hidden">
+                            <div className="transform -rotate-45 border-2 border-white/20 rounded-xl px-4 py-1.5 bg-black/20 shadow-inner backdrop-blur-[1px]">
+                              <span className="text-white/30 font-black text-sm tracking-[0.2em] uppercase whitespace-nowrap select-none">
+                                PREVIEW MODE
+                              </span>
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
 

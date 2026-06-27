@@ -4,26 +4,23 @@ export async function addPdfWatermarks(doc: any, logoBase64Input?: string) {
 
   if (!logoB64) {
     try {
-      const data = await new Promise<{ b64: string; dims: { w: number; h: number } }>((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'Anonymous';
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth || 200;
-          canvas.height = img.naturalHeight || 200;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            resolve({ b64: canvas.toDataURL('image/png'), dims: { w: canvas.width, h: canvas.height } });
-          } else {
-            resolve({ b64: '', dims: { w: 200, h: 200 } });
-          }
-        };
-        img.onerror = () => resolve({ b64: '', dims: { w: 200, h: 200 } });
-        img.src = '/logo.png';
+      const res = await fetch('/logo.png');
+      const blob = await res.blob();
+      logoB64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(blob);
       });
-      logoB64 = data.b64;
-      dims = data.dims;
+
+      if (logoB64) {
+        dims = await new Promise<{ w: number; h: number }>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth || 200, h: img.naturalHeight || 200 });
+          img.onerror = () => resolve({ w: 200, h: 200 });
+          img.src = logoB64!;
+        });
+      }
     } catch (e) {
       console.warn("Could not load logo for watermark:", e);
     }
@@ -42,7 +39,7 @@ export async function addPdfWatermarks(doc: any, logoBase64Input?: string) {
   const cornerW = Math.min(24, pageWidth * 0.12); // mm
   const cornerH = cornerW / aspect;
 
-  const centerW = Math.min(55, pageWidth * 0.28); // mm
+  const centerW = Math.min(65, pageWidth * 0.32); // mm
   const centerH = centerW / aspect;
 
   const marginX = 10;
@@ -54,11 +51,12 @@ export async function addPdfWatermarks(doc: any, logoBase64Input?: string) {
     if (typeof doc.saveGraphicsState === 'function') doc.saveGraphicsState();
     if (typeof doc.setGState === 'function') {
       try {
-        const GState = (doc as any).GState;
-        if (GState) {
-          doc.setGState(new GState({ opacity: 0.06 }));
+        const GStateClass = (doc.constructor as any)?.GState || (doc as any)?.GState;
+        const stateObj = { opacity: 0.18, 'fill-opacity': 0.18, 'stroke-opacity': 0.18 };
+        if (GStateClass) {
+          doc.setGState(new GStateClass(stateObj));
         } else {
-          doc.setGState({ opacity: 0.06 } as any);
+          doc.setGState(stateObj as any);
         }
       } catch (e) {}
     }

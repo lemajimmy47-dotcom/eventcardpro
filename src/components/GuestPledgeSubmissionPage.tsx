@@ -130,8 +130,8 @@ export default function GuestPledgeSubmissionPage({
             <canvas 
               id="guest-pledge-live-canvas"
               ref={canvasRef}
-              width={450} 
-              height={600}
+              width={450 * 3} 
+              height={600 * 3}
               className="w-full sm:max-w-[320px] h-auto block"
             />
           </div>

@@ -102,8 +102,9 @@ export const drawContributionCardToCanvas = (
     currentCtx.save();
     const gX = ((tpl.guestNameX || 50) / 100) * w;
     const gY = ((tpl.guestNameY || 50) / 100) * currentH;
+    const scale = w / 450;
     currentCtx.fillStyle = tpl.guestNameColor || '#FFFFFF';
-    currentCtx.font = `bold italic ${tpl.guestNameSize || 32}px "Inter", sans-serif`;
+    currentCtx.font = `bold italic ${(tpl.guestNameSize || 32) * scale}px "Inter", sans-serif`;
     currentCtx.textAlign = 'center';
     currentCtx.textBaseline = 'middle';
     currentCtx.fillText(guest.name, gX, gY);

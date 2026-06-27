@@ -221,8 +221,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                 {language === 'sw' ? '2. Badilisha Nafasi za Vipengele' : '2. Element Positions & Alignment'}
               </h3>
               
-              {/* Tabs hidden per user request to only keep Guest Name adjustment */}
-              <div className="hidden">
+              {/* Navigation tabs for position editors */}
+              <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/5">
                 <button
                   type="button"
                   id="tab-btn-name"
@@ -570,13 +570,21 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
               : (localSettings.orientation === 'landscape' ? '3. Live Canva Preview (600 x 450 px)' : '3. Live Canva Preview (450 x 600 px)')}
           </h3>
           
-          <div className={`relative border-4 border-white/10 rounded-3xl shadow-2xl overflow-hidden bg-white w-full ${localSettings.orientation === 'landscape' ? 'aspect-[4/3] max-w-[450px]' : 'aspect-[3/4] max-w-[340px]'}`}>
+          <div id="preview" className={`relative border-4 border-white/10 rounded-3xl shadow-2xl overflow-hidden bg-white w-full ${localSettings.orientation === 'landscape' ? 'aspect-[4/3] max-w-[450px]' : 'aspect-[3/4] max-w-[340px]'}`}>
             <canvas 
               ref={canvasRef} 
-              width={localSettings.orientation === 'landscape' ? 600 : 450} 
-              height={localSettings.orientation === 'landscape' ? 450 : 600} 
+              width={(localSettings.orientation === 'landscape' ? 600 : 450) * 3} 
+              height={(localSettings.orientation === 'landscape' ? 450 : 600) * 3} 
               className="w-full h-auto block bg-white"
             />
+            {/* Transparent 'PREVIEW MODE' watermark overlay */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center select-none z-30 overflow-hidden">
+              <div className="transform -rotate-45 border-4 border-slate-900/15 rounded-2xl px-6 py-2 sm:px-8 sm:py-3 bg-white/10 shadow-inner backdrop-blur-[1px]">
+                <span className="text-slate-900/25 font-black text-xl sm:text-3xl tracking-[0.25em] uppercase whitespace-nowrap select-none">
+                  PREVIEW MODE
+                </span>
+              </div>
+            </div>
           </div>
           <p className="text-[10px] text-slate-400 italic text-center leading-relaxed">
             {language === 'sw' 

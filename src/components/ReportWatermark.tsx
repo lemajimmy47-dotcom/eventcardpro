@@ -2,7 +2,7 @@ import React from 'react';
 
 export const ReportWatermark: React.FC = () => {
   return (
-    <div className="pointer-events-none absolute inset-0 select-none z-0 overflow-hidden print:fixed print:inset-0 print:z-[9999]">
+    <div className="pointer-events-none absolute inset-0 select-none z-[50] overflow-hidden print:fixed print:inset-0 print:z-[9999]">
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           .watermark-grid {
@@ -17,10 +17,11 @@ export const ReportWatermark: React.FC = () => {
             padding: 2rem !important;
             pointer-events: none !important;
             z-index: 9999 !important;
+            opacity: 0.18 !important;
           }
         }
       `}} />
-      <div className="watermark-grid absolute inset-0 flex flex-col justify-between p-6 opacity-[0.06]">
+      <div className="watermark-grid absolute inset-0 flex flex-col justify-between p-6 opacity-[0.18]">
         {/* Top Corners */}
         <div className="flex justify-between items-start w-full">
           <img src="/logo.png" alt="" className="w-16 sm:w-24 h-auto object-contain" />

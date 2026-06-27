@@ -11,6 +11,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { EventDetails, Guest, ContributionPayment } from '../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { addPdfWatermarks } from '../utils/pdfWatermark';
+import { ReportWatermark } from './ReportWatermark';
 
 interface EventReportsProps {
   event: EventDetails;
@@ -262,7 +264,7 @@ export default function EventReports({
   }, [guests, isEn, metrics]);
 
   // PDF Report Engine
-  const downloadReportPDF = () => {
+  const downloadReportPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
@@ -627,6 +629,7 @@ export default function EventReports({
       });
     }
 
+    await addPdfWatermarks(doc);
     doc.save(`EventReport_${selectedReport}_${event.name.replace(/\s+/g, '_')}.pdf`);
   };
 
@@ -719,7 +722,7 @@ export default function EventReports({
     URL.revokeObjectURL(url);
   };
 
-  const downloadComprehensiveExecutiveSummaryPDF = () => {
+  const downloadComprehensiveExecutiveSummaryPDF = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     let currentY = 15;
@@ -924,6 +927,7 @@ export default function EventReports({
     doc.text(isEn ? "Report Verified and Signed by Committee Operations" : "Ripoti hii imethibitishwa na kuidhinishwa na Uongozi wa Kamati", 10, currentY);
     doc.text(`Printed: ${new Date().toLocaleString()}`, pageWidth - 10, currentY, { align: 'right' });
 
+    await addPdfWatermarks(doc);
     doc.save(`Executive_Summary_${event.name.replace(/\s+/g, '_')}.pdf`);
   };
 
@@ -1311,7 +1315,8 @@ export default function EventReports({
       </div>
 
       {/* Visual content area */}
-      <div className="bg-slate-900/20 border border-white/5 rounded-3xl p-6 shadow-2xl space-y-6" id="printable-event-report-container">
+      <div className="bg-slate-900/20 border border-white/5 rounded-3xl p-6 shadow-2xl space-y-6 relative" id="printable-event-report-container">
+        <ReportWatermark />
         
         {/* Unified Premium Report Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-white/5 gap-4">

@@ -49,8 +49,9 @@ export default function SendMessages({ event, settings, guests, language, onUpda
     const guest = activeSendTarget.guest;
     const canvas = document.createElement('canvas');
     
-    canvas.width = settings.orientation === 'landscape' ? 600 : 450;
-    canvas.height = settings.orientation === 'landscape' ? 450 : 600;
+    const scaleFactor = 3;
+    canvas.width = (settings.orientation === 'landscape' ? 600 : 450) * scaleFactor;
+    canvas.height = (settings.orientation === 'landscape' ? 450 : 600) * scaleFactor;
     setModalImageLoaded(false);
     drawCardToCanvas(
       canvas, 
@@ -353,8 +354,8 @@ Karibu sana!`;
           ...(event.smsTemplates || {}),
           invitationTemplateSw,
           invitationTemplateEn,
-          thanks1Sw: thankYouTemplateSw,
-          thanks1En: thankYouTemplateEn
+          generalThanksSw: thankYouTemplateSw,
+          generalThanksEn: thankYouTemplateEn
         }
       });
     }
@@ -381,8 +382,8 @@ Karibu sana!`;
   }, [invitationTemplateEn, event?.id]);
 
   const [thankYouTemplateSw, setThankYouTemplateSw] = useState<string>(() => {
-    if (event?.smsTemplates?.thanks1Sw) {
-      return event.smsTemplates.thanks1Sw;
+    if (event?.smsTemplates?.generalThanksSw) {
+      return event.smsTemplates.generalThanksSw;
     }
     const key = event?.id ? `kadi_thanks_template_${event.id}_sw` : 'kadi_thanks_template_sw';
     const saved = safeLocalStorage.getItem(key);
@@ -395,8 +396,8 @@ Asante sana na Mungu akubariki!`;
   });
 
   const [thankYouTemplateEn, setThankYouTemplateEn] = useState<string>(() => {
-    if (event?.smsTemplates?.thanks1En) {
-      return event.smsTemplates.thanks1En;
+    if (event?.smsTemplates?.generalThanksEn) {
+      return event.smsTemplates.generalThanksEn;
     }
     const key = event?.id ? `kadi_thanks_template_${event.id}_en` : 'kadi_thanks_template_en';
     const saved = safeLocalStorage.getItem(key);

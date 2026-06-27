@@ -12,6 +12,8 @@ import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaCh
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ContributionManager from './ContributionManager';
+import { addPdfWatermarks } from '../utils/pdfWatermark';
+import { ReportWatermark } from './ReportWatermark';
 
 interface CommitteeDashboardProps {
   key?: React.Key;
@@ -566,7 +568,7 @@ export default function CommitteeDashboard({
     document.body.removeChild(link);
   };
 
-  const downloadReportPDF = () => {
+  const downloadReportPDF = async () => {
     addActivityLog(`${activeRole} View`, `Amepakua Ripoti ya PDF rasmi: ${selectedReport}`);
     
     const doc = new jsPDF(selectedReport === 'Summary' ? 'l' : 'p', 'mm', 'a4');
@@ -802,6 +804,7 @@ export default function CommitteeDashboard({
         }
       });
 
+      await addPdfWatermarks(doc);
       doc.save(`Official_${selectedReport}_Report_${(event.name || "SHEREHE").replace(/\s+/g, '_')}.pdf`);
       return;
     }
@@ -1434,6 +1437,7 @@ export default function CommitteeDashboard({
       });
     }
 
+    await addPdfWatermarks(doc);
     doc.save(`Official_${selectedReport}_Report_${event.name.replace(/\s+/g, '_')}.pdf`);
   };
 
@@ -2244,7 +2248,8 @@ export default function CommitteeDashboard({
               const printedDateString = `${weekday}, ${dateFormatted} at ${timeFormatted}`;
 
               return (
-                <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xl space-y-6 max-w-5xl mx-auto font-sans" id="printable-report-card">
+                <div className="bg-white text-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xl space-y-6 max-w-5xl mx-auto font-sans relative" id="printable-report-card">
+                  <ReportWatermark />
                   {/* Embed style block for perfect print purposes to target print-friendly styles cleanly */}
                   <style dangerouslySetInnerHTML={{ __html: `
                     @media print {

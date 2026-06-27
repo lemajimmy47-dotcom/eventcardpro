@@ -45,12 +45,14 @@ export function drawCardToCanvas(
 
   // Render overlay items (Guest Name, QR Code, and Card Type Badge)
   const renderOverlays = () => {
+    const baseW = settings.orientation === 'landscape' ? 600 : 450;
+    const scale = w / baseW;
     // 1. Draw Dynamic Guest Name
     ctx.save();
     const nameX = (settings.guestNameX / 100) * w;
     const nameY = (settings.guestNameY / 100) * h;
     ctx.fillStyle = settings.guestNameColor || settings.textColor;
-    ctx.font = `bold ${settings.guestNameSize}px "${settings.fontFamily || 'Inter'}", sans-serif`;
+    ctx.font = `bold ${(settings.guestNameSize || 32) * scale}px "${settings.fontFamily || 'Inter'}", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(guestName || 'MGENI WA HESHIMA / GUEST NAME', nameX, nameY);
@@ -63,17 +65,17 @@ export function drawCardToCanvas(
       const badgeY = (settings.cardTypeY / 100) * h;
       
       const badgeText = cardType.toUpperCase();
-      ctx.font = `bold ${settings.cardTypeSize || 13}px "${settings.fontFamily || 'Inter'}", sans-serif`;
+      ctx.font = `bold ${(settings.cardTypeSize || 13) * scale}px "${settings.fontFamily || 'Inter'}", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       // Calculate dimensions of the text for background pill
       const textMetrics = ctx.measureText(badgeText);
       const textWidth = textMetrics.width;
-      const paddingH = 12;
-      const paddingV = 6;
+      const paddingH = 12 * scale;
+      const paddingV = 6 * scale;
       const rectW = textWidth + paddingH * 2;
-      const rectH = (settings.cardTypeSize || 13) + paddingV * 2;
+      const rectH = ((settings.cardTypeSize || 13) * scale) + paddingV * 2;
       
       // Draw background pill
       ctx.fillStyle = settings.cardTypeColor || settings.textColor || '#fbbf24';
@@ -94,7 +96,7 @@ export function drawCardToCanvas(
     // 3. Draw QR Code at relative coordinates
     const qrX = (settings.qrCodeX / 100) * w;
     const qrY = (settings.qrCodeY / 100) * h;
-    const qrSize = settings.qrCodeSize || 100;
+    const qrSize = (settings.qrCodeSize || 100) * scale;
 
     const cachedQR = qrCache.get(qrCodeText);
     if (cachedQR) {
@@ -103,8 +105,8 @@ export function drawCardToCanvas(
       ctx.fillStyle = '#ffffff'; // Always white background for QR code scan longevity
       ctx.beginPath();
       // Round corners for the QR white board
-      const padding = 6;
-      ctx.roundRect ? ctx.roundRect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2, 8) : ctx.rect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2);
+      const padding = 6 * scale;
+      ctx.roundRect ? ctx.roundRect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2, 8 * scale) : ctx.rect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2);
       ctx.fill();
       
       // Draw the QR Image
@@ -113,13 +115,13 @@ export function drawCardToCanvas(
     } else {
       ctx.save();
       ctx.fillStyle = '#ffffff';
-      const padding = 6;
-      ctx.roundRect ? ctx.roundRect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2, 8) : ctx.rect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2);
+      const padding = 6 * scale;
+      ctx.roundRect ? ctx.roundRect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2, 8 * scale) : ctx.rect(qrX - qrSize / 2 - padding, qrY - qrSize / 2 - padding, qrSize + padding * 2, qrSize + padding * 2);
       ctx.fill();
 
       // Placeholder text in black/gray
       ctx.fillStyle = '#1e293b';
-      ctx.font = '9px sans-serif';
+      ctx.font = `${9 * scale}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('SCAN PASS', qrX, qrY);

@@ -23,8 +23,9 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
 
   useEffect(() => {
     const canvas = document.createElement('canvas');
-    canvas.width = settings.orientation === 'landscape' ? 600 : 450;
-    canvas.height = settings.orientation === 'landscape' ? 450 : 600;
+    const scaleFactor = 3;
+    canvas.width = (settings.orientation === 'landscape' ? 600 : 450) * scaleFactor;
+    canvas.height = (settings.orientation === 'landscape' ? 450 : 600) * scaleFactor;
     
     drawCardToCanvas(
         canvas, 

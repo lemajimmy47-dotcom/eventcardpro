@@ -38,8 +38,9 @@ function LazyGuestCardImage({ guest, event, settings, className }: LazyGuestCard
   useEffect(() => {
     let active = true;
     const canvas = document.createElement('canvas');
-    canvas.width = settings.orientation === 'landscape' ? 600 : 450;
-    canvas.height = settings.orientation === 'landscape' ? 450 : 600;
+    const scaleFactor = 3;
+    canvas.width = (settings.orientation === 'landscape' ? 600 : 450) * scaleFactor;
+    canvas.height = (settings.orientation === 'landscape' ? 450 : 600) * scaleFactor;
     
     drawCardToCanvas(
       canvas,
@@ -84,8 +85,9 @@ function LazyGuestCardImage({ guest, event, settings, className }: LazyGuestCard
 
 const getCardImageUrlOnDemand = (g: Guest, event: EventDetails, settings: TemplateSettings): string => {
   const canvas = document.createElement('canvas');
-  canvas.width = settings.orientation === 'landscape' ? 600 : 450;
-  canvas.height = settings.orientation === 'landscape' ? 450 : 600;
+  const scaleFactor = 3;
+  canvas.width = (settings.orientation === 'landscape' ? 600 : 450) * scaleFactor;
+  canvas.height = (settings.orientation === 'landscape' ? 450 : 600) * scaleFactor;
   drawCardToCanvas(
     canvas,
     event,
@@ -1587,13 +1589,21 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
               </div>
 
               {/* Dynamic canvas drawing preview */}
-              <div className={`relative border-4 border-white/15 rounded-2xl shadow-xl overflow-hidden bg-white w-full ${settings.orientation === 'landscape' ? 'aspect-[4/3] max-w-[340px]' : 'aspect-[3/4] max-w-[280px]'}`}>
+              <div id="preview" className={`relative border-4 border-white/15 rounded-2xl shadow-xl overflow-hidden bg-white w-full ${settings.orientation === 'landscape' ? 'aspect-[4/3] max-w-[340px]' : 'aspect-[3/4] max-w-[280px]'}`}>
                 <canvas 
                   ref={previewCanvasRef} 
-                  width={settings.orientation === 'landscape' ? 600 : 450} 
-                  height={settings.orientation === 'landscape' ? 450 : 600} 
+                  width={(settings.orientation === 'landscape' ? 600 : 450) * 3} 
+                  height={(settings.orientation === 'landscape' ? 450 : 600) * 3} 
                   className="w-full h-auto block"
                 />
+                {/* Transparent 'PREVIEW MODE' watermark overlay */}
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center select-none z-30 overflow-hidden">
+                  <div className="transform -rotate-45 border-3 border-slate-900/15 rounded-xl px-5 py-2 bg-white/10 shadow-inner backdrop-blur-[1px]">
+                    <span className="text-slate-900/25 font-black text-lg sm:text-2xl tracking-[0.25em] uppercase whitespace-nowrap select-none">
+                      PREVIEW MODE
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="w-full flex gap-3 text-xs">
