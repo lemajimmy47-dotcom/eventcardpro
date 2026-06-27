@@ -953,7 +953,7 @@ export default function ContributionManager({
       const bank = event.paymentMethods.filter(m => m.type === 'Bank');
       
       if (mobile.length > 0) {
-        paymentString += "Namba za Simu (Mobile Money):\n";
+        paymentString += isEn ? "Mobile Money:\n" : "Namba za Simu:\n";
         mobile.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
         paymentString += "\n";
       }
@@ -3187,7 +3187,7 @@ export default function ContributionManager({
                       className="w-full bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500/50"
                     >
                       <option value="">{isEn ? "Chagua..." : "Chagua..."}</option>
-                      <option value="Mobile">Mobile Money</option>
+                      <option value="Mobile">{isEn ? "Mobile Money" : "Namba za simu"}</option>
                       <option value="Lipa Namba">Lipa Namba</option>
                       <option value="Bank">Bank Account</option>
                     </select>
@@ -3215,7 +3215,6 @@ export default function ContributionManager({
                           <>
                             <option value="M-Pesa">M-Pesa</option>
                             <option value="Mixx By Yas">Mixx By Yas</option>
-                            <option value="Tigo Pesa">Tigo Pesa</option>
                             <option value="Airtel Money">Airtel Money</option>
                             <option value="Halopesa">Halopesa</option>
                             <option value="T-Pesa">T-Pesa</option>
@@ -3224,7 +3223,7 @@ export default function ContributionManager({
                         ) : payType === 'Lipa Namba' ? (
                           <>
                             <option value="Lipa kwa M-Pesa">Lipa kwa M-Pesa</option>
-                            <option value="Lipa kwa Tigo Pesa">Lipa kwa Tigo Pesa</option>
+                            <option value="Lipa kwa Mixx By Yas">Lipa kwa Mixx By Yas</option>
                             <option value="Lipa kwa Airtel Money">Lipa kwa Airtel Money</option>
                             <option value="Lipa kwa Halopesa">Lipa kwa Halopesa</option>
                             <option value="Lipa Namba (General)">Lipa Namba (Mitandao Yote)</option>
