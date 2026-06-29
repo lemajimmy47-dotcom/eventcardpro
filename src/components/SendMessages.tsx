@@ -124,6 +124,18 @@ export default function SendMessages({ event, settings, guests, language, onUpda
     customHeaders: '{}',
     customBody: '{\n  "to": "{to}",\n  "message": "{message}"\n}'
   });
+
+  const isMetaWhatsApp = React.useMemo(() => {
+    if (!gatewaySettings.whatsappUrl) return false;
+    if (gatewaySettings.whatsappUrl.trim().startsWith('{') && gatewaySettings.whatsappUrl.trim().endsWith('}')) {
+      try {
+        const parsed = JSON.parse(gatewaySettings.whatsappUrl);
+        return parsed.provider === 'meta';
+      } catch(e) { return false; }
+    }
+    return false;
+  }, [gatewaySettings.whatsappUrl]);
+
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [isSavingGateway, setIsSavingGateway] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -1927,18 +1939,27 @@ Karibu sana!`);
                   <span>{isEn ? 'Quick Messaging Guide (Copy-Paste) :' : 'Mbinu wepesi ya Kutuma Ujumbe (Copy-Paste) :'}</span>
                 </p>
                 {activeSendTarget.channel === 'whatsapp' ? (
-                  <div className="text-slate-400 text-left space-y-1.5">
-                    <p className="border-l-2 border-emerald-500 pl-2">
-                       <span className="text-emerald-400 font-bold block">🚀 NJIA RAHISI (Bila Kupakua):</span>
-                       1. Bonyeza kitufe cha bluu cha <b>"📋 COPY PICHA YA KADI"</b> hapo juu. <br />
-                       2. Bonyeza kitufe cha <b>"Copy Ujumbe"</b> upande wa juu wa ujumbe. <br />
-                       3. Bonyeza <b>"Fungua WhatsApp"</b> chini. Soga ikifunguka, <b>Bandika (Paste / Ctrl+V)</b> picha, kisha bandika yale maandishi kama maelezo ya picha (caption) na utume! ✓
-                    </p>
-                    <p className="border-l-2 border-blue-500 pl-2 mt-1">
-                       <span className="text-blue-400 font-bold block">💾 NJIA MBADALA (Kwa Kupakua):</span>
-                       Kama kitufe cha copy kisizae katika kivinjari chako: Pakua picha kwa kubonyeza <b>"📥 PAKUA PICHA YA KADI"</b>, kisha pakia kama faili la picha kwenye soga ya mgeni na uweke ujumbe uliounakili kama caption.
-                    </p>
-                  </div>
+                  isMetaWhatsApp ? (
+                    <div className="text-slate-400 text-left space-y-1.5">
+                      <p className="border-l-2 border-emerald-500 pl-2">
+                         <span className="text-emerald-400 font-bold block">🚀 META CLOUD API IMESETIWA:</span>
+                         Bonyeza kitufe cha <b>"Tuma Ujumbe (Send)"</b> hapa chini na mfumo utatuma kadi yako moja kwa moja kupitia WhatsApp Business API bila kufungua App ya WhatsApp! ✓
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-slate-400 text-left space-y-1.5">
+                      <p className="border-l-2 border-emerald-500 pl-2">
+                         <span className="text-emerald-400 font-bold block">🚀 NJIA RAHISI (Bila Kupakua):</span>
+                         1. Bonyeza kitufe cha bluu cha <b>"📋 COPY PICHA YA KADI"</b> hapo juu. <br />
+                         2. Bonyeza kitufe cha <b>"Copy Ujumbe"</b> upande wa juu wa ujumbe. <br />
+                         3. Bonyeza <b>"Fungua WhatsApp"</b> chini. Soga ikifunguka, <b>Bandika (Paste / Ctrl+V)</b> picha, kisha bandika yale maandishi kama maelezo ya picha (caption) na utume! ✓
+                      </p>
+                      <p className="border-l-2 border-blue-500 pl-2 mt-1">
+                         <span className="text-blue-400 font-bold block">💾 NJIA MBADALA (Kwa Kupakua):</span>
+                         Kama kitufe cha copy kisizae katika kivinjari chako: Pakua picha kwa kubonyeza <b>"📥 PAKUA PICHA YA KADI"</b>, kisha pakia kama faili la picha kwenye soga ya mgeni na uweke ujumbe uliounakili kama caption.
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <p className="text-slate-400">
                     {isEn 
@@ -1959,16 +1980,27 @@ Karibu sana!`);
                 </button>
                 
                 {activeSendTarget.channel === 'whatsapp' ? (
-                  <a
-                    href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getGuestMessageText(activeSendTarget.guest, false, true))}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}
-                    className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>{isDispatching ? (isEn ? 'Processing...' : 'Inachakata...') : (isEn ? 'Open WhatsApp' : 'Fungua WhatsApp')}</span>
-                  </a>
+                  isMetaWhatsApp ? (
+                    <button
+                      type="button"
+                      disabled={isDispatching}
+                      onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}
+                      className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Send via WhatsApp' : 'Tuma Ujumbe (Send)')}</span>
+                    </button>
+                  ) : (
+                    <a
+                      href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getGuestMessageText(activeSendTarget.guest, false, true))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}
+                      className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>{isDispatching ? (isEn ? 'Processing...' : 'Inachakata...') : (isEn ? 'Open WhatsApp' : 'Fungua WhatsApp')}</span>
+                    </a>
+                  )
                 ) : (
                   <button
                     type="button"

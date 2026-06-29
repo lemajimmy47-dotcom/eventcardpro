@@ -174,8 +174,39 @@ export default function ContributionManager({
       .catch(err => console.warn('Failed to fetch real sms balance:', err));
   };
 
+  const [gatewaySettings, setGatewaySettings] = useState({
+    provider: 'simulation',
+    url: '',
+    apiKey: '',
+    apiSecret: '',
+    senderId: '',
+    senderIdStatus: 'approved' as 'pending' | 'approved' | 'rejected',
+    whatsappUrl: '',
+    customHeaders: '{}',
+    customBody: '{\n  "to": "{to}",\n  "message": "{message}"\n}'
+  });
+
+  const isMetaWhatsApp = React.useMemo(() => {
+    if (!gatewaySettings.whatsappUrl) return false;
+    if (gatewaySettings.whatsappUrl.trim().startsWith('{') && gatewaySettings.whatsappUrl.trim().endsWith('}')) {
+      try {
+        const parsed = JSON.parse(gatewaySettings.whatsappUrl);
+        return parsed.provider === 'meta';
+      } catch(e) { return false; }
+    }
+    return false;
+  }, [gatewaySettings.whatsappUrl]);
+
   useEffect(() => {
     fetchRealSmsBalance();
+    fetch('/api/sms-settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.provider) {
+          setGatewaySettings(data);
+        }
+      })
+      .catch(err => console.warn('Failed to fetch gateway settings:', err));
   }, []);
 
   useEffect(() => {
@@ -1788,7 +1819,7 @@ export default function ContributionManager({
     setIsDispatching(true);
     const mainText = getContributionMessageText(g, type, channel);
 
-    if (channel === 'sms') {
+    if (channel === 'sms' || (channel === 'whatsapp' && isMetaWhatsApp)) {
       try {
         const res = await fetch('/api/send-sms', {
           method: 'POST',
@@ -1797,7 +1828,7 @@ export default function ContributionManager({
             guestId: g.id,
             phone: g.phone,
             text: mainText,
-            channel: 'sms'
+            channel: channel // Passes 'sms' or 'whatsapp' appropriately to server
           })
         });
 
@@ -1814,30 +1845,39 @@ export default function ContributionManager({
           phone: g.phone || 'N/A',
           type: type === 'Pledge' ? 'Pledge Request' : (type === 'Reminder' ? 'Reminder' : 'Thank You'),
           message: mainText,
-          channel: 'SMS',
+          channel: channel === 'whatsapp' ? 'WhatsApp' : 'SMS',
           sentAt: new Date().toLocaleDateString(isEn ? 'en-US' : 'sw-TZ') + ' ' + new Date().toTimeString().split(' ')[0].substring(0, 5),
           status: 'delivered'
         };
         setMessageLogs(prev => [startLog, ...prev]);
-        setSendLogs(prev => [`[✓ SMS] Ujumbe umetumwa kwa ${g.name}`, ...prev]);
+        setSendLogs(prev => [`[✓ ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}] Ujumbe umetumwa kwa ${g.name}`, ...prev]);
 
         const updatedGuests = guests.map(item => {
           if (item.id === g.id) {
-            const currentCount = typeof item.smsCount === 'number' ? item.smsCount : (item.smsStatus === 'Imetumia' ? 1 : 0);
-            return {
-              ...item,
-              smsStatus: 'Imetumia' as const,
-              smsCount: currentCount + 1
-            };
+            if (channel === 'whatsapp') {
+              const currentCount = typeof item.whatsappCount === 'number' ? item.whatsappCount : (item.whatsappStatus === 'Imetumia' ? 1 : 0);
+              return {
+                ...item,
+                whatsappStatus: 'Imetumia' as const,
+                whatsappCount: currentCount + 1
+              };
+            } else {
+              const currentCount = typeof item.smsCount === 'number' ? item.smsCount : (item.smsStatus === 'Imetumia' ? 1 : 0);
+              return {
+                ...item,
+                smsStatus: 'Imetumia' as const,
+                smsCount: currentCount + 1
+              };
+            }
           }
           return item;
         });
         onUpdateGuests(updatedGuests);
         
-        triggerSmsWalletUpdate(1, 'SMS');
+        triggerSmsWalletUpdate(1, channel === 'whatsapp' ? 'WhatsApp' : 'SMS');
         setActiveSendTarget(null);
       } catch (err: any) {
-        console.error("Individual SMS dispatch mistake:", err);
+        console.error(`Individual ${channel} dispatch mistake:`, err);
         const uniqueClogId = 'clog-' + Date.now();
         const startLog = {
           id: uniqueClogId,
@@ -1846,16 +1886,17 @@ export default function ContributionManager({
           phone: g.phone || 'N/A',
           type: type === 'Pledge' ? 'Pledge Request' : (type === 'Reminder' ? 'Reminder' : 'Thank You'),
           message: `${mainText}\n[HITILAFU: ${err.message}]`,
-          channel: 'SMS',
+          channel: channel === 'whatsapp' ? 'WhatsApp' : 'SMS',
           sentAt: new Date().toLocaleDateString(isEn ? 'en-US' : 'sw-TZ') + ' ' + new Date().toTimeString().split(' ')[0].substring(0, 5),
           status: 'failed'
         };
         setMessageLogs(prev => [startLog, ...prev]);
-        setSendLogs(prev => [`[✗ SMS] Kushindwa kumpata ${g.name}: ${err.message}`, ...prev]);
+        setSendLogs(prev => [`[✗ ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}] Kushindwa kumpata ${g.name}: ${err.message}`, ...prev]);
       } finally {
         setIsDispatching(false);
       }
     } else {
+      // Manual WhatsApp fallback behavior
       const uniqueClogId = 'clog-' + Date.now();
       const startLog = {
         id: uniqueClogId,
@@ -1869,7 +1910,7 @@ export default function ContributionManager({
         status: 'delivered'
       };
       setMessageLogs(prev => [startLog, ...prev]);
-      setSendLogs(prev => [`[✓ WhatsApp] Ujumbe umetumwa kwa ${g.name}`, ...prev]);
+      setSendLogs(prev => [`[✓ WhatsApp] Ujumbe umetumwa kwa ${g.name} (Manual)`, ...prev]);
 
       const updatedGuests = guests.map(item => {
         if (item.id === g.id) {
@@ -4800,14 +4841,25 @@ export default function ContributionManager({
                   )}
 
                   {activeSendTarget.channel === 'whatsapp' && (
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2.5 text-[10.5px] text-blue-300 leading-normal">
-                      <AlertCircle className="w-4 h-4 mt-0.5 text-blue-400 shrink-0" />
-                      <span>
-                        {isEn 
-                          ? "We recommend copying the card image first using 'Copy Card', then click the button below to paste it directly onto WhatsApp along with the text."
-                          : "Tunapendekeza unakili kwanza picha ya doti kadi ya mchango kwa kubonyeza 'Copy Kadi', ndipo ubonyeze kitufe hapo chini ili kuibandika (Paste) kirahisi kwenye WhatsApp."}
-                      </span>
-                    </div>
+                    isMetaWhatsApp ? (
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-start gap-2.5 text-[10.5px] text-emerald-300 leading-normal">
+                        <AlertCircle className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
+                        <span>
+                          {isEn 
+                            ? "🚀 META CLOUD API ENABLED: Click 'Send via WhatsApp' below to dispatch directly via API."
+                            : "🚀 META CLOUD API IMESETIWA: Bonyeza 'Tuma Ujumbe (Send)' hapa chini kutuma moja kwa moja bila kufungua app ya WhatsApp."}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2.5 text-[10.5px] text-blue-300 leading-normal">
+                        <AlertCircle className="w-4 h-4 mt-0.5 text-blue-400 shrink-0" />
+                        <span>
+                          {isEn 
+                            ? "We recommend copying the card image first using 'Copy Card', then click the button below to paste it directly onto WhatsApp along with the text."
+                            : "Tunapendekeza unakili kwanza picha ya doti kadi ya mchango kwa kubonyeza 'Copy Kadi', ndipo ubonyeze kitufe hapo chini ili kuibandika (Paste) kirahisi kwenye WhatsApp."}
+                        </span>
+                      </div>
+                    )
                   )}
                 </div>
 
@@ -4831,17 +4883,37 @@ export default function ContributionManager({
                       )}
                     </button>
                   ) : activeSendTarget.channel === 'whatsapp' ? (
-                    <a
-                      href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, activeSendTarget.channel, true))}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl transition duration-200 flex items-center justify-center gap-2 font-extrabold uppercase font-mono text-[11px] tracking-wider cursor-pointer shadow-lg hover:brightness-110"
-                      onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp', activeSendTarget.type)}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>{isEn ? "Open WhatsApp Connection" : "Fungua WhatsApp & Tuma Kadi"}</span>
-                      <ExternalLink className="w-3.5 h-3.5 text-white/70" />
-                    </a>
+                    isMetaWhatsApp ? (
+                      <button
+                        onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp', activeSendTarget.type)}
+                        disabled={isDispatching}
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl transition duration-200 flex items-center justify-center gap-2 font-extrabold uppercase font-mono text-[11px] tracking-wider disabled:opacity-55 cursor-pointer shadow-lg hover:brightness-110"
+                      >
+                        {isDispatching ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                            <span>{isEn ? "Sending..." : "Inatuma..."}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>{isEn ? "Send via WhatsApp" : "Tuma Ujumbe (Send)"}</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <a
+                        href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getContributionMessageText(activeSendTarget.guest, activeSendTarget.type, activeSendTarget.channel, true))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl transition duration-200 flex items-center justify-center gap-2 font-extrabold uppercase font-mono text-[11px] tracking-wider cursor-pointer shadow-lg hover:brightness-110"
+                        onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp', activeSendTarget.type)}
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>{isEn ? "Open WhatsApp Connection" : "Fungua WhatsApp & Tuma Kadi"}</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-white/70" />
+                      </a>
+                    )
                   ) : (
                     // Preview mode triggers
                     <div className="grid grid-cols-2 gap-3">
