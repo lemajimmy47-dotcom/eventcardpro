@@ -35,7 +35,7 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
         guest.cardType, 
         guest.code ? `EVENTCARD-${guest.code}` : `EVENTCARD-${guest.id}`,
         () => {
-            setCardImageUrl(canvas.toDataURL('image/jpeg', 0.85));
+            setCardImageUrl(canvas.toDataURL('image/webp', 0.98));
         }
     );
   }, [guest, event, settings]);

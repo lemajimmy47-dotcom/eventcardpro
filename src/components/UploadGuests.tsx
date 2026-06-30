@@ -52,7 +52,7 @@ function LazyGuestCardImage({ guest, event, settings, className }: LazyGuestCard
       () => {
         if (active) {
           try {
-            setImgUrl(canvas.toDataURL('image/jpeg', 0.82));
+            setImgUrl(canvas.toDataURL('image/webp', 0.98));
           } catch (err) {
             console.error("Error exporting lazy guest card image canvas:", err);
           }
@@ -96,7 +96,7 @@ const getCardImageUrlOnDemand = (g: Guest, event: EventDetails, settings: Templa
     g.cardType,
     g.code ? `EVENTCARD-${g.code}` : `EVENTCARD-${g.id}`
   );
-  return canvas.toDataURL('image/jpeg', 0.85);
+  return canvas.toDataURL('image/webp', 0.98);
 };
 
 interface UploadGuestsProps {
@@ -1612,8 +1612,8 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                     const canvas = previewCanvasRef.current;
                     if (canvas) {
                       const link = document.createElement('a');
-                      link.href = canvas.toDataURL('image/jpeg', 0.85);
-                      link.download = `Kadi_${previewGuest.name.replace(/\s+/g, '_')}.jpg`;
+                      link.href = canvas.toDataURL('image/webp', 0.98);
+                      link.download = `Kadi_${previewGuest.name.replace(/\s+/g, '_')}.webp`;
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);

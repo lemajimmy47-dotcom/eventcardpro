@@ -152,7 +152,7 @@ function sanitizeHttpHeaders(headers: any, settings: any): Record<string, string
   return cleanHeaders;
 }
 
-async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[]) {
+async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string) {
   // Standardize/Clean Tanzanian phone numbers to 255XXXXXXXXX format
   const cleanedPhone = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
   let formattedPhone = cleanedPhone;
@@ -183,18 +183,69 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         
         console.log(`[Meta WhatsApp] Dispatching to ${formattedPhone} using template ${templateName}`);
         
-        // Structure parameters for Meta WhatsApp Business body
-        const parameters = Array.isArray(templateParams) && templateParams.length > 0 
-          ? templateParams.map((val: string) => ({
-              type: "text",
-              text: String(val)
-            }))
-          : [
-              {
-                type: "text",
-                text: text // fallback to full text as single parameter if none sent
+        // Structure parameters for Meta WhatsApp Business body and buttons dynamically
+        const bodyParams: any[] = [];
+        const buttonParams: any[] = [];
+
+        if (Array.isArray(templateParams) && templateParams.length > 0) {
+          const urlIndices: number[] = [];
+          templateParams.forEach((val, idx) => {
+            const str = String(val || "").trim();
+            if (str.startsWith("http://") || str.startsWith("https://")) {
+              urlIndices.push(idx);
+            }
+          });
+
+          // If we have more than 12 parameters and at least one is a URL,
+          // we treat URL(s) as button parameter(s) and other fields as body parameters.
+          if (templateParams.length > 12 && urlIndices.length > 0) {
+            templateParams.forEach((val, idx) => {
+              const strVal = (val === undefined || val === null) ? "" : String(val).trim();
+              if (urlIndices.includes(idx)) {
+                buttonParams.push({
+                  type: "text",
+                  text: strVal || " "
+                });
+              } else {
+                bodyParams.push({
+                  type: "text",
+                  text: strVal || " "
+                });
               }
-            ];
+            });
+          } else {
+            // Default: all are body parameters
+            templateParams.forEach((val) => {
+              const strVal = (val === undefined || val === null) ? "" : String(val).trim();
+              bodyParams.push({
+                type: "text",
+                text: strVal || " "
+              });
+            });
+          }
+        } else {
+          bodyParams.push({
+            type: "text",
+            text: (text && text.trim()) ? text.trim() : " "
+          });
+        }
+
+        // Dynamically resolve eventId to serve the exact image header
+        let eventId = "default";
+        if (guestId) {
+          try {
+            const db = await readDBLatest();
+            const guest = (db.guests || []).find((g: any) => g.id === guestId);
+            if (guest && guest.eventId) {
+              eventId = guest.eventId;
+            }
+          } catch (err) {
+            console.error("[Meta WhatsApp] Error finding guest eventId:", err);
+          }
+        }
+        
+        const baseOrigin = appOrigin || "https://ais-pre-szslj3otpfjyj7doxrjz75-384135275183.europe-west2.run.app";
+        const headerImageUrl = `${baseOrigin}/api/template-image/${eventId}`;
 
         const payload: any = {
           messaging_product: "whatsapp",
@@ -211,12 +262,35 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
 
         // Standard hello_world template does not take parameters
         if (templateName !== 'hello_world') {
-          payload.template.components = [
-            {
+          payload.template.components = [];
+          
+          // Add header parameter for the image
+          payload.template.components.push({
+            type: "header",
+            parameters: [
+              {
+                type: "image",
+                image: {
+                  link: headerImageUrl
+                }
+              }
+            ]
+          });
+
+          if (bodyParams.length > 0) {
+            payload.template.components.push({
               type: "body",
-              parameters: parameters
-            }
-          ];
+              parameters: bodyParams
+            });
+          }
+          if (buttonParams.length > 0) {
+            payload.template.components.push({
+              type: "button",
+              index: "0",
+              sub_type: "url",
+              parameters: buttonParams
+            });
+          }
         }
 
         const metaUrl = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
@@ -244,8 +318,14 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         if (!response.ok) {
           try {
             const errObj = JSON.parse(respText);
-            if (errObj.error && errObj.error.code === 190 && errObj.error.type === "OAuthException") {
-              throw new Error(`Hitilafu ya Meta WhatsApp: Token yako imepitwa na wakati (expired) au si sahihi. Tafadhali nenda kwenye "Mipangilio" kisha weka "Meta Access Token" mpya na sahihi.`);
+            if (errObj.error && (errObj.error.code === 190 || errObj.error.code === 131005) && errObj.error.type === "OAuthException") {
+              throw new Error(`Hitilafu ya Meta WhatsApp: Token yako imepitwa na wakati (expired) au haina ruhusa (Access Denied). Tafadhali nenda kwenye "Mipangilio" kisha weka "Meta Access Token" mpya na sahihi.`);
+            }
+            if (errObj.error && errObj.error.code === 133010) {
+              throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa. Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya 'To' (Recipient List) kule Meta for Developers.`);
+            }
+            if (errObj.error && errObj.error.code === 132001) {
+              throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
             }
           } catch(e: any) {
             if (e.message.includes("Hitilafu ya Meta WhatsApp")) throw e;
@@ -529,6 +609,44 @@ async function startServer() {
 
   // API 1: Fetch overall state
   app.get("/api/test-env", (req, res)=>{res.json({URL: process.env.DATABASE_URL})});
+
+  // Serving template image for Meta WhatsApp API and other purposes
+  app.get("/api/template-image/:eventId", async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const db = await readDBLatest();
+      let imageUrl = "";
+      if (db.templateSettings && db.templateSettings[eventId]) {
+        imageUrl = db.templateSettings[eventId].imageUrl || "";
+      }
+      if (!imageUrl && db.templateSettings && db.templateSettings['default']) {
+        imageUrl = db.templateSettings['default'].imageUrl || "";
+      }
+
+      if (!imageUrl) {
+        return res.status(404).send("Image not found");
+      }
+
+      if (imageUrl.startsWith("data:")) {
+        const matches = imageUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const data = Buffer.from(matches[2], 'base64');
+          res.setHeader('Content-Type', contentType);
+          return res.send(data);
+        }
+      }
+
+      if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+        return res.redirect(imageUrl);
+      }
+
+      res.status(400).send("Unsupported image format");
+    } catch (error: any) {
+      res.status(500).send("Error serving image: " + error.message);
+    }
+  });
+
   app.get("/api/state", async (req, res) => {
     try {
       const state = await getStateForClient();
@@ -1033,7 +1151,11 @@ async function startServer() {
       const db = await readDBLatest();
       const settings = db.smsGatewaySettings || { provider: "simulation" };
 
-      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams);
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const origin = `${protocol}://${host}`;
+
+      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams, guestId, origin);
       
       let batchId = null;
       try {

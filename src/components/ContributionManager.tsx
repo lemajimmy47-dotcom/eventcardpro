@@ -1763,7 +1763,7 @@ export default function ContributionManager({
       pledgeText,
       isEn,
       () => {
-        setModalCardUrl(canvas.toDataURL('image/jpeg', 0.85));
+        setModalCardUrl(canvas.toDataURL('image/webp', 0.98));
         setModalImageLoaded(true);
       }
     );
@@ -1804,7 +1804,7 @@ export default function ContributionManager({
       pledgeText,
       isEn,
       () => {
-        setQueueCardUrl(canvas.toDataURL('image/jpeg', 0.85));
+        setQueueCardUrl(canvas.toDataURL('image/webp', 0.98));
         setQueueCardLoaded(true);
       }
     );

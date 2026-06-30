@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { QrCode, CheckCircle, XCircle, AlertTriangle, ShieldCheck, Search, Users, Sparkles, MapPin, History, Clock, Download, Camera, Trash2, X, Globe, ExternalLink } from 'lucide-react';
+import { QrCode, CheckCircle, XCircle, AlertTriangle, ShieldCheck, Search, Users, Sparkles, MapPin, History, Clock, Download, Camera, Trash2, X, Globe, ExternalLink, RefreshCw } from 'lucide-react';
 import { EventDetails, Guest } from '../types';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
@@ -37,6 +37,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
   const [listSearch, setListSearch] = useState('');
   const [listFilter, setListFilter] = useState<'all' | 'checked-in' | 'pending' | 'confirmed'>('confirmed');
   const [recentScans, setRecentScans] = useState<{ id: string; name: string; time: string; cardType: string }[]>([]);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   
   // Real Camera capture state
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -236,44 +237,45 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
       const ctx = new AudioContextClass();
 
       if (type === 'success') {
-        const now = ctx.currentTime;
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.type = 'triangle';
-        osc1.frequency.setValueAtTime(523.25, now); // C5
-        gain1.gain.setValueAtTime(0.15, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.15);
-
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(659.25, now + 0.08); // E5
-        gain2.gain.setValueAtTime(0.15, now + 0.08);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + 0.08);
-        osc2.stop(now + 0.3);
-      } else {
+        // Notification chime (arpeggio)
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const now = ctx.currentTime + i * 0.1;
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.start(now);
+          osc.stop(now + 0.3);
+        });
+      } else if (type === 'duplicate' || type === 'error') {
+        // Error / duplicate buzz
         const now = ctx.currentTime;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(120, now);
-        osc.frequency.linearRampToValueAtTime(80, now + 0.35);
+        // start low and go lower for an error sound
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(50, now + 0.5);
 
-        gain.gain.setValueAtTime(0.18, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.3, now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.35);
+        osc.stop(now + 0.5);
       }
     } catch (e) {
       console.warn("Audio Context sound failed to play:", e);
@@ -350,13 +352,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
       if (errorMsg) {
         setManualError(errorMsg);
       }
-      
-      scanTimeoutRef.current = setTimeout(() => {
-        setScanResult(null);
-        setManualError('');
-        isProcessingRef.current = false;
-        lockCodeRef.current = null;
-      }, 2000);
+      playFeedbackSound('error');
       return;
     }
 
@@ -405,13 +401,17 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         time: checkInTime
       });
     }
+  };
 
-    // Automatically reset the scan view to 'awaiting' state after exactly 2 seconds
-    scanTimeoutRef.current = setTimeout(() => {
-      setScanResult(null);
-      isProcessingRef.current = false;
-      lockCodeRef.current = null;
-    }, 2000);
+  const handleResetCheckins = () => {
+    const updated = guestsRef.current.map(g => ({
+      ...g,
+      checkedIn: false,
+      checkedInTime: undefined,
+      guestPhotoUrl: undefined // optionally clear photos, maybe not needed, but good measure
+    }));
+    onUpdateGuests(updated, isEn ? 'Reset all check-in counts to 0' : 'Rudisha namba ya walioingia kuwa 0');
+    setShowResetConfirm(false);
   };
 
   const handleImageUploadAndScan = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -908,7 +908,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const dataUrl = canvas.toDataURL('image/webp', 0.98);
         setSnapImage(dataUrl);
       }
     }
@@ -1123,7 +1123,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
           {/* Left Area: Viewfinder design with moving laser (4 Cols) */}
           <div className="lg:col-span-4 flex flex-col items-center space-y-4 w-full">
             
-            <div className="relative w-full max-w-xs aspect-square border-4 border-white/15 rounded-3xl overflow-hidden bg-slate-950/80 shadow-2xl flex items-center justify-center p-3">
+            <div className="relative w-full max-w-sm aspect-[4/5] min-h-[450px] border-4 border-white/15 rounded-3xl overflow-hidden bg-slate-950/80 shadow-2xl flex items-center justify-center p-3">
               
               {/* Hidden analysis canvas */}
               <canvas ref={scanCanvasRef} className="hidden" />
@@ -1432,16 +1432,25 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                     }`}
                   >
                     {scanResult.status === 'success' && (
-                      <div className="space-y-2">
-                        <CheckCircle className="w-12 h-12 mx-auto text-white animate-bounce" />
+                      <div className="space-y-2 flex flex-col items-center w-full">
+                        <CheckCircle className="w-12 h-12 text-white animate-bounce" />
                         <h4 className="font-bold text-lg leading-tight uppercase font-sans">{isEn ? 'Guest Admitted!' : 'Mgeni Amekubaliwa!'}</h4>
-                        <div className="text-xs space-y-0.5 font-sans">
+                        <div className="text-xs space-y-1 font-sans w-full">
                           <p className="font-bold text-sm bg-black/20 px-3 py-1.5 rounded-full inline-block mb-1">{scanResult.guestName}</p>
-                          <p>{isEn ? 'Card:' : 'Kadi:'} <strong>{scanResult.cardType}</strong></p>
-                          <p>{isEn ? 'Guests arrived:' : 'Idadi walioingia:'} <strong>{scanResult.companions}</strong></p>
+                          <p>{isEn ? 'Card Type:' : 'Aina ya Kadi:'} <strong>{scanResult.cardType}</strong></p>
+                          <p>{isEn ? 'Allowed to enter:' : 'Wanaoruhusiwa Kuingia:'} <strong>{scanResult.companions || (scanResult.cardType === 'DOUBLE' ? 2 : 1)}</strong></p>
                           <p className="italic text-[10px] text-emerald-100 font-mono mt-1">{isEn ? 'Time:' : 'Saa:'} {scanResult.time}</p>
+                          
+                          <div className="flex flex-wrap gap-2 justify-center py-2 mt-2 border-t border-white/20 text-[10px] bg-black/10 rounded-lg w-full">
+                            <span className="w-full font-bold mb-1">{isEn ? 'Total Checked-in:' : 'Jumla ya Waliokwisha Ingia:'}</span>
+                            {['SINGLE', 'DOUBLE', 'VIP', 'VVIP'].map(t => {
+                               const c = guests.filter(g => g.checkedIn && g.cardType === t).length;
+                               if (c === 0) return null;
+                               return <span key={t} className="bg-black/30 px-2 py-0.5 rounded">{t}: {c}</span>
+                            })}
+                          </div>
                         </div>
-                        <div className="pt-2">
+                        <div className="pt-2 flex flex-col items-center gap-2">
                           <button
                             type="button"
                             onClick={() => {
@@ -1462,27 +1471,52 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                     )}
 
                     {scanResult.status === 'duplicate' && (
-                      <div className="space-y-2 p-1">
-                        <AlertTriangle className="w-12 h-12 mx-auto text-yellow-300 animate-pulse" />
+                      <div className="space-y-2 p-1 flex flex-col items-center w-full">
+                        <AlertTriangle className="w-12 h-12 text-yellow-300 animate-pulse" />
                         <h4 className="font-bold text-base leading-tight uppercase font-sans text-yellow-200">{isEn ? 'CARD ALREADY USED!' : 'KADI ISHATUMIWA! DIAL UP'}</h4>
-                        <div className="text-[10px] space-y-0.5 font-sans leading-normal">
+                        <div className="text-[10px] space-y-1 font-sans leading-normal w-full">
                           <p className="font-bold text-xs bg-black/30 px-3 py-1 rounded-full inline-block mb-1 text-white">{scanResult.guestName}</p>
                           <p className="text-slate-100">{isEn ? 'This card has already been scanned before and is used!' : 'Kadi hii imeshapitia skana hapo mbeleni na imetumika tayari!'}</p>
                           <p className="font-semibold text-yellow-200">{isEn ? 'Time of first scan:' : 'Saa ya skan ya kwanza:'} {scanResult.time}</p>
-                          <p className="text-[9px] text-amber-200 italic mt-1 border-t border-white/10 pt-1">{isEn ? 'Warning: Ensure usher prevents duplicate entry!' : 'Onyo: Mwezeshe usher kuzuia duplicate entry!'}</p>
+                          
+                          <div className="flex flex-wrap gap-2 justify-center py-2 mt-2 border-t border-white/20 text-[9px] bg-black/20 rounded-lg w-full">
+                            <span className="w-full font-bold mb-1 text-yellow-200">{isEn ? 'Total Checked-in:' : 'Jumla ya Waliokwisha Ingia:'}</span>
+                            {['SINGLE', 'DOUBLE', 'VIP', 'VVIP'].map(t => {
+                               const c = guests.filter(g => g.checkedIn && g.cardType === t).length;
+                               if (c === 0) return null;
+                               return <span key={t} className="bg-black/30 px-2 py-0.5 rounded text-white">{t}: {c}</span>
+                            })}
+                          </div>
+
+                          <p className="text-[9px] text-amber-200 italic mt-2 border-t border-white/10 pt-1">{isEn ? 'Warning: Ensure usher prevents duplicate entry!' : 'Onyo: Mwezeshe usher kuzuia duplicate entry!'}</p>
                         </div>
                       </div>
                     )}
 
                     {scanResult.status === 'error' && (
-                      <div className="space-y-2">
-                        <XCircle className="w-12 h-12 mx-auto text-rose-200" />
+                      <div className="space-y-2 flex flex-col items-center">
+                        <XCircle className="w-12 h-12 text-rose-200" />
                         <h4 className="font-bold text-base leading-tight uppercase font-sans text-rose-100">KADI HAIKUTAMBULIKA!</h4>
                         <p className="text-[10px] leading-relaxed text-rose-200 bg-black/20 p-2 rounded-lg">
                           {manualError || (isEn ? 'QR code not recognized or not in the official guest list for this event.' : 'Nambari ya QR haikutambulika au haimo katika orodha rasmi ya sherehe hii.')}
                         </p>
                       </div>
                     )}
+                    
+                    <div className="pt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScanResult(null);
+                          setManualError('');
+                          isProcessingRef.current = false;
+                          lockCodeRef.current = null;
+                        }}
+                        className="inline-flex items-center justify-center min-w-[120px] px-6 py-2.5 bg-white text-black font-bold rounded-xl transition cursor-pointer text-sm shadow-lg hover:bg-slate-200"
+                      >
+                        Ok
+                      </button>
+                    </div>
 
                   </motion.div>
                 )}
@@ -1515,6 +1549,42 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                 onChange={handleImageUploadAndScan}
                 className="hidden"
               />
+            </div>
+
+            {/* Reset Button */}
+            <div className="w-full max-w-xs mt-2">
+              {!showResetConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(true)}
+                  className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition shadow text-[10px] uppercase font-mono tracking-wider flex items-center justify-center gap-2 border border-slate-700"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {isEn ? 'Reset All Check-in Counts (0)' : 'Rudisha Namba ya Walioingia Kuwa 0'}
+                </button>
+              ) : (
+                <div className="bg-rose-950/40 border border-rose-500/30 rounded-xl p-3 space-y-3">
+                  <p className="text-[10px] text-rose-200 font-sans text-center">
+                    {isEn ? 'Are you sure? This will clear all checked-in statuses for this event.' : 'Una uhakika? Hii itafuta kumbukumbu zote za walioingia kwenye sherehe hii.'}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowResetConfirm(false)}
+                      className="flex-1 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg text-[10px] transition hover:bg-slate-700"
+                    >
+                      {isEn ? 'Cancel' : 'Ghairi'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetCheckins}
+                      className="flex-1 py-2 bg-rose-600 text-white font-bold rounded-lg text-[10px] transition hover:bg-rose-500 shadow-lg shadow-rose-900/50"
+                    >
+                      {isEn ? 'Yes, Reset' : 'Ndiyo, Futa'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Kamera inayoshindwa kuwaka: Njia rahisi kabisa za Utatuzi (Camera Troubleshooter Swahili Panel) */}

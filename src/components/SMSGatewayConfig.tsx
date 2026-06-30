@@ -405,7 +405,7 @@ export default function SMSGatewayConfig() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-semibold text-slate-400 block">
-                        {isEn ? "Language Code" : "Luka ya Template"}
+                        {isEn ? "Language Code" : "Lugha ya Template"}
                       </label>
                       <input 
                         type="text" 

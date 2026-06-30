@@ -61,7 +61,7 @@ export default function SendMessages({ event, settings, guests, language, onUpda
       guest.cardType, 
       guest.code ? `EVENTCARD-${guest.code}` : `EVENTCARD-${guest.id}`,
       () => {
-        setModalCardUrl(canvas.toDataURL('image/jpeg', 0.85));
+        setModalCardUrl(canvas.toDataURL('image/webp', 0.98));
         setModalImageLoaded(true);
       }
     );

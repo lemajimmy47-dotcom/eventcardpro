@@ -33,7 +33,7 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const maxW = 850;
+          const maxW = 2048; // Imeongezwa kuruhusu ubora wa hali ya juu (high-res)
           if (width > maxW) {
             height = (maxW / width) * height;
             width = maxW;
@@ -42,7 +42,7 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          const compressedDataUrl = canvas.toDataURL('image/webp', 0.98);
 
           setLocalSettings(prev => ({
             ...prev,
