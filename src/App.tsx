@@ -55,6 +55,7 @@ import GuestInvitePage from './components/GuestInvitePage';
 import GuestSaveTheDatePage from './components/GuestSaveTheDatePage';
 import GuestPledgeSubmissionPage from './components/GuestPledgeSubmissionPage';
 import AuditLogsPage from './components/AuditLogsPage';
+import { ConnectivityDebug } from './components/ConnectivityDebug';
 import { safeLocalStorage } from './utils/storage';
 import { EventDetails, Guest, TemplateSettings, UserAccount, CommitteeMember, CommitteeNotification, ContributionCardTemplate } from './types';
 
@@ -74,7 +75,8 @@ type AppTab =
   | 'committee'
   | 'save-the-date'
   | 'event-reports'
-  | 'audit-logs';
+  | 'audit-logs'
+  | 'debug';
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
@@ -1828,6 +1830,8 @@ export default function App() {
         );
       case 'audit-logs':
         return <AuditLogsPage language={language} />;
+      case 'debug':
+        return <ConnectivityDebug />;
       case 'contributions':
         return (
           <React.Fragment key={eventDetails?.id || 'contributions'}>
@@ -1915,6 +1919,7 @@ export default function App() {
     { id: 'save-the-date', icon: History, label: 'Save The Date' },
     { id: 'committee', icon: ShieldCheck, label: 'Kamati (Committee)' },
     { id: 'scan', icon: QrCode, label: t('nav.scan') },
+    { id: 'debug', icon: ShieldCheck, label: language === 'sw' ? 'Mtatuzi wa Muunganisho' : 'Debug Connectivity' },
     { id: 'settings', icon: Settings, label: t('nav.settings') },
     { id: 'wallet', icon: Wallet, label: t('nav.wallet') },
     { id: 'audit-logs', icon: ShieldCheck, label: language === 'sw' ? 'Audit Logs (Ulinzi)' : 'Audit Logs' }

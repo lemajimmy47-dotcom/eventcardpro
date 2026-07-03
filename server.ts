@@ -173,7 +173,13 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
     eventData?.name || "Sherehe yetu", // 3. Event Name
     eventData?.date || "", // 4. Date
     eventData?.eventHallName || "Ukumbi wa Sherehe", // 5. Venue
-    `${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}` // 6. Time
+    `${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`, // 6. Time
+    guestData?.code || guestData?.id || "N/A", // 7. Card Number
+    guestData?.cardType || "Kadi ya Kawaida", // 8. Card Type
+    eventData?.contact1Name || "Msimamizi 1", // 9. Contact 1 Name
+    eventData?.contact1 || "", // 10. Contact 1 Phone
+    eventData?.contact2Name || "Msimamizi 2", // 11. Contact 2 Name
+    eventData?.contact2 || "" // 12. Contact 2 Phone
   ];
 
   if (Array.isArray(incomingParams) && incomingParams.length > 0) {
@@ -212,7 +218,7 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
 
 const metaMediaCache = new Map<string, { mediaId: string; timestamp: number }>();
 
-async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string, reqEventId?: string) {
+async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string, reqEventId?: string, reqTemplateName?: string, reqImageUrl?: string) {
   // Standardize/Clean Tanzanian phone numbers to 255XXXXXXXXX format
   const cleanedPhone = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
   let formattedPhone = cleanedPhone;
@@ -238,7 +244,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
       if (metaConfig && metaConfig.provider === 'meta') {
         const token = (metaConfig.meta_token || "").trim();
         const phoneId = (metaConfig.phone_number_id || "").trim();
-        const templateName = (metaConfig.template_name || "").trim();
+        let templateName = (reqTemplateName || metaConfig.template_name || "").trim();
         const templateLang = (metaConfig.template_lang || "sw").trim();
         
         console.log(`[Meta WhatsApp] Dispatching to ${formattedPhone} using template ${templateName}`);
@@ -291,23 +297,26 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         const lowerTemplateName = templateName.toLowerCase();
         if (lowerTemplateName.includes('shukrani') || lowerTemplateName.includes('asante') || lowerTemplateName.includes('thanks') || lowerTemplateName.includes('thank_you') || lowerTemplateName.includes('thankyou')) {
           expectedCount = 1;
-        } else if (lowerTemplateName.includes('mchango') || lowerTemplateName.includes('pledge') || lowerTemplateName.includes('ombi') || lowerTemplateName.includes('save') || lowerTemplateName.includes('date') || lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho') || lowerTemplateName.includes('hifadhi') || lowerTemplateName.includes('tarehe')) {
+        } else if (lowerTemplateName.includes('mchango') || lowerTemplateName.includes('pledge') || lowerTemplateName.includes('ombi') || lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho')) {
+          expectedCount = 3;
+        } else if (lowerTemplateName.includes('save') || lowerTemplateName.includes('date') || lowerTemplateName.includes('hifadhi') || lowerTemplateName.includes('tarehe')) {
+          // Explicitly handle Save the Date with 3 params and NO buttons by default
           expectedCount = 3;
         } else if (lowerTemplateName.includes('mwaliko') || lowerTemplateName.includes('kadi') || lowerTemplateName.includes('wedding') || lowerTemplateName.includes('invite') || lowerTemplateName.includes('sherehe') || lowerTemplateName.includes('invitation')) {
-          expectedCount = 6;
+          expectedCount = 12;
         }
 
         if (expectedCount > 0) {
           console.log(`[Meta WhatsApp] Fuzzy matched template ${templateName} to expected parameter count: ${expectedCount}`);
           bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams);
         } else if (Array.isArray(templateParams) && templateParams.length > 0) {
-          // If no fuzzy match but frontend supplied parameters, use frontend count
+          // Fallback to trusting frontend count if no fuzzy match
           expectedCount = templateParams.length;
-          console.log(`[Meta WhatsApp] Using frontend-provided templateParams count: ${expectedCount}`);
+          console.log(`[Meta WhatsApp] No fuzzy match, using frontend templateParams count: ${expectedCount}`);
           bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams);
         } else {
           if (templateName === 'kadi_mwaliko' && guestData && eventData) {
-            bodyParams = getParamsForCount(6, guestData, eventData, text, templateParams);
+            bodyParams = getParamsForCount(12, guestData, eventData, text, templateParams);
           } else if (templateName === 'shukrani' && guestData && eventData) {
             bodyParams = getParamsForCount(1, guestData, eventData, text, templateParams);
           } else {
@@ -341,14 +350,33 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           }
         }
         
-        const baseOrigin = appOrigin || "https://ais-pre-szslj3otpfjyj7doxrjz75-384135275183.europe-west2.run.app";
-        const headerImageUrl = `${baseOrigin}/api/template-image/${eventId}`;
+        // Always attempt to supply a URL button parameter for guest-specific links.
+        // If the template does not have a button, the self-healing logic will remove it.
+        const guestCode = guestData?.code || guestData?.id || guestId || "";
+        const isSaveTheDate = lowerTemplateName.includes('save') || lowerTemplateName.includes('date') || lowerTemplateName.includes('hifadhi') || lowerTemplateName.includes('tarehe');
+        
+        if (guestCode && !isSaveTheDate) {
+          const buttonParamVal = `?invite=${guestCode}&eventId=${eventId || ""}`;
+          buttonParams.push({ type: "text", text: buttonParamVal });
+        } else if (!isSaveTheDate) {
+          // Check if any frontend template params look like URLs
+          if (Array.isArray(templateParams)) {
+            templateParams.forEach(val => {
+              const str = String(val || "").trim();
+              if ((str.startsWith("http://") || str.startsWith("https://")) && buttonParams.length === 0) {
+                buttonParams.push({ type: "text", text: str });
+              }
+            });
+          }
+        }
+
+        const headerImageUrl = `${appOrigin || "https://eventcard.co.tz"}/api/template-image/${eventId}`;
 
         // Let's resolve the actual image to upload it directly to Meta to bypass preview server authentication/sandbox limits
         let mediaId: string | null = null;
-        let imageUrl = "";
+        let imageUrl = reqImageUrl || "";
         try {
-          if (db) {
+          if (!imageUrl && db) {
             if (db.templateSettings && db.templateSettings[eventId]) {
               imageUrl = db.templateSettings[eventId].imageUrl || "";
             }
@@ -384,6 +412,8 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                   blob = await imgRes.blob();
                   contentType = blob.type || "image/png";
                   filename = contentType === "image/jpeg" ? "image.jpg" : "image.png";
+                } else {
+                  throw new Error(`Hitilafu ya Meta WhatsApp: Imeshindwa kupakua picha ya kadi toka kwenye kiungo chake (Status ${imgRes.status}).`);
                 }
               }
 
@@ -409,13 +439,19 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                   metaMediaCache.set(cacheKey, { mediaId, timestamp: now });
                   console.log(`[Meta WhatsApp] Successfully uploaded and CACHED media. Media ID: ${mediaId}`);
                 } else {
-                  console.error(`[Meta WhatsApp] Media upload failed, falling back to link:`, mediaResult);
+                  console.error(`[Meta WhatsApp] Media upload failed:`, mediaResult);
+                  const apiMsg = mediaResult?.error?.message || "Hitilafu isiyojulikana";
+                  const apiCode = mediaResult?.error?.code || "";
+                  throw new Error(`Hitilafu ya Meta WhatsApp: Imeshindwa kupakia picha ya kadi kwenda Meta (Media Upload Failed, Msimbo ${apiCode}). Tafadhali hakikisha Token ya Meta na ID ya namba ya simu ziko sahihi, na picha ina ukubwa usiozidi 5MB. [Jibu la Meta: ${apiMsg}]`);
                 }
               }
             }
           }
-        } catch (mediaErr) {
-          console.error("[Meta WhatsApp] Error uploading media to Meta, falling back to link:", mediaErr);
+        } catch (mediaErr: any) {
+          console.error("[Meta WhatsApp] Error uploading media to Meta:", mediaErr);
+          if (mediaErr?.message?.includes("Hitilafu ya Meta WhatsApp")) {
+            throw mediaErr;
+          }
         }
 
         const payload: any = {
@@ -496,6 +532,12 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
 
             if (response.ok) {
               success = true;
+              try {
+                const data = JSON.parse(respText);
+                if (data.messages && data.messages[0]) {
+                  return JSON.stringify({ ...data, messageId: data.messages[0].id, log: `Meta ID: ${data.messages[0].id}` });
+                }
+              } catch (e) {}
               return respText;
             }
 
@@ -515,89 +557,215 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
               if (errObj.error && (errObj.error.code === 133010 || errObj.error.code === 131030)) {
                 throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
               }
-              // Case C: Template name / language not found
+              // Case C: Template name / language not found - SELF HEALING FALLBACK
               if (errObj.error && errObj.error.code === 132001) {
-                throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
-              }
+                const defaultTemplate = (metaConfig.template_name || "").trim();
+                const defaultLang = (metaConfig.template_lang || "sw").trim();
 
-              // Case D: Header component error (Template does not contain title component or no parameters allowed in header)
-              if (combinedMsg.includes("header") || combinedMsg.includes("Title") || combinedMsg.includes("title") || combinedMsg.includes("does not contain title component") || combinedMsg.includes("no parameters allowed in header") || combinedMsg.includes("Template does not contain header component")) {
-                const headerCompIdx = payload.template.components.findIndex((c: any) => c.type === "header");
-                if (headerCompIdx !== -1) {
-                  payload.template.components.splice(headerCompIdx, 1);
-                  console.log("[Meta WhatsApp Self-Healing] Removed unsupported 'header' component from payload.");
+                // Strategy 1: Try language fallback first if we haven't tried the other common one yet
+                if (payload.template.language.code === 'sw' && !combinedMsg.includes("tried_en")) {
+                  console.log(`[Meta WhatsApp Self-Healing] Template "${templateName}" not found in 'sw'. Attempting fallback to 'en'...`);
+                  payload.template.language.code = 'en';
+                  // Use a marker in logs/state if needed, but for now we just try it
                   healAttempted = true;
+                } else if (payload.template.language.code === 'en' && !combinedMsg.includes("tried_sw")) {
+                  console.log(`[Meta WhatsApp Self-Healing] Template "${templateName}" not found in 'en'. Attempting fallback to 'sw'...`);
+                  payload.template.language.code = 'sw';
+                  healAttempted = true;
+                } 
+                // Strategy 2: Try falling back to the configured default template name
+                else if (templateName !== defaultTemplate && defaultTemplate) {
+                  console.log(`[Meta WhatsApp Self-Healing] Custom template "${templateName}" not found. Falling back to configured default: "${defaultTemplate}" in language "${defaultLang}"`);
+                  templateName = defaultTemplate;
+                  payload.template.name = templateName;
+                  payload.template.language.code = defaultLang;
+                  
+                  // Re-evaluate expected count and params for fallback template
+                  let newExpectedCount = 0;
+                  const lowerFallbackName = templateName.toLowerCase();
+                  if (lowerFallbackName.includes('shukrani') || lowerFallbackName.includes('asante') || lowerFallbackName.includes('thanks') || lowerFallbackName.includes('thank_you') || lowerFallbackName.includes('thankyou')) {
+                    newExpectedCount = 1;
+                  } else if (lowerFallbackName.includes('mchango') || lowerFallbackName.includes('pledge') || lowerFallbackName.includes('ombi') || lowerFallbackName.includes('save') || lowerFallbackName.includes('date') || lowerFallbackName.includes('reminder') || lowerFallbackName.includes('ukumbusho') || lowerFallbackName.includes('hifadhi') || lowerFallbackName.includes('tarehe')) {
+                    newExpectedCount = 3;
+                  } else if (lowerFallbackName.includes('mwaliko') || lowerFallbackName.includes('kadi') || lowerFallbackName.includes('wedding') || lowerFallbackName.includes('invite') || lowerFallbackName.includes('sherehe') || lowerFallbackName.includes('invitation')) {
+                    newExpectedCount = 12;
+                  }
+
+                  if (newExpectedCount > 0) {
+                    const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams);
+                    const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
+                    if (bodyCompIdx !== -1) {
+                      payload.template.components[bodyCompIdx].parameters = recoveredParams;
+                    } else {
+                      payload.template.components.push({
+                        type: "body",
+                        parameters: recoveredParams
+                      });
+                    }
+                  }
+                  healAttempted = true;
+                } else {
+                  // Final fallback: try 'mwaliko_wa_sherehe' or 'kadi_mwaliko' if we haven't tried them yet
+                  const genericFallbacks = ['mwaliko_wa_sherehe', 'kadi_mwaliko'];
+                  for (const fallback of genericFallbacks) {
+                    if (templateName !== fallback) {
+                      console.log(`[Meta WhatsApp Self-Healing] Exhausted options. Trying generic fallback: "${fallback}"...`);
+                      templateName = fallback;
+                      payload.template.name = templateName;
+                      payload.template.language.code = "sw"; // Try Swahili first for generic
+                      
+                      // Enforce 12 params for these known invitation fallbacks
+                      const recoveredParams = getParamsForCount(12, guestData, eventData, text, templateParams);
+                      const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
+                      if (bodyCompIdx !== -1) {
+                        payload.template.components[bodyCompIdx].parameters = recoveredParams;
+                      } else {
+                        payload.template.components.push({
+                          type: "body",
+                          parameters: recoveredParams
+                        });
+                      }
+                      
+                      healAttempted = true;
+                      break;
+                    }
+                  }
+                  
+                  if (!healAttempted) {
+                    throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika Meta dashboard yako. Tafadhali hakikisha jina na lugha ya template vinalingana na vile vilivyoko kule Meta.`);
+                  }
                 }
               }
 
-              // Case E: Button parameter error
-              if (combinedMsg.includes("button") || combinedMsg.includes("Button") || combinedMsg.includes("buttons") || combinedMsg.includes("Button at index 0")) {
-                const btnCompIdx = payload.template.components.findIndex((c: any) => c.type === "button");
-                if (combinedMsg.includes("requires a parameter")) {
-                  const code = guestData?.code || guestData?.id || guestId || "";
-                  let buttonParamVal = "";
-                  if (Array.isArray(templateParams)) {
-                    for (const p of templateParams) {
-                      const str = String(p || "").trim();
-                      if (str.startsWith("http://") || str.startsWith("https://")) {
-                        if (str.includes("?")) {
-                          buttonParamVal = str.substring(str.indexOf("?"));
-                        } else {
-                          buttonParamVal = str;
+              if (!healAttempted) {
+                const lowerCombined = combinedMsg.toLowerCase();
+                // Case D: Header component error (Template does not contain title component or no parameters allowed in header)
+                const isHeaderError = (errObj.error?.code === 132018 && (lowerCombined.includes("header") || lowerCombined.includes("title"))) || 
+                                     combinedMsg.includes("header") || 
+                                     combinedMsg.includes("Title") || 
+                                     combinedMsg.includes("title") || 
+                                     combinedMsg.includes("does not contain title component") || 
+                                     combinedMsg.includes("no parameters allowed in header") || 
+                                     combinedMsg.includes("Template does not contain header component") || 
+                                     combinedMsg.includes("not contain title component") || 
+                                     combinedMsg.includes("not contain header component");
+
+                if (isHeaderError) {
+                  const headerCompIdx = payload.template.components.findIndex((c: any) => c.type === "header");
+                  if (headerCompIdx !== -1) {
+                    payload.template.components.splice(headerCompIdx, 1);
+                    console.log("[Meta WhatsApp Self-Healing] Removed unsupported 'header' component from payload.");
+                    healAttempted = true;
+                  }
+                }
+
+                // Case E: Button parameter error
+                const isButtonError = lowerCombined.includes("button") || 
+                                     lowerCombined.includes("132018") || 
+                                     lowerCombined.includes("button at index 0") ||
+                                     lowerCombined.includes("buttons") ||
+                                     lowerCombined.includes("does not contain button components");
+
+                if (isButtonError) {
+                  const btnCompIdx = payload.template.components.findIndex((c: any) => c.type === "button" || c.type === "buttons");
+                  
+                  if (lowerCombined.includes("requires a parameter") || lowerCombined.includes("expected 1") || lowerCombined.includes("missing parameter") || lowerCombined.includes("index 0 requires")) {
+                    const code = guestData?.code || guestData?.id || guestId || "";
+                    let buttonParamVal = "";
+                    if (Array.isArray(templateParams)) {
+                      for (const p of templateParams) {
+                        const str = String(p || "").trim();
+                        if (str.startsWith("http://") || str.startsWith("https://") || str.startsWith("?")) {
+                          if (str.includes("?")) {
+                            buttonParamVal = str.substring(str.indexOf("?"));
+                          } else {
+                            buttonParamVal = str;
+                          }
+                          break;
                         }
-                        break;
+                      }
+                    }
+                    if (!buttonParamVal && code) {
+                      buttonParamVal = `?invite=${code}&eventId=${eventId || ""}`;
+                    }
+                    if (buttonParamVal) {
+                      const btnParams = [{ type: "text", text: buttonParamVal }];
+                      if (btnCompIdx !== -1) {
+                        payload.template.components[btnCompIdx].parameters = btnParams;
+                        console.log(`[Meta WhatsApp Self-Healing] Updated existing button component with parameter: "${buttonParamVal}"`);
+                      } else {
+                        payload.template.components.push({
+                          type: "button",
+                          index: "0",
+                          sub_type: "url",
+                          parameters: btnParams
+                        });
+                        console.log(`[Meta WhatsApp Self-Healing] Added missing button component with parameter: "${buttonParamVal}"`);
+                      }
+                      healAttempted = true;
+                    } else {
+                      // No parameter found to supply, but required. Try to remove button if Meta is confused
+                      if (btnCompIdx !== -1) {
+                        payload.template.components.splice(btnCompIdx, 1);
+                        console.log("[Meta WhatsApp Self-Healing] Button requires parameter but none found. Removed button component.");
+                        healAttempted = true;
+                      }
+                    }
+                  } else if (lowerCombined.includes("no parameters allowed") || 
+                             lowerCombined.includes("does not contain button") || 
+                             lowerCombined.includes("not contain button components") ||
+                             lowerCombined.includes("no button components") ||
+                             lowerCombined.includes("extra parameter") ||
+                             lowerCombined.includes("not contain button") ||
+                             lowerCombined.includes("invalid parameters for button") ||
+                             lowerCombined.includes("no parameters allowed for button")) {
+                    if (btnCompIdx !== -1) {
+                      // Remove ALL button components to be safe
+                      const initialCount = payload.template.components.length;
+                      payload.template.components = payload.template.components.filter((c: any) => c.type !== "button" && c.type !== "buttons");
+                      console.log(`[Meta WhatsApp Self-Healing] Removed ${initialCount - payload.template.components.length} unsupported 'button' components from payload.`);
+                      healAttempted = true;
+                    } else {
+                      // If we are getting a button error but no button in payload, Meta might be confused by the payload structure
+                      // We'll try to remove ANY component that isn't 'body' as a last resort for 132018 errors
+                      const initialCount = payload.template.components.length;
+                      payload.template.components = payload.template.components.filter((c: any) => c.type === "body");
+                      if (payload.template.components.length < initialCount) {
+                        console.log(`[Meta WhatsApp Self-Healing] Received button error but no button found. Stripped ${initialCount - payload.template.components.length} non-body components to recover.`);
+                        healAttempted = true;
+                      } else {
+                        console.log("[Meta WhatsApp Self-Healing] Received button error but no non-body components to strip. Attempting to clear all parameters just in case.");
+                        // Last ditch effort: send empty components list
+                        payload.template.components = [];
+                        healAttempted = true;
                       }
                     }
                   }
-                  if (!buttonParamVal && code) {
-                    buttonParamVal = `?invite=${code}&eventId=${eventId || ""}`;
-                  }
-                  if (buttonParamVal) {
-                    const btnParams = [{ type: "text", text: buttonParamVal }];
-                    if (btnCompIdx !== -1) {
-                      payload.template.components[btnCompIdx].parameters = btnParams;
+                }
+
+                // Case F: Body parameter mismatch
+                if (errObj.error?.code === 132000 || errObj.error?.code === 132018 || combinedMsg.includes("Number of parameters does not match") || combinedMsg.includes("number of localizable_params") || combinedMsg.includes("param") || combinedMsg.includes("parameter") || lowerCombined.includes("parameters in your template")) {
+                  const countMatch = 
+                    combinedMsg.match(/expected number of params\s*(?:\:\s*)?\(?(\d+)\)?/i) || 
+                    combinedMsg.match(/expected\s+(\d+)\s+params/i) ||
+                    combinedMsg.match(/expected\s*(?:\:\s*)?\(?(\d+)\)?/i) ||
+                    combinedMsg.match(/expected\s+(\d+)/i) ||
+                    combinedMsg.match(/params\s*\(?(\d+)\)?/i);
+                  if (countMatch && countMatch[1]) {
+                    const newExpectedCount = parseInt(countMatch[1], 10);
+                    const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams);
+                    const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
+                    if (bodyCompIdx !== -1) {
+                      payload.template.components[bodyCompIdx].parameters = recoveredParams;
                     } else {
                       payload.template.components.push({
-                        type: "button",
-                        index: "0",
-                        sub_type: "url",
-                        parameters: btnParams
+                        type: "body",
+                        parameters: recoveredParams
                       });
                     }
-                    console.log(`[Meta WhatsApp Self-Healing] Supplied missing URL button parameter: "${buttonParamVal}"`);
+                    console.log(`[Meta WhatsApp Self-Healing] Adjusted body parameters to exactly match count: ${newExpectedCount}`);
                     healAttempted = true;
                   }
-                } else if (combinedMsg.includes("no parameters allowed") || combinedMsg.includes("does not contain button component")) {
-                  if (btnCompIdx !== -1) {
-                    payload.template.components.splice(btnCompIdx, 1);
-                    console.log("[Meta WhatsApp Self-Healing] Removed unsupported 'button' component from payload.");
-                    healAttempted = true;
-                  }
-                }
-              }
-
-              // Case F: Body parameter mismatch
-              if (errObj.error?.code === 132000 || combinedMsg.includes("Number of parameters does not match") || combinedMsg.includes("number of localizable_params") || combinedMsg.includes("param") || combinedMsg.includes("parameter")) {
-                const countMatch = 
-                  combinedMsg.match(/expected number of params\s*(?:\:\s*)?\(?(\d+)\)?/i) || 
-                  combinedMsg.match(/expected\s+(\d+)\s+params/i) ||
-                  combinedMsg.match(/expected\s*(?:\:\s*)?\(?(\d+)\)?/i) ||
-                  combinedMsg.match(/expected\s+(\d+)/i) ||
-                  combinedMsg.match(/params\s*\(?(\d+)\)?/i);
-                if (countMatch && countMatch[1]) {
-                  const newExpectedCount = parseInt(countMatch[1], 10);
-                  const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams);
-                  const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
-                  if (bodyCompIdx !== -1) {
-                    payload.template.components[bodyCompIdx].parameters = recoveredParams;
-                  } else {
-                    payload.template.components.push({
-                      type: "body",
-                      parameters: recoveredParams
-                    });
-                  }
-                  console.log(`[Meta WhatsApp Self-Healing] Adjusted body parameters to exactly match count: ${newExpectedCount}`);
-                  healAttempted = true;
                 }
               }
 
@@ -639,6 +807,12 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           if (errObj.error && errObj.error.code === 132001) {
             throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
           }
+          if (errObj.error) {
+            const apiMsg = errObj.error.message || "Hitilafu isiyojulikana";
+            const apiCode = errObj.error.code || "";
+            const apiDetails = errObj.error.error_data?.details || "";
+            throw new Error(`Hitilafu ya Meta WhatsApp (Msimbo ${apiCode}): ${apiMsg}. ${apiDetails}`);
+          }
         } catch(e: any) {
           if (e.message.includes("Hitilafu ya Meta WhatsApp")) throw e;
         }
@@ -654,7 +828,29 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         .replace(/{message}/g, encodeURIComponent(text));
       // Use GET for simple webhook URLs unless it's a custom provider
       const response = await fetch(finalUrl, { method: 'GET' });
-      return await response.text();
+      const responseContent = await response.text();
+      
+      if (!response.ok) {
+        throw new Error(`WhatsApp Webhook failed with status ${response.status}: ${responseContent}`);
+      }
+      
+      try {
+        const parsed = JSON.parse(responseContent);
+        const lowerStatus = String(parsed.status || "").toLowerCase();
+        const hasErrorKey = parsed.error || parsed.errorMessage || parsed.errors;
+        const isSuccessFalse = parsed.success === false || parsed.success === "false";
+        
+        if (lowerStatus === "fail" || lowerStatus === "failed" || lowerStatus === "error" || isSuccessFalse || hasErrorKey) {
+          const errMsg = parsed.message || parsed.error || parsed.errorMessage || responseContent;
+          throw new Error(`Hitilafu ya Lango la WhatsApp: ${errMsg}`);
+        }
+      } catch (e: any) {
+        if (e.message.startsWith("Hitilafu ya Lango la WhatsApp")) {
+          throw e;
+        }
+      }
+      
+      return responseContent;
     }
     return "WhatsApp Simulation";
   }
@@ -871,6 +1067,26 @@ Tafadhali ingia kwenye akaunti yako ya ${settings.provider === "meseji" ? "Mesej
     
     throw new Error(`Gateway Error (${response.status}): ${responseContent}`);
   }
+  
+  // Check if response body is JSON and contains failure message even with status 200
+  try {
+    const parsed = JSON.parse(responseContent);
+    const lowerStatus = String(parsed.status || "").toLowerCase();
+    const hasErrorKey = parsed.error || parsed.errorMessage || parsed.errors || parsed.message === "Unauthorized" || parsed.message === "Invalid Token";
+    const isSuccessFalse = parsed.success === false || parsed.success === "false";
+    
+    if (lowerStatus === "fail" || lowerStatus === "failed" || lowerStatus === "error" || isSuccessFalse || hasErrorKey) {
+      const errMsg = parsed.message || parsed.error || parsed.errorMessage || responseContent;
+      console.error(`[SMS] Gateway JSON indicates failure despite 2xx status code:`, responseContent);
+      throw new Error(`Hitilafu toka kwa Mtoa huduma: ${errMsg}`);
+    }
+  } catch (jsonErr: any) {
+    if (jsonErr.message.startsWith("Hitilafu toka kwa Mtoa huduma")) {
+      throw jsonErr;
+    }
+    // If not JSON or other parsing errors, we just treat it as successful raw text
+  }
+
   return responseContent;
 }
 
@@ -1705,7 +1921,7 @@ async function startServer() {
   // API 7: Real Send SMS & WhatsApp dispatcher
   app.post("/api/send-sms", async (req, res) => {
     try {
-      const { guestId, eventId, phone, text, channel, scheduleTime, templateParams } = req.body;
+      const { guestId, eventId, phone, text, channel, scheduleTime, templateParams, templateName, imageUrl } = req.body;
       if (!phone || !text) {
         return res.status(400).json({ error: "Missing phone number or message text" });
       }
@@ -1717,7 +1933,7 @@ async function startServer() {
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const origin = `${protocol}://${host}`;
 
-      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams, guestId, origin, eventId);
+      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl);
       
       let batchId = null;
       try {
@@ -2225,6 +2441,134 @@ async function startServer() {
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
+  });
+
+  app.get("/api/debug/connectivity", async (req, res) => {
+    const results: any = {
+      timestamp: new Date().toISOString(),
+      database: { status: "unknown" },
+      whatsapp: { status: "unknown" },
+      sms: { status: "unknown" }
+    };
+
+    // 1. Test Database (Cloud SQL / PostgreSQL)
+    try {
+      const dbState = await readDBLatest();
+      results.database = { 
+        status: "ok", 
+        message: "Database read successful",
+        stats: {
+          guests: dbState.guests?.length || 0,
+          events: dbState.eventsList?.length || 0
+        }
+      };
+    } catch (error: any) {
+      results.database = { status: "error", message: error.message };
+    }
+
+    // Load gateway settings
+    let gatewaySettings: any = {};
+    try {
+      const dbState = await readDBLatest();
+      // In this app, gateway settings are stored in smsGatewaySettings
+      gatewaySettings = dbState.smsGatewaySettings || {};
+    } catch (e) {}
+
+    // 2. Test WhatsApp (Meta API)
+    if (gatewaySettings.whatsappUrl) {
+      try {
+        let metaConfig: any = null;
+        if (gatewaySettings.whatsappUrl.trim().startsWith('{')) {
+          metaConfig = JSON.parse(gatewaySettings.whatsappUrl);
+        }
+
+        if (metaConfig && (metaConfig.meta_token || metaConfig.token) && (metaConfig.phone_number_id || metaConfig.phone_id)) {
+          const token = (metaConfig.meta_token || metaConfig.token || "").trim();
+          const phoneId = (metaConfig.phone_number_id || metaConfig.phone_id || "").trim();
+          
+          const testUrl = `https://graph.facebook.com/v17.0/${phoneId}`;
+          const response = await fetch(testUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await response.json();
+          results.whatsapp = { 
+            status: response.ok ? "ok" : "error", 
+            httpStatus: response.status,
+            configFound: true,
+            phoneId: phoneId,
+            response: data 
+          };
+        } else {
+          results.whatsapp = { 
+            status: "not_configured", 
+            message: "WhatsApp configuration found but missing token or phone_id",
+            configRaw: gatewaySettings.whatsappUrl.substring(0, 50) + "..."
+          };
+        }
+      } catch (error: any) {
+        results.whatsapp = { status: "error", message: error.message };
+      }
+    } else {
+      results.whatsapp = { status: "not_configured", message: "WhatsApp gateway settings not found in database" };
+    }
+
+    // 3. Test SMS Gateway (Beem)
+    if (gatewaySettings.provider === "beem" || (gatewaySettings.url && gatewaySettings.url.includes("beem"))) {
+      try {
+        const apiKey = gatewaySettings.apiKey || "";
+        const apiSecret = gatewaySettings.apiSecret || "";
+        
+        if (apiKey && apiSecret) {
+          const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+          const response = await fetch('https://api.beem.africa/public/v1/vendors/balance', {
+            headers: { 'Authorization': `Basic ${auth}` }
+          });
+          const data = await response.json();
+          results.sms = { 
+            status: response.ok ? "ok" : "error", 
+            httpStatus: response.status,
+            provider: "Beem",
+            response: data 
+          };
+        } else {
+          results.sms = { status: "not_configured", message: "Beem provider selected but missing API Key or Secret" };
+        }
+      } catch (error: any) {
+        results.sms = { status: "error", message: error.message };
+      }
+    } else if (gatewaySettings.provider === "meseji" || (gatewaySettings.url && gatewaySettings.url.includes("meseji"))) {
+      try {
+        const apiKey = (gatewaySettings.apiKey || "").trim();
+        if (apiKey) {
+          const response = await fetch("https://meseji.co.tz/api/v1/sms/balance", {
+            method: "GET",
+            headers: {
+              "x-api-key": apiKey,
+              "Accept": "application/json"
+            }
+          });
+          const data = await response.json();
+          results.sms = { 
+            status: response.ok ? "ok" : "error", 
+            httpStatus: response.status,
+            provider: "Meseji",
+            response: data 
+          };
+        } else {
+          results.sms = { status: "not_configured", message: "Meseji provider selected but missing API Key", provider: "Meseji" };
+        }
+      } catch (error: any) {
+        results.sms = { status: "error", message: error.message, provider: "Meseji" };
+      }
+    } else {
+      results.sms = { 
+        status: "not_configured", 
+        message: "SMS gateway not configured or using simulation mode",
+        provider: gatewaySettings.provider || "none"
+      };
+    }
+
+    res.json(results);
   });
 
   // Vite static assets and html routing middleware

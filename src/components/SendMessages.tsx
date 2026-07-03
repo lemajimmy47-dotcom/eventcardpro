@@ -136,6 +136,14 @@ export default function SendMessages({ event, settings, guests, language, onUpda
     return false;
   }, [gatewaySettings.whatsappUrl]);
 
+  const metaTemplateName = React.useMemo(() => {
+    if (!gatewaySettings.whatsappUrl) return null;
+    try {
+      const parsed = JSON.parse(gatewaySettings.whatsappUrl);
+      return parsed.template_name || null;
+    } catch(e) { return null; }
+  }, [gatewaySettings.whatsappUrl]);
+
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [isSavingGateway, setIsSavingGateway] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -888,7 +896,11 @@ Karibu sana!`);
           text: mainText,
           channel,
           scheduleTime: formattedScheduleTime,
-          templateParams
+          templateParams,
+          templateName: (messageType === 'invitation' && metaTemplateName) 
+            ? metaTemplateName 
+            : (messageType === 'thank-you' ? 'shukrani' : (messageType === 'reminder' ? 'ukumbusho' : 'kadi_mwaliko')),
+          imageUrl: settings.imageUrl || ""
         })
       });
       
@@ -1148,30 +1160,17 @@ Karibu sana!`);
             text: mainText,
             channel: channel,
             scheduleTime: formattedScheduleTime,
-            templateParams: templateParams
+            templateParams: templateParams,
+            templateName: (messageType === 'invitation' && metaTemplateName) 
+              ? metaTemplateName 
+              : (messageType === 'thank-you' ? 'shukrani' : (messageType === 'reminder' ? 'ukumbusho' : 'kadi_mwaliko')),
+            imageUrl: settings.imageUrl || ""
           })
         });
         
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Mwituko batili");
-
-        // 2. Send Link as separate SMS if enabled - DISABLED as per user requested
-        if (false && sendSmsLink) {
-          // Short delay between messages for the same guest
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-          await fetch('/api/send-sms', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              phone: guest.phone,
-              text: `Pata kadi yako hapa: ${appUrl}`,
-              channel: 'sms',
-              scheduleTime: formattedScheduleTime
-            })
-          });
-        }
-
+        
         // Update local processing state and fire onUpdateGuests to parent
         processingGuests = processingGuests.map(g => {
           if (g.id === guest.id) {

@@ -389,18 +389,20 @@ Karibu sana!`);
               phone: guest.phone,
               text: textMsg,
               channel: 'whatsapp',
-              templateParams
+              templateParams,
+              templateName: 'hifadhi_tarehe',
+              imageUrl: selectedFile || ""
             })
           });
 
+          const data = await res.json().catch(() => ({}));
           if (res.ok) {
             showToast(isEn ? `✓ Sent to ${guest.name} via WhatsApp API!` : `✓ Save The Date imetumwa vizuri kwa ${guest.name} kupitia WhatsApp Business API!`, 'success');
             markGuestAsSent(guest.id);
-            setSendLogs(prev => [`[✓ META WHATSAPP] Aliyepokea: ${guest.name} - Ujumbe umetumwa kiotomatiki`, ...prev]);
+            setSendLogs(prev => [`[✓ META WHATSAPP] Aliyepokea: ${guest.name} - ${data.log || 'Ujumbe umetumwa'}`, ...prev]);
           } else {
-            const err = await res.json().catch(() => ({}));
-            showToast(`Imeshindwa kutuma: ${err.error || 'Hitilafu ya Meta API'}`, 'error');
-            setSendLogs(prev => [`[✗ META WHATSAPP] Imefeli kwa ${guest.name}: ${err.error || 'Hitilafu'}`, ...prev]);
+            showToast(`Imeshindwa kutuma: ${data.error || 'Hitilafu ya Meta API'}`, 'error');
+            setSendLogs(prev => [`[✗ META WHATSAPP] Imefeli kwa ${guest.name}: ${data.error || 'Hitilafu'}`, ...prev]);
           }
           return;
         }
@@ -545,16 +547,18 @@ Karibu sana!`);
                   phone: g.phone,
                   text: textMsg,
                   channel: 'whatsapp',
-                  templateParams
+                  templateParams,
+                  templateName: 'hifadhi_tarehe',
+                  imageUrl: selectedFile || ""
                 })
               });
 
+              const data = await res.json().catch(() => ({}));
               if (res.ok) {
                 markGuestAsSent(g.id);
-                setSendLogs(prev => [`[✓ META WHATSAPP] Ujumbe umetumwa kiotomatiki kwa ${g.name} (${g.phone})`, ...prev]);
+                setSendLogs(prev => [`[✓ META WHATSAPP] Ujumbe umetumwa kwa ${g.name} - ${data.log || 'Sawa'}`, ...prev]);
               } else {
-                const err = await res.json().catch(() => ({}));
-                setSendLogs(prev => [`[✗ META WHATSAPP] Imefeli kwa ${g.name}: ${err.error || 'Hitilafu'}`, ...prev]);
+                setSendLogs(prev => [`[✗ META WHATSAPP] Imefeli kwa ${g.name}: ${data.error || 'Hitilafu'}`, ...prev]);
               }
             } else {
               const formatted = formatPhone(g.phone);

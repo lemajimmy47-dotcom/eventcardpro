@@ -1205,7 +1205,9 @@ export default function ContributionManager({
             eventId: event.id,
             phone: g.phone,
             text: text,
-            channel: sendingChannel.toLowerCase() // 'sms' or 'whatsapp'
+            channel: sendingChannel.toLowerCase(), // 'sms' or 'whatsapp'
+            templateName: type === 'Pledge' ? 'kadi_mchango' : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
+            imageUrl: cardTemplate.imageUrl || ""
           })
         });
 
@@ -1830,7 +1832,9 @@ export default function ContributionManager({
             eventId: event.id,
             phone: g.phone,
             text: mainText,
-            channel: channel // Passes 'sms' or 'whatsapp' appropriately to server
+            channel: channel, // Passes 'sms' or 'whatsapp' appropriately to server
+            templateName: type === 'Pledge' ? 'kadi_mchango' : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
+            imageUrl: cardTemplate.imageUrl || ""
           })
         });
 
