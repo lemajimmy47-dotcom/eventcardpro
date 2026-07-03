@@ -164,9 +164,55 @@ function sanitizeMetaTemplateParam(val: any): string {
   return str || " ";
 }
 
+function getParamsForCount(count: number, guestData: any, eventData: any, fallbackText: string, incomingParams?: string[]): any[] {
+  const resolvedParams: string[] = [];
+  
+  const standardValues = [
+    guestData?.name || "Mgeni wetu", // 1. Guest Name
+    eventData?.hostName || "Familia yetu", // 2. Host Name
+    eventData?.name || "Sherehe yetu", // 3. Event Name
+    eventData?.date || "", // 4. Date
+    eventData?.eventHallName || "Ukumbi wa Sherehe", // 5. Venue
+    `${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}` // 6. Time
+  ];
+
+  if (Array.isArray(incomingParams) && incomingParams.length > 0) {
+    for (let i = 0; i < count; i++) {
+      if (i < incomingParams.length) {
+        resolvedParams.push(incomingParams[i]);
+      } else if (i < standardValues.length) {
+        resolvedParams.push(standardValues[i]);
+      } else {
+        resolvedParams.push("");
+      }
+    }
+  } else {
+    if (count === 1) {
+      resolvedParams.push(guestData?.name || "Mgeni wetu");
+    } else if (count === 2) {
+      resolvedParams.push(guestData?.name || "Mgeni wetu");
+      resolvedParams.push(eventData?.name || "Sherehe yetu");
+    } else if (count === 3) {
+      resolvedParams.push(guestData?.name || "Mgeni wetu");
+      resolvedParams.push(eventData?.hostName || "Familia yetu");
+      resolvedParams.push(eventData?.name || "Sherehe yetu");
+    } else {
+      for (let i = 0; i < count; i++) {
+        if (i < standardValues.length) {
+          resolvedParams.push(standardValues[i]);
+        } else {
+          resolvedParams.push("");
+        }
+      }
+    }
+  }
+
+  return resolvedParams.map(val => ({ type: "text", text: sanitizeMetaTemplateParam(val) }));
+}
+
 const metaMediaCache = new Map<string, { mediaId: string; timestamp: number }>();
 
-async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string) {
+async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string, reqEventId?: string) {
   // Standardize/Clean Tanzanian phone numbers to 255XXXXXXXXX format
   const cleanedPhone = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
   let formattedPhone = cleanedPhone;
@@ -197,53 +243,6 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         
         console.log(`[Meta WhatsApp] Dispatching to ${formattedPhone} using template ${templateName}`);
         
-        // Structure parameters for Meta WhatsApp Business body and buttons dynamically
-        const bodyParams: any[] = [];
-        const buttonParams: any[] = [];
-
-        if (Array.isArray(templateParams) && templateParams.length > 0) {
-          const urlIndices: number[] = [];
-          templateParams.forEach((val, idx) => {
-            const str = String(val || "").trim();
-            if (str.startsWith("http://") || str.startsWith("https://")) {
-              urlIndices.push(idx);
-            }
-          });
-
-          // If we have more than 12 parameters and at least one is a URL,
-          // we treat URL(s) as button parameter(s) and other fields as body parameters.
-          if (templateParams.length > 12 && urlIndices.length > 0) {
-            templateParams.forEach((val, idx) => {
-              const strVal = sanitizeMetaTemplateParam(val);
-              if (urlIndices.includes(idx)) {
-                buttonParams.push({
-                  type: "text",
-                  text: strVal
-                });
-              } else {
-                bodyParams.push({
-                  type: "text",
-                  text: strVal
-                });
-              }
-            });
-          } else {
-            // Default: all are body parameters
-            templateParams.forEach((val) => {
-              const strVal = sanitizeMetaTemplateParam(val);
-              bodyParams.push({
-                type: "text",
-                text: strVal
-              });
-            });
-          }
-        } else {
-          bodyParams.push({
-            type: "text",
-            text: sanitizeMetaTemplateParam(text)
-          });
-        }
-
         // Fetch database once to resolve both guest eventId and template settings
         let db: any = null;
         try {
@@ -253,15 +252,92 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         }
 
         // Dynamically resolve eventId to serve the exact image header
-        let eventId = "default";
-        if (guestId && db) {
-          try {
-            const guest = (db.guests || []).find((g: any) => g.id === guestId);
-            if (guest && guest.eventId) {
-              eventId = guest.eventId;
+        let eventId = reqEventId || "default";
+        let guestData: any = null;
+        let eventData: any = null;
+        
+        if (db) {
+          if (guestId) {
+            try {
+              guestData = (db.guests || []).find((g: any) => g.id === guestId);
+              if (!guestData && phone) {
+                const cleanP = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
+                guestData = (db.guests || []).find((g: any) => {
+                  const gp = (g.phone || "").replace(/\s+/g, '').replace(/[+\-]/g, '');
+                  return gp && (gp === cleanP || gp.endsWith(cleanP) || cleanP.endsWith(gp));
+                });
+              }
+              if (guestData && guestData.eventId && !reqEventId) {
+                eventId = guestData.eventId;
+              }
+            } catch (err) {
+              console.error("[Meta WhatsApp] Error finding guest eventId:", err);
             }
-          } catch (err) {
-            console.error("[Meta WhatsApp] Error finding guest eventId:", err);
+          }
+
+          if (eventId !== "default") {
+            eventData = (db.eventsList || []).find((e: any) => e.id === eventId);
+          }
+          if (!eventData && (db.eventsList || []).length > 0) {
+            eventData = db.eventsList[0];
+          }
+        }
+        
+        let bodyParams: any[] = [];
+        let buttonParams: any[] = [];
+
+        // Determine expected parameter count from fuzzy template name matching first to enforce official Meta template structure
+        let expectedCount = 0;
+        const lowerTemplateName = templateName.toLowerCase();
+        if (lowerTemplateName.includes('shukrani') || lowerTemplateName.includes('asante') || lowerTemplateName.includes('thanks') || lowerTemplateName.includes('thank_you') || lowerTemplateName.includes('thankyou')) {
+          expectedCount = 1;
+        } else if (lowerTemplateName.includes('mchango') || lowerTemplateName.includes('pledge') || lowerTemplateName.includes('ombi') || lowerTemplateName.includes('save') || lowerTemplateName.includes('date') || lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho') || lowerTemplateName.includes('hifadhi') || lowerTemplateName.includes('tarehe')) {
+          expectedCount = 3;
+        } else if (lowerTemplateName.includes('mwaliko') || lowerTemplateName.includes('kadi') || lowerTemplateName.includes('wedding') || lowerTemplateName.includes('invite') || lowerTemplateName.includes('sherehe') || lowerTemplateName.includes('invitation')) {
+          expectedCount = 6;
+        }
+
+        if (expectedCount > 0) {
+          console.log(`[Meta WhatsApp] Fuzzy matched template ${templateName} to expected parameter count: ${expectedCount}`);
+          bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams);
+        } else if (Array.isArray(templateParams) && templateParams.length > 0) {
+          // If no fuzzy match but frontend supplied parameters, use frontend count
+          expectedCount = templateParams.length;
+          console.log(`[Meta WhatsApp] Using frontend-provided templateParams count: ${expectedCount}`);
+          bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams);
+        } else {
+          if (templateName === 'kadi_mwaliko' && guestData && eventData) {
+            bodyParams = getParamsForCount(6, guestData, eventData, text, templateParams);
+          } else if (templateName === 'shukrani' && guestData && eventData) {
+            bodyParams = getParamsForCount(1, guestData, eventData, text, templateParams);
+          } else {
+            // Fallback to dynamic params passed from frontend
+            if (Array.isArray(templateParams) && templateParams.length > 0) {
+              const urlIndices: number[] = [];
+              templateParams.forEach((val, idx) => {
+                const str = String(val || "").trim();
+                if (str.startsWith("http://") || str.startsWith("https://")) {
+                  urlIndices.push(idx);
+                }
+              });
+
+              if (templateParams.length > 12 && urlIndices.length > 0) {
+                templateParams.forEach((val, idx) => {
+                  const strVal = sanitizeMetaTemplateParam(val);
+                  if (urlIndices.includes(idx)) {
+                    buttonParams.push({ type: "text", text: strVal });
+                  } else {
+                    bodyParams.push({ type: "text", text: strVal });
+                  }
+                });
+              } else {
+                templateParams.forEach((val) => {
+                  bodyParams.push({ type: "text", text: sanitizeMetaTemplateParam(val) });
+                });
+              }
+            } else {
+              bodyParams.push({ type: "text", text: sanitizeMetaTemplateParam(text) });
+            }
           }
         }
         
@@ -270,8 +346,8 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
 
         // Let's resolve the actual image to upload it directly to Meta to bypass preview server authentication/sandbox limits
         let mediaId: string | null = null;
+        let imageUrl = "";
         try {
-          let imageUrl = "";
           if (db) {
             if (db.templateSettings && db.templateSettings[eventId]) {
               imageUrl = db.templateSettings[eventId].imageUrl || "";
@@ -359,21 +435,23 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         if (templateName !== 'hello_world') {
           payload.template.components = [];
           
-          // Add header parameter for the image
-          const headerParam: any = {
-            type: "image",
-            image: {}
-          };
-          if (mediaId) {
-            headerParam.image.id = mediaId;
-          } else {
-            headerParam.image.link = headerImageUrl;
-          }
+          // Add header parameter for the image only if an imageUrl is configured in the template settings
+          if (imageUrl) {
+            const headerParam: any = {
+              type: "image",
+              image: {}
+            };
+            if (mediaId) {
+              headerParam.image.id = mediaId;
+            } else {
+              headerParam.image.link = headerImageUrl;
+            }
 
-          payload.template.components.push({
-            type: "header",
-            parameters: [headerParam]
-          });
+            payload.template.components.push({
+              type: "header",
+              parameters: [headerParam]
+            });
+          }
 
           if (bodyParams.length > 0) {
             payload.template.components.push({
@@ -392,46 +470,183 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         }
 
         const metaUrl = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
+        let lastError: Error | null = null;
         let response;
-        try {
-          const rawHeaders = {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          };
-          response = await fetch(metaUrl, {
-            method: 'POST',
-            headers: sanitizeHttpHeaders(rawHeaders, settings),
-            body: JSON.stringify(payload)
-          });
-        } catch (err: any) {
-          const errorStr = (err?.message || String(err)).toLowerCase();
-          if (errorStr.includes("bytestring") || errorStr.includes("character at index") || errorStr.includes("greater than 255")) {
-            throw new Error(`Hitilafu katika Mipangilio ya WhatsApp: Token uliyoweka kwenye Mipangilio ya Meta WhatsApp ina alama isiyoruhusiwa (isiyo ya ASCII). Tafadhali thibitisha au uandike upya token yako bila kuweka alama au nyakati (timestamps) zisizo sahihi.`);
+        let respText = "";
+        let attempt = 0;
+        const maxAttempts = 3;
+        let success = false;
+
+        while (attempt < maxAttempts) {
+          attempt++;
+          console.log(`[Meta WhatsApp] Attempt ${attempt}/${maxAttempts} - Payload:`, JSON.stringify(payload));
+          
+          try {
+            const rawHeaders = {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            };
+            response = await fetch(metaUrl, {
+              method: 'POST',
+              headers: sanitizeHttpHeaders(rawHeaders, settings),
+              body: JSON.stringify(payload)
+            });
+            respText = await response.text();
+            console.log(`[Meta WhatsApp] Attempt ${attempt} response:`, respText);
+
+            if (response.ok) {
+              success = true;
+              return respText;
+            }
+
+            // Parse response to determine self-healing path
+            let healAttempted = false;
+            try {
+              const errObj = JSON.parse(respText);
+              const errMsg = errObj.error?.message || "";
+              const errDetails = errObj.error?.error_data?.details || "";
+              const combinedMsg = `${errMsg} ${errDetails}`;
+
+              // Case A: Token expired / Auth Exception
+              if (errObj.error && (errObj.error.code === 190 || errObj.error.code === 131005) && errObj.error.type === "OAuthException") {
+                throw new Error(`Hitilafu ya Meta WhatsApp: Token yako imepitwa na wakati (expired) au haina ruhusa (Access Denied). Tafadhali nenda kwenye "Mipangilio" kisha weka "Meta Access Token" mpya na sahihi.`);
+              }
+              // Case B: Guest number not verified
+              if (errObj.error && (errObj.error.code === 133010 || errObj.error.code === 131030)) {
+                throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
+              }
+              // Case C: Template name / language not found
+              if (errObj.error && errObj.error.code === 132001) {
+                throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
+              }
+
+              // Case D: Header component error (Template does not contain title component or no parameters allowed in header)
+              if (combinedMsg.includes("header") || combinedMsg.includes("Title") || combinedMsg.includes("title") || combinedMsg.includes("does not contain title component") || combinedMsg.includes("no parameters allowed in header") || combinedMsg.includes("Template does not contain header component")) {
+                const headerCompIdx = payload.template.components.findIndex((c: any) => c.type === "header");
+                if (headerCompIdx !== -1) {
+                  payload.template.components.splice(headerCompIdx, 1);
+                  console.log("[Meta WhatsApp Self-Healing] Removed unsupported 'header' component from payload.");
+                  healAttempted = true;
+                }
+              }
+
+              // Case E: Button parameter error
+              if (combinedMsg.includes("button") || combinedMsg.includes("Button") || combinedMsg.includes("buttons") || combinedMsg.includes("Button at index 0")) {
+                const btnCompIdx = payload.template.components.findIndex((c: any) => c.type === "button");
+                if (combinedMsg.includes("requires a parameter")) {
+                  const code = guestData?.code || guestData?.id || guestId || "";
+                  let buttonParamVal = "";
+                  if (Array.isArray(templateParams)) {
+                    for (const p of templateParams) {
+                      const str = String(p || "").trim();
+                      if (str.startsWith("http://") || str.startsWith("https://")) {
+                        if (str.includes("?")) {
+                          buttonParamVal = str.substring(str.indexOf("?"));
+                        } else {
+                          buttonParamVal = str;
+                        }
+                        break;
+                      }
+                    }
+                  }
+                  if (!buttonParamVal && code) {
+                    buttonParamVal = `?invite=${code}&eventId=${eventId || ""}`;
+                  }
+                  if (buttonParamVal) {
+                    const btnParams = [{ type: "text", text: buttonParamVal }];
+                    if (btnCompIdx !== -1) {
+                      payload.template.components[btnCompIdx].parameters = btnParams;
+                    } else {
+                      payload.template.components.push({
+                        type: "button",
+                        index: "0",
+                        sub_type: "url",
+                        parameters: btnParams
+                      });
+                    }
+                    console.log(`[Meta WhatsApp Self-Healing] Supplied missing URL button parameter: "${buttonParamVal}"`);
+                    healAttempted = true;
+                  }
+                } else if (combinedMsg.includes("no parameters allowed") || combinedMsg.includes("does not contain button component")) {
+                  if (btnCompIdx !== -1) {
+                    payload.template.components.splice(btnCompIdx, 1);
+                    console.log("[Meta WhatsApp Self-Healing] Removed unsupported 'button' component from payload.");
+                    healAttempted = true;
+                  }
+                }
+              }
+
+              // Case F: Body parameter mismatch
+              if (errObj.error?.code === 132000 || combinedMsg.includes("Number of parameters does not match") || combinedMsg.includes("number of localizable_params") || combinedMsg.includes("param") || combinedMsg.includes("parameter")) {
+                const countMatch = 
+                  combinedMsg.match(/expected number of params\s*(?:\:\s*)?\(?(\d+)\)?/i) || 
+                  combinedMsg.match(/expected\s+(\d+)\s+params/i) ||
+                  combinedMsg.match(/expected\s*(?:\:\s*)?\(?(\d+)\)?/i) ||
+                  combinedMsg.match(/expected\s+(\d+)/i) ||
+                  combinedMsg.match(/params\s*\(?(\d+)\)?/i);
+                if (countMatch && countMatch[1]) {
+                  const newExpectedCount = parseInt(countMatch[1], 10);
+                  const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams);
+                  const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
+                  if (bodyCompIdx !== -1) {
+                    payload.template.components[bodyCompIdx].parameters = recoveredParams;
+                  } else {
+                    payload.template.components.push({
+                      type: "body",
+                      parameters: recoveredParams
+                    });
+                  }
+                  console.log(`[Meta WhatsApp Self-Healing] Adjusted body parameters to exactly match count: ${newExpectedCount}`);
+                  healAttempted = true;
+                }
+              }
+
+            } catch (e: any) {
+              if (e.message.includes("Hitilafu ya Meta WhatsApp")) {
+                throw e;
+              }
+            }
+
+            if (!healAttempted) {
+              // No recognizable healing possible, break out and show the response
+              break;
+            }
+
+          } catch (err: any) {
+            const errorStr = (err?.message || String(err)).toLowerCase();
+            if (errorStr.includes("bytestring") || errorStr.includes("character at index") || errorStr.includes("greater than 255")) {
+              throw new Error(`Hitilafu katika Mipangilio ya WhatsApp: Token uliyoweka kwenye Mipangilio ya Meta WhatsApp ina alama isiyoruhusiwa (isiyo ya ASCII). Tafadhali thibitisha au uandike upya token yako bila kuweka alama au nyakati (timestamps) zisizo sahihi.`);
+            }
+            if (errorStr.includes("hitilafu ya meta whatsapp")) {
+              throw err;
+            }
+            lastError = err;
           }
-          throw err;
         }
 
-        const respText = await response.text();
-        console.log("[Meta WhatsApp Resp]:", respText);
-        if (!response.ok) {
-          try {
-            const errObj = JSON.parse(respText);
-            if (errObj.error && (errObj.error.code === 190 || errObj.error.code === 131005) && errObj.error.type === "OAuthException") {
-              throw new Error(`Hitilafu ya Meta WhatsApp: Token yako imepitwa na wakati (expired) au haina ruhusa (Access Denied). Tafadhali nenda kwenye "Mipangilio" kisha weka "Meta Access Token" mpya na sahihi.`);
-            }
-            if (errObj.error && (errObj.error.code === 133010 || errObj.error.code === 131030)) {
-              throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
-            }
-            if (errObj.error && errObj.error.code === 132001) {
-              throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
-            }
-          } catch(e: any) {
-            if (e.message.includes("Hitilafu ya Meta WhatsApp")) throw e;
-            // Ignore JSON parse error
-          }
-          throw new Error(`Meta API failed: ${respText}`);
+        if (success) {
+          return respText;
         }
-        return respText;
+
+        try {
+          const errObj = JSON.parse(respText);
+          if (errObj.error && (errObj.error.code === 190 || errObj.error.code === 131005) && errObj.error.type === "OAuthException") {
+            throw new Error(`Hitilafu ya Meta WhatsApp: Token yako imepitwa na wakati (expired) au haina ruhusa (Access Denied). Tafadhali nenda kwenye "Mipangilio" kisha weka "Meta Access Token" mpya na sahihi.`);
+          }
+          if (errObj.error && (errObj.error.code === 133010 || errObj.error.code === 131030)) {
+            throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
+          }
+          if (errObj.error && errObj.error.code === 132001) {
+            throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
+          }
+        } catch(e: any) {
+          if (e.message.includes("Hitilafu ya Meta WhatsApp")) throw e;
+        }
+
+        if (lastError) {
+          throw lastError;
+        }
+        throw new Error(`Meta API failed: ${respText}`);
       }
 
       const finalUrl = settings.whatsappUrl
@@ -1490,7 +1705,7 @@ async function startServer() {
   // API 7: Real Send SMS & WhatsApp dispatcher
   app.post("/api/send-sms", async (req, res) => {
     try {
-      const { guestId, phone, text, channel, scheduleTime, templateParams } = req.body;
+      const { guestId, eventId, phone, text, channel, scheduleTime, templateParams } = req.body;
       if (!phone || !text) {
         return res.status(400).json({ error: "Missing phone number or message text" });
       }
@@ -1502,7 +1717,7 @@ async function startServer() {
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const origin = `${protocol}://${host}`;
 
-      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams, guestId, origin);
+      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams, guestId, origin, eventId);
       
       let batchId = null;
       try {

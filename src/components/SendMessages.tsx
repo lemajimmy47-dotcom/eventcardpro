@@ -798,7 +798,9 @@ Karibu sana!`);
         const rawTemplate = messageType === 'thank-you' 
           ? (language === 'en' ? thankYouTemplateEn : thankYouTemplateSw)
           : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
-        const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://eventcard.co.tz';
+        const currentOrigin = typeof window !== 'undefined' && !window.location.hostname.includes('europe-west2.run.app') && !window.location.hostname.includes('localhost') 
+          ? window.location.origin 
+          : 'https://eventcard.co.tz';
         const appUrl = `${currentOrigin}/?invite=${target.code || target.id}&eventId=${event.id}&lang=${language}`;
         const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
 
@@ -881,6 +883,7 @@ Karibu sana!`);
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           guestId,
+          eventId: event.id,
           phone: target.phone,
           text: mainText,
           channel,
@@ -949,6 +952,7 @@ Karibu sana!`);
 
   const handleSendAll = async () => {
     if (isSendingAll || isBatchSending) return;
+    const channel: string = 'sms';
     
     // Only send to guests that are currently visible/filtered
     if (filteredGuests.length === 0) {
@@ -1045,9 +1049,93 @@ Karibu sana!`);
       setSendLogs(prev => [`[WAIT] Inatuma kwa ${guest.name} (${guest.phone})...`, ...prev]);
 
       try {
-        const mainText = getGuestMessageText(guest, true); // Strip link from main text
-        const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://eventcard.co.tz';
+        const mainText = getGuestMessageText(guest, channel === 'sms');
+        const formattedScheduleTime = isScheduling && scheduleTime ? scheduleTime.replace('T', ' ') + ':00' : undefined;
+        const currentOrigin = typeof window !== 'undefined' && !window.location.hostname.includes('europe-west2.run.app') && !window.location.hostname.includes('localhost') 
+          ? window.location.origin 
+          : 'https://eventcard.co.tz';
         const appUrl = `${currentOrigin}/?invite=${guest.code || guest.id}&eventId=${event.id}&lang=${language}`;
+        
+        // Extract template params dynamically for official Meta WhatsApp template matching
+        let templateParams: string[] | undefined = undefined;
+        if (channel === 'whatsapp') {
+          const rawTemplate = messageType === 'thank-you' 
+            ? (language === 'en' ? thankYouTemplateEn : thankYouTemplateSw)
+            : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
+          const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
+
+          const replacements: { [key: string]: string } = {
+            '{mgeni}': guest.name,
+            '{name}': guest.name,
+            '{{1}}': guest.name,
+            '{1}': guest.name,
+            '{{name}}': guest.name,
+            '{guestName}': guest.name,
+            '{jina_la_mgeni}': guest.name,
+            '(jina_la_mgeni)': guest.name,
+            '{mwenyeji}': event.hostName || "[Mwenyeji]",
+            '{hostName}': event.hostName || "[Mwenyeji]",
+            '{host_name}': event.hostName || "[Mwenyeji]",
+            '{{2}}': event.hostName || "[Mwenyeji]",
+            '{2}': event.hostName || "[Mwenyeji]",
+            '{{host_name}}': event.hostName || "[Mwenyeji]",
+            '{sherehe}': event.name || "[Sherehe]",
+            '{event_name}': event.name || "[Sherehe]",
+            '{eventName}': event.name || "[Sherehe]",
+            '{{3}}': event.name || "[Sherehe]",
+            '{3}': event.name || "[Sherehe]",
+            '{{event_name}}': event.name || "[Sherehe]",
+            '{tarehe}': event.date || "26/11/2026",
+            '{date}': event.date || "26/11/2026",
+            '{eventDate}': event.date || "26/11/2026",
+            '{{4}}': event.date || "26/11/2026",
+            '{4}': event.date || "26/11/2026",
+            '{{date}}': event.date || "26/11/2026",
+            '{muda}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+            '{time}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+            '{eventTime}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+            '{{5}}': event.eventHallName || "[Ukumbi]",
+            '{5}': event.eventHallName || "[Ukumbi]",
+            '{{venue}}': event.eventHallName || "[Ukumbi]",
+            '{ukumbi}': event.eventHallName || "[Ukumbi]",
+            '{venue}': event.eventHallName || "[Ukumbi]",
+            '{eventHall}': event.eventHallName || "[Ukumbi]",
+            '{{6}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+            '{6}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+            '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+            '{vazi}': event.dressCode || "[Vazi]",
+            '{dressCode}': event.dressCode || "[Dress Code]",
+            '{Link}': messageType === 'thank-you' ? "" : appUrl,
+            '{kiungo}': messageType === 'thank-you' ? "" : appUrl,
+            '{inviteUrl}': messageType === 'thank-you' ? "" : appUrl,
+            '{namba_mwaliko}': guest.code || "[Code]",
+            '{card_number}': guest.code || "[Code]",
+            '{inviteCode}': guest.code || "[Code]",
+            '{{7}}': guest.code || "[Code]",
+            '{7}': guest.code || "[Code]",
+            '{{card_number}}': guest.code || "[Code]",
+            '{aina}': guest.cardType || "DOUBLE",
+            '{card_type}': guest.cardType || "DOUBLE",
+            '{{8}}': guest.cardType || "DOUBLE",
+            '{8}': guest.cardType || "DOUBLE",
+            '{{card_type}}': guest.cardType || "DOUBLE",
+            '{mwasiliano}': contacts,
+            '{{9}}': contacts,
+            '{9}': contacts,
+            '{{contacts}}': contacts,
+            '{contact_1_name}': event.contact1Name || "",
+            '{contact_1_phone}': event.contact1 || "",
+            '{contact_2_name}': event.contact2Name || "",
+            '{contact_2_phone}': event.contact2 || ""
+          };
+
+          const regex = /\{\{[0-9]+\}\}|\{\{[a-zA-Z0-9_\-Hh]+\}\}|\{[a-zA-Z0-9_\-Hh]+\}/g;
+          const matches = rawTemplate.match(regex) || [];
+          templateParams = matches.map(match => {
+            const val = replacements[match];
+            return val !== undefined ? val : match;
+          });
+        }
         
         // 1. Send Main Message
         const res = await fetch('/api/send-sms', {
@@ -1055,10 +1143,12 @@ Karibu sana!`);
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             guestId: guest.id,
+            eventId: event.id,
             phone: guest.phone,
             text: mainText,
-            channel: 'sms',
-            scheduleTime: formattedScheduleTime
+            channel: channel,
+            scheduleTime: formattedScheduleTime,
+            templateParams: templateParams
           })
         });
         

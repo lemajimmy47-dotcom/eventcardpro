@@ -60,8 +60,22 @@ Karibu sana!`);
   const [gatewaySettings, setGatewaySettings] = useState({
     provider: 'simulation',
     senderId: 'EVENT',
-    senderIdStatus: 'approved' as 'pending' | 'approved' | 'rejected'
+    senderIdStatus: 'approved' as 'pending' | 'approved' | 'rejected',
+    whatsappUrl: ''
   });
+
+  const isMetaWhatsApp = React.useMemo(() => {
+    if (!gatewaySettings.whatsappUrl) return false;
+    if (gatewaySettings.whatsappUrl.trim().startsWith('{') && gatewaySettings.whatsappUrl.trim().endsWith('}')) {
+      try {
+        const parsed = JSON.parse(gatewaySettings.whatsappUrl);
+        return parsed.provider === 'meta';
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }, [gatewaySettings.whatsappUrl]);
 
   // Custom non-blocking modal (iframe-safe) states and helper functions
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -334,6 +348,63 @@ Karibu sana!`);
       const textMsg = getCompiledMessage(guest, sendChannel === 'sms');
       
       if (sendChannel === 'whatsapp') {
+        if (isMetaWhatsApp) {
+          const proceed = await showConfirm(
+            isEn ? "Send via WhatsApp API" : "Tuma Kupitia WhatsApp API",
+            isEn 
+              ? `Do you want to send Save The Date to ${guest.name} via Meta WhatsApp Cloud API automatically?`
+              : `Je, unataka kumtumia ${guest.name} Save The Date kupitia WhatsApp Business API (Meta) kiotomatiki bila kufungua WhatsApp?`
+          );
+          if (!proceed) return;
+
+          const currentOrigin = typeof window !== 'undefined' && !window.location.hostname.includes('europe-west2.run.app') && !window.location.hostname.includes('localhost') 
+            ? window.location.origin 
+            : 'https://eventcard.co.tz';
+          const guestLink = `${currentOrigin}/?invite=${guest.code || guest.id || 'std'}&std=true&eventId=${eventDetails.id}&lang=${language}`;
+          
+          const replacements: { [key: string]: string } = {
+            '{name}': guest.name.toUpperCase(),
+            '{host}': eventDetails.hostName || 'Familia yetu',
+            '{event_name}': eventDetails.name || 'Sherehe yetu',
+            '{date}': eventDetails.date || '',
+            '{link}': guestLink,
+            '{ukumbi}': eventDetails.eventHallName || "",
+            '{muda}': `${eventDetails.time || ""} ${eventDetails.period || ""}`,
+            '{card_no}': guest.code || guest.id || "[Code]"
+          };
+
+          const regex = /\{[a-zA-Z0-9_\-Hh]+\}/g;
+          const matches = stdTemplate.match(regex) || [];
+          const templateParams = matches.map(match => {
+            const val = replacements[match];
+            return val !== undefined ? val : match;
+          });
+
+          const res = await fetch('/api/send-sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              guestId: guest.id,
+              eventId: eventDetails.id,
+              phone: guest.phone,
+              text: textMsg,
+              channel: 'whatsapp',
+              templateParams
+            })
+          });
+
+          if (res.ok) {
+            showToast(isEn ? `✓ Sent to ${guest.name} via WhatsApp API!` : `✓ Save The Date imetumwa vizuri kwa ${guest.name} kupitia WhatsApp Business API!`, 'success');
+            markGuestAsSent(guest.id);
+            setSendLogs(prev => [`[✓ META WHATSAPP] Aliyepokea: ${guest.name} - Ujumbe umetumwa kiotomatiki`, ...prev]);
+          } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(`Imeshindwa kutuma: ${err.error || 'Hitilafu ya Meta API'}`, 'error');
+            setSendLogs(prev => [`[✗ META WHATSAPP] Imefeli kwa ${guest.name}: ${err.error || 'Hitilafu'}`, ...prev]);
+          }
+          return;
+        }
+
         const formatted = formatPhone(guest.phone);
         const encodedText = encodeURIComponent(textMsg);
         // Try to open safely
@@ -361,6 +432,7 @@ Karibu sana!`);
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           guestId: guest.id,
+          eventId: eventDetails.id,
           phone: guest.phone,
           text: textMsg,
           channel: 'sms'
@@ -440,19 +512,65 @@ Karibu sana!`);
         
         try {
           if (channel === 'whatsapp') {
-            const formatted = formatPhone(g.phone);
-            const encodedText = encodeURIComponent(textMsg);
-            
-            const a = document.createElement('a');
-            a.href = `https://api.whatsapp.com/send?phone=${formatted}&text=${encodedText}`;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            markGuestAsSent(g.id);
-            setSendLogs(prev => [`[✓ WHATSAPP] Aliyepokea: ${g.name} - Dirisha limefunguliwa`, ...prev]);
+            if (isMetaWhatsApp) {
+              const currentOrigin = typeof window !== 'undefined' && !window.location.hostname.includes('europe-west2.run.app') && !window.location.hostname.includes('localhost') 
+                ? window.location.origin 
+                : 'https://eventcard.co.tz';
+              const guestLink = `${currentOrigin}/?invite=${g.code || g.id || 'std'}&std=true&eventId=${eventDetails.id}&lang=${language}`;
+              
+              const replacements: { [key: string]: string } = {
+                '{name}': g.name.toUpperCase(),
+                '{host}': eventDetails.hostName || 'Familia yetu',
+                '{event_name}': eventDetails.name || 'Sherehe yetu',
+                '{date}': eventDetails.date || '',
+                '{link}': guestLink,
+                '{ukumbi}': eventDetails.eventHallName || "",
+                '{muda}': `${eventDetails.time || ""} ${eventDetails.period || ""}`,
+                '{card_no}': g.code || g.id || "[Code]"
+              };
+
+              const regex = /\{[a-zA-Z0-9_\-Hh]+\}/g;
+              const matches = stdTemplate.match(regex) || [];
+              const templateParams = matches.map(match => {
+                const val = replacements[match];
+                return val !== undefined ? val : match;
+              });
+
+              const res = await fetch('/api/send-sms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  guestId: g.id,
+                  eventId: eventDetails.id,
+                  phone: g.phone,
+                  text: textMsg,
+                  channel: 'whatsapp',
+                  templateParams
+                })
+              });
+
+              if (res.ok) {
+                markGuestAsSent(g.id);
+                setSendLogs(prev => [`[✓ META WHATSAPP] Ujumbe umetumwa kiotomatiki kwa ${g.name} (${g.phone})`, ...prev]);
+              } else {
+                const err = await res.json().catch(() => ({}));
+                setSendLogs(prev => [`[✗ META WHATSAPP] Imefeli kwa ${g.name}: ${err.error || 'Hitilafu'}`, ...prev]);
+              }
+            } else {
+              const formatted = formatPhone(g.phone);
+              const encodedText = encodeURIComponent(textMsg);
+              
+              const a = document.createElement('a');
+              a.href = `https://api.whatsapp.com/send?phone=${formatted}&text=${encodedText}`;
+              a.target = '_blank';
+              a.rel = 'noopener noreferrer';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              
+              markGuestAsSent(g.id);
+              setSendLogs(prev => [`[✓ WHATSAPP] Aliyepokea: ${g.name} - Dirisha limefunguliwa`, ...prev]);
+            }
           } else {
             // SMS Gateway real call
             const res = await fetch('/api/send-sms', {
@@ -460,6 +578,7 @@ Karibu sana!`);
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 guestId: g.id,
+                eventId: eventDetails.id,
                 phone: g.phone,
                 text: textMsg,
                 channel: 'sms'

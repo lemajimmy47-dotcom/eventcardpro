@@ -38,6 +38,8 @@ export interface EventDetails {
     invitationTemplateEn?: string;
     contributionSw?: string;
     contributionEn?: string;
+    generalThanksSw?: string;
+    generalThanksEn?: string;
   } | null;
 
   paymentMethods?: {

@@ -1202,6 +1202,7 @@ export default function ContributionManager({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             guestId: g.id,
+            eventId: event.id,
             phone: g.phone,
             text: text,
             channel: sendingChannel.toLowerCase() // 'sms' or 'whatsapp'
@@ -1826,6 +1827,7 @@ export default function ContributionManager({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             guestId: g.id,
+            eventId: event.id,
             phone: g.phone,
             text: mainText,
             channel: channel // Passes 'sms' or 'whatsapp' appropriately to server
