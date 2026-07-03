@@ -25,8 +25,13 @@ export default function SMSGatewayConfig() {
   const [whatsappUrlInput, setWhatsappUrlInput] = useState('');
   const [whatsappMetaToken, setWhatsappMetaToken] = useState('');
   const [whatsappMetaPhoneId, setWhatsappMetaPhoneId] = useState('');
+  const [whatsappMetaWabaId, setWhatsappMetaWabaId] = useState('');
   const [whatsappMetaTemplateName, setWhatsappMetaTemplateName] = useState('kadi_mwaliko');
   const [whatsappMetaLang, setWhatsappMetaLang] = useState('sw');
+  const [testPhone, setTestPhone] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
+  const [isTriggeringMeta, setIsTriggeringMeta] = useState(false);
+  const [metaTriggerLogs, setMetaTriggerLogs] = useState<string[]>([]);
 
   const fetchBalance = () => {
     fetch('/api/sms-balance')
@@ -55,6 +60,7 @@ export default function SMSGatewayConfig() {
                 setWhatsappProvider('meta');
                 setWhatsappMetaToken(parsed.meta_token || '');
                 setWhatsappMetaPhoneId(parsed.phone_number_id || '');
+                setWhatsappMetaWabaId(parsed.waba_id || '');
                 setWhatsappMetaTemplateName(parsed.template_name || 'kadi_mwaliko');
                 setWhatsappMetaLang(parsed.template_lang || 'sw');
                 setWhatsappUrlInput('');
@@ -112,6 +118,7 @@ export default function SMSGatewayConfig() {
         provider: 'meta',
         meta_token: whatsappMetaToken.trim(),
         phone_number_id: whatsappMetaPhoneId.trim(),
+        waba_id: whatsappMetaWabaId.trim(),
         template_name: whatsappMetaTemplateName.trim(),
         template_lang: whatsappMetaLang.trim()
       });
@@ -141,6 +148,81 @@ export default function SMSGatewayConfig() {
       })
       .finally(() => {
         setIsSaving(false);
+      });
+  };
+
+  const handleTestMeta = () => {
+    if (!testPhone.trim()) {
+      alert(isEn ? "Please enter a test phone number" : "Tafadhali weka namba ya simu ya majaribio");
+      return;
+    }
+    setIsTesting(true);
+    fetch('/api/send-sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: testPhone.trim(),
+        text: "hello_world",
+        channel: 'whatsapp',
+        templateParams: []
+      })
+    })
+      .then(res => {
+        if (!res.ok) {
+          return res.json().then(err => { throw new Error(err.error || "Failed"); });
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data.success) {
+          alert(isEn 
+            ? "Success! Test message sent. Please check your phone. If you used your Meta sandbox number, the API call should now show 1/1 (Completed) on Meta Developer Portal!" 
+            : "Hongera! Ujumbe wa majaribio umetumwa vizuri. Tafadhali kagua simu yako. Kama umetumia namba yako ya sandbox, jaribio la API sasa litaonyesha 1/1 (Completed) kule Meta Developer Portal!");
+        } else {
+          alert((isEn ? "Failed: " : "Imeshindikana: ") + (data.log || "Unknown error"));
+        }
+      })
+      .catch(err => {
+        alert((isEn ? "Error: " : "Hitilafu: ") + err.message);
+      })
+      .finally(() => {
+        setIsTesting(false);
+      });
+  };
+
+  const handleTriggerMetaReviewCalls = () => {
+    if (!whatsappMetaToken.trim()) {
+      alert(isEn ? "Please enter your Meta Access Token first" : "Tafadhali weka Meta Access Token kwanza");
+      return;
+    }
+    setIsTriggeringMeta(true);
+    setMetaTriggerLogs([isEn ? "Starting Meta API review test queries..." : "Inaanza kufanya majaribio ya API za Meta..."]);
+
+    fetch('/api/meta-trigger-review-calls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meta_token: whatsappMetaToken.trim(),
+        waba_id: whatsappMetaWabaId.trim(),
+        phone_number_id: whatsappMetaPhoneId.trim()
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.logs) {
+          setMetaTriggerLogs(data.logs);
+          alert(isEn 
+            ? "Meta API review calls completed! Please refresh your Meta App Review Testing Dashboard in a few seconds." 
+            : "Majaribio ya API za Meta yamekamilika kwa ufanisi! Tafadhali weka upya (refresh) ukurasa wako wa Meta Developer katika sekunde chache.");
+        } else {
+          setMetaTriggerLogs([`❌ Error: ${data.error || "Unknown error"}`]);
+        }
+      })
+      .catch(err => {
+        setMetaTriggerLogs([`❌ Hitilafu: ${err.message}`]);
+      })
+      .finally(() => {
+        setIsTriggeringMeta(false);
       });
   };
 
@@ -242,6 +324,16 @@ export default function SMSGatewayConfig() {
                 onChange={(e) => setGatewaySettings({ ...gatewaySettings, apiKey: e.target.value.trim() })}
                 className="w-full bg-[#050b18] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono transition-all"
               />
+              {gatewaySettings.apiKey.startsWith('EAA') && (
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10.5px] text-amber-300 leading-normal space-y-1 mt-1">
+                  <p className="font-bold">⚠️ {isEn ? "Possible Configuration Mistake!" : "Uwezekano wa Hitilafu ya Usanidi!"}</p>
+                  <p>
+                    {isEn 
+                      ? "This API Key starts with 'EAA...', which looks like a Meta WhatsApp Access Token. This field is for your SMS Gateway API Key (e.g., Meseji.co.tz API Key). Please enter your correct SMS token here, and place your Meta WhatsApp Token in the WhatsApp section below." 
+                      : "Ufunguo huu unaanza na 'EAA...', unaofanana na Token ya Meta WhatsApp. Sehemu hii ni kwa ajili ya Ufunguo wa Mtoa Huduma wa SMS za Kawaida (kama Meseji.co.tz). Tafadhali weka ufunguo wako sahihi wa SMS hapa, kisha weka token yako ya Meta WhatsApp chini kwenye sehemu ya WhatsApp."}
+                  </p>
+                </div>
+              )}
             </div>
 
             {(gatewaySettings.provider === 'beem' || gatewaySettings.provider === 'nextsms') && (
@@ -390,6 +482,19 @@ export default function SMSGatewayConfig() {
                     />
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 block">
+                      {isEn ? "WhatsApp Business Account ID (WABA ID)" : "ID ya Akaunti ya WhatsApp Business (WABA ID)"}
+                    </label>
+                    <input 
+                      type="text" 
+                      placeholder="E.g. 1045062067950525"
+                      value={whatsappMetaWabaId}
+                      onChange={(e) => setWhatsappMetaWabaId(e.target.value)}
+                      className="w-full bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <label className="text-[10px] font-semibold text-slate-400 block">
@@ -417,11 +522,93 @@ export default function SMSGatewayConfig() {
                     </div>
                   </div>
 
-                  <div className="text-[9px] text-slate-400 leading-normal p-2 bg-black/40 rounded-lg mt-1">
-                    <p className="font-bold text-slate-300 pb-0.5">⚠️ Muhimu kwa Meta WABA:</p>
+                   <div className="text-[9px] text-slate-400 leading-normal p-2 bg-black/40 rounded-lg mt-1">
+                    <p className="font-bold text-slate-300 pb-0.5">⚠️ {isEn ? "Important for Meta WABA:" : "Muhimu kwa Meta WABA:"}</p>
                     {isEn 
                       ? "Ensure your Meta message template parameters ({{1}}, {{2}}, {{3}}...) are aligned in the correct sequence. Our software maps variables in order of their appearance."
                       : "Hakikisha template yako ya Meta ina vigezo kwa mpangilio sahihi. Mfumo wetu utatuma taarifa (Kama Jina la Mgeni, Ukumbi, n.k) kwa ulingano sahihi."}
+                  </div>
+
+                  <div className="border-t border-white/10 pt-3 mt-3 space-y-2">
+                    <span className="text-[10px] font-bold text-emerald-400 block uppercase">
+                      🚀 {isEn ? "TEST META CONNECTION" : "JARIBU MUUNGANISHO WA META"}
+                    </span>
+                    <p className="text-[9px] text-slate-500 leading-relaxed">
+                      {isEn 
+                        ? "Save your settings first! Then enter your recipient phone number (with country code, e.g., 255712345678) to send a test template message." 
+                        : "Hifadhi kwanza mipangilio hapo chini! Kisha weka namba ya simu ya mpokeaji (ikiwa na msimbo wa nchi, mfano 255712345678) ili kutuma ujumbe wa jaribio."}
+                    </p>
+                    <div className="flex gap-2">
+                      <input 
+                        type="tel"
+                        placeholder="E.g. 255712345678"
+                        value={testPhone}
+                        onChange={(e) => setTestPhone(e.target.value.trim())}
+                        className="flex-1 bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleTestMeta}
+                        disabled={isTesting}
+                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all whitespace-nowrap"
+                      >
+                        {isTesting ? (isEn ? "Sending..." : "Inatuma...") : (isEn ? "Send Test" : "Tuma Jaribio")}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/10 pt-3 mt-3 space-y-2 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+                    <span className="text-[10px] font-bold text-emerald-400 block uppercase">
+                      🔗 {isEn ? "CONFIGURE META WEBHOOK" : "USANIDI WA WEBHOOK YA META"}
+                    </span>
+                    <p className="text-[9px] text-slate-300 leading-relaxed">
+                      {isEn 
+                        ? "Paste these values into Step 2 (Production setup -> Configure Webhooks) on your Meta Developer Portal to receive real-time delivery reports ('Delivered', 'Read') and automatically process RSVPs when guests reply on WhatsApp!" 
+                        : "Nakili maelezo haya hapa chini na uyabandike kwenye Meta Developer Portal (Step 2. Production setup -> Configure Webhooks) ili kupokea taarifa za uwasilishaji kwa wakati halisi ('Imefika', 'Imesomwa') na kupokea majibu ya RSVP moja kwa moja mgeni akijibu kupitia WhatsApp!"}
+                    </p>
+                    <div className="space-y-1.5 font-mono text-[9px] bg-black/40 p-2 rounded-lg text-slate-300 border border-white/5 select-all">
+                      <div>
+                        <span className="text-emerald-400 font-bold block uppercase text-[8px]">{isEn ? "Callback URL:" : "Callback URL:"}</span>
+                        <span className="break-all">{window.location.origin}/api/webhook/whatsapp</span>
+                      </div>
+                      <div className="pt-1.5 border-t border-white/5">
+                        <span className="text-emerald-400 font-bold block uppercase text-[8px]">{isEn ? "Verify Token:" : "Verify Token:"}</span>
+                        <span>EventCardWhatsAppWebhookVerifyToken2026</span>
+                      </div>
+                    </div>
+                    <p className="text-[8px] text-amber-400">
+                      ⚠️ {isEn 
+                        ? "After verification, under 'Webhook fields', make sure to subscribe to 'messages' to receive automated guest responses." 
+                        : "Baada ya thibitisho (verification), hakikisha unajiandikisha (subscribe) kwenye sehemu ya 'messages' ili kupokea majibu ya wageni wako."}
+                    </p>
+                  </div>
+
+                  <div className="border-t border-white/10 pt-3 mt-3 space-y-2 bg-blue-500/10 -mx-3 -mb-3 p-3 rounded-b-xl">
+                    <span className="text-[10px] font-bold text-amber-400 block uppercase">
+                      ⚡ {isEn ? "COMPLETE META API TESTING (0 OF 1 FIX)" : "KUKAMILISHA MAJARIBIO YA META (0 OF 1 FIX)"}
+                    </span>
+                    <p className="text-[9px] text-slate-300 leading-relaxed">
+                      {isEn 
+                        ? "Are you stuck with '0 of 1 API call(s) required' for business_management or whatsapp_business_management? Click below to execute the precise programmatic calls Meta requires to mark them as Completed instantly!" 
+                        : "Je, umekwama kwenye '0 of 1 API call(s) required' kwa ajili ya business_management au whatsapp_business_management kule Meta? Bonyeza hapa chini kufanya maombi hayo hapa hapa bila kuhitaji Graph API Explorer!"}
+                    </p>
+                    
+                    <button
+                      type="button"
+                      onClick={handleTriggerMetaReviewCalls}
+                      disabled={isTriggeringMeta}
+                      className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all"
+                    >
+                      {isTriggeringMeta ? (isEn ? "Triggering..." : "Inatuma...") : (isEn ? "Trigger Meta API Review Calls" : "Anza Majaribio Sasa")}
+                    </button>
+
+                    {metaTriggerLogs.length > 0 && (
+                      <div className="bg-black/60 rounded-lg p-2 font-mono text-[8px] text-emerald-400 max-h-32 overflow-y-auto space-y-1 mt-1 border border-emerald-500/20">
+                        {metaTriggerLogs.map((log, idx) => (
+                          <div key={idx} className="leading-tight">{log}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

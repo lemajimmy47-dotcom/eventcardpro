@@ -152,6 +152,20 @@ function sanitizeHttpHeaders(headers: any, settings: any): Record<string, string
   return cleanHeaders;
 }
 
+function sanitizeMetaTemplateParam(val: any): string {
+  if (val === undefined || val === null) return " ";
+  let str = String(val);
+  // Replace newlines, carriage returns, and tabs with spaces
+  str = str.replace(/[\r\n\t]+/g, ' ');
+  // Replace multiple spaces (2 or more spaces) with a single space to avoid the "more than 4 consecutive spaces" rule
+  str = str.replace(/ {2,}/g, ' ');
+  // Trim the result
+  str = str.trim();
+  return str || " ";
+}
+
+const metaMediaCache = new Map<string, { mediaId: string; timestamp: number }>();
+
 async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string) {
   // Standardize/Clean Tanzanian phone numbers to 255XXXXXXXXX format
   const cleanedPhone = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
@@ -200,41 +214,48 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           // we treat URL(s) as button parameter(s) and other fields as body parameters.
           if (templateParams.length > 12 && urlIndices.length > 0) {
             templateParams.forEach((val, idx) => {
-              const strVal = (val === undefined || val === null) ? "" : String(val).trim();
+              const strVal = sanitizeMetaTemplateParam(val);
               if (urlIndices.includes(idx)) {
                 buttonParams.push({
                   type: "text",
-                  text: strVal || " "
+                  text: strVal
                 });
               } else {
                 bodyParams.push({
                   type: "text",
-                  text: strVal || " "
+                  text: strVal
                 });
               }
             });
           } else {
             // Default: all are body parameters
             templateParams.forEach((val) => {
-              const strVal = (val === undefined || val === null) ? "" : String(val).trim();
+              const strVal = sanitizeMetaTemplateParam(val);
               bodyParams.push({
                 type: "text",
-                text: strVal || " "
+                text: strVal
               });
             });
           }
         } else {
           bodyParams.push({
             type: "text",
-            text: (text && text.trim()) ? text.trim() : " "
+            text: sanitizeMetaTemplateParam(text)
           });
+        }
+
+        // Fetch database once to resolve both guest eventId and template settings
+        let db: any = null;
+        try {
+          db = await readDBLatest();
+        } catch (dbErr) {
+          console.error("[Meta WhatsApp] Error reading DB for template/guest:", dbErr);
         }
 
         // Dynamically resolve eventId to serve the exact image header
         let eventId = "default";
-        if (guestId) {
+        if (guestId && db) {
           try {
-            const db = await readDBLatest();
             const guest = (db.guests || []).find((g: any) => g.id === guestId);
             if (guest && guest.eventId) {
               eventId = guest.eventId;
@@ -246,6 +267,80 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         
         const baseOrigin = appOrigin || "https://ais-pre-szslj3otpfjyj7doxrjz75-384135275183.europe-west2.run.app";
         const headerImageUrl = `${baseOrigin}/api/template-image/${eventId}`;
+
+        // Let's resolve the actual image to upload it directly to Meta to bypass preview server authentication/sandbox limits
+        let mediaId: string | null = null;
+        try {
+          let imageUrl = "";
+          if (db) {
+            if (db.templateSettings && db.templateSettings[eventId]) {
+              imageUrl = db.templateSettings[eventId].imageUrl || "";
+            }
+            if (!imageUrl && db.templateSettings && db.templateSettings['default']) {
+              imageUrl = db.templateSettings['default'].imageUrl || "";
+            }
+          }
+
+          if (imageUrl) {
+            const cacheKey = `${eventId}_${imageUrl.substring(0, 100)}_${imageUrl.length}`;
+            const cached = metaMediaCache.get(cacheKey);
+            const now = Date.now();
+
+            if (cached && (now - cached.timestamp < 24 * 60 * 60 * 1000)) {
+              mediaId = cached.mediaId;
+              console.log(`[Meta WhatsApp] Using CACHED Media ID for key: ${cacheKey}. Media ID: ${mediaId}`);
+            } else {
+              let blob: any = null;
+              let filename = "image.png";
+              let contentType = "image/png";
+
+              if (imageUrl.startsWith("data:")) {
+                const matches = imageUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+                if (matches && matches.length === 3) {
+                  contentType = matches[1];
+                  const buffer = Buffer.from(matches[2], 'base64');
+                  blob = new Blob([buffer], { type: contentType });
+                  filename = contentType === "image/jpeg" ? "image.jpg" : "image.png";
+                }
+              } else if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+                const imgRes = await fetch(imageUrl);
+                if (imgRes.ok) {
+                  blob = await imgRes.blob();
+                  contentType = blob.type || "image/png";
+                  filename = contentType === "image/jpeg" ? "image.jpg" : "image.png";
+                }
+              }
+
+              if (blob) {
+                console.log(`[Meta WhatsApp] Uploading media to Meta API... File size: ${blob.size} bytes, type: ${contentType}`);
+                const mediaUrl = `https://graph.facebook.com/v20.0/${phoneId}/media`;
+                const formData = new FormData();
+                formData.append("messaging_product", "whatsapp");
+                formData.append("file", blob, filename);
+                formData.append("type", contentType);
+
+                const mediaResponse = await fetch(mediaUrl, {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${token}`
+                  },
+                  body: formData
+                });
+
+                const mediaResult: any = await mediaResponse.json();
+                if (mediaResponse.ok && mediaResult.id) {
+                  mediaId = mediaResult.id;
+                  metaMediaCache.set(cacheKey, { mediaId, timestamp: now });
+                  console.log(`[Meta WhatsApp] Successfully uploaded and CACHED media. Media ID: ${mediaId}`);
+                } else {
+                  console.error(`[Meta WhatsApp] Media upload failed, falling back to link:`, mediaResult);
+                }
+              }
+            }
+          }
+        } catch (mediaErr) {
+          console.error("[Meta WhatsApp] Error uploading media to Meta, falling back to link:", mediaErr);
+        }
 
         const payload: any = {
           messaging_product: "whatsapp",
@@ -265,16 +360,19 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           payload.template.components = [];
           
           // Add header parameter for the image
+          const headerParam: any = {
+            type: "image",
+            image: {}
+          };
+          if (mediaId) {
+            headerParam.image.id = mediaId;
+          } else {
+            headerParam.image.link = headerImageUrl;
+          }
+
           payload.template.components.push({
             type: "header",
-            parameters: [
-              {
-                type: "image",
-                image: {
-                  link: headerImageUrl
-                }
-              }
-            ]
+            parameters: [headerParam]
           });
 
           if (bodyParams.length > 0) {
@@ -321,8 +419,8 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
             if (errObj.error && (errObj.error.code === 190 || errObj.error.code === 131005) && errObj.error.type === "OAuthException") {
               throw new Error(`Hitilafu ya Meta WhatsApp: Token yako imepitwa na wakati (expired) au haina ruhusa (Access Denied). Tafadhali nenda kwenye "Mipangilio" kisha weka "Meta Access Token" mpya na sahihi.`);
             }
-            if (errObj.error && errObj.error.code === 133010) {
-              throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa. Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya 'To' (Recipient List) kule Meta for Developers.`);
+            if (errObj.error && (errObj.error.code === 133010 || errObj.error.code === 131030)) {
+              throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
             }
             if (errObj.error && errObj.error.code === 132001) {
               throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
@@ -538,6 +636,10 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
       responseContent.toLowerCase().includes("token hash");
 
     if (isAuthError) {
+      const apiKey = (settings.apiKey || "").trim();
+      if (apiKey.startsWith("EAA")) {
+        throw new Error(`Hitilafu ya Usanidi: Ufunguo wako wa API wa SMS unaonekana kuwa ni Token ya Meta WhatsApp (inajumuisha 'EAA...'). Kwa ajili ya kutuma SMS za kawaida, unahitaji kuweka Token ya Meseji.co.tz kwenye Mipangilio ya SMS, sio Token ya Meta WhatsApp. Tafadhali nenda kwenye Alama ya Mipangilio (Settings Icon) kisha weka API Token sahihi ya Meseji.co.tz.`);
+      }
       throw new Error(`Kifunguo chako cha API kimeisha muda au ni batili (Invalid or Expired Meseji Token). Tafadhali ingia kwenye akaunti yako ya Meseji.co.tz, thibitisha salio la SMS (Credits), na utengeneze token mpya chini ya API Settings, kisha uisasishe kwenye ukurasa wa 'Kutuma Mialiko/Ujumbe' > 'Alama ya Mipangilio' (Settings). [Jibu la Gateway: ${responseContent}]`);
     }
 
@@ -1059,6 +1161,251 @@ async function startServer() {
       res.json({ success: true, message: "Gateway settings saved successfully" });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // API 6B: Direct Meta testing/review call trigger proxy to resolve 0/1 API calls required
+  app.post("/api/meta-trigger-review-calls", async (req, res) => {
+    try {
+      const { meta_token, waba_id, phone_number_id } = req.body;
+      if (!meta_token) {
+        return res.status(400).json({ error: "Meta Access Token is required." });
+      }
+
+      const logs: string[] = [];
+
+      // 1. business_management -> GET /v20.0/me/businesses
+      try {
+        logs.push(`[1/5] Inatuma ombi la 'business_management' (GET /v20.0/me/businesses)...`);
+        const bizResp = await fetch("https://graph.facebook.com/v20.0/me/businesses", {
+          headers: { "Authorization": `Bearer ${meta_token}` }
+        });
+        const bizData: any = await bizResp.json();
+        if (bizResp.ok) {
+          const count = bizData.data?.length || 0;
+          logs.push(`✅ Imefanikiwa! Imepata akaunti za biashara (Businesses) ${count}.`);
+        } else {
+          logs.push(`⚠️ Onyo la 'business_management': ${bizData.error?.message || JSON.stringify(bizData)}`);
+        }
+      } catch (err: any) {
+        logs.push(`❌ Hitilafu ya 'business_management': ${err.message}`);
+      }
+
+      // 2. whatsapp_business_management -> GET /v20.0/{waba_id}
+      if (waba_id) {
+        try {
+          logs.push(`[2/5] Inatuma ombi la 'whatsapp_business_management' (GET /v20.0/${waba_id})...`);
+          const wabaResp = await fetch(`https://graph.facebook.com/v20.0/${waba_id}`, {
+            headers: { "Authorization": `Bearer ${meta_token}` }
+          });
+          const wabaData: any = await wabaResp.json();
+          if (wabaResp.ok) {
+            logs.push(`✅ Imefanikiwa! Akaunti ya WhatsApp WABA (${wabaData.name || waba_id}) imepatikana.`);
+          } else {
+            logs.push(`⚠️ Onyo la WABA GET: ${wabaData.error?.message || JSON.stringify(wabaData)}`);
+          }
+        } catch (err: any) {
+          logs.push(`❌ Hitilafu ya WABA GET: ${err.message}`);
+        }
+
+        // 3. whatsapp_business_management -> GET /v20.0/{waba_id}/phone_numbers
+        try {
+          logs.push(`[3/5] Inatuma ombi la 'whatsapp_business_management' (GET /v20.0/${waba_id}/phone_numbers)...`);
+          const phoneResp = await fetch(`https://graph.facebook.com/v20.0/${waba_id}/phone_numbers`, {
+            headers: { "Authorization": `Bearer ${meta_token}` }
+          });
+          const phoneData: any = await phoneResp.json();
+          if (phoneResp.ok) {
+            const count = phoneData.data?.length || 0;
+            logs.push(`✅ Imefanikiwa! Imepata namba za simu ${count} zilizounganishwa na WABA.`);
+          } else {
+            logs.push(`⚠️ Onyo la WABA Phone Numbers: ${phoneData.error?.message || JSON.stringify(phoneData)}`);
+          }
+        } catch (err: any) {
+          logs.push(`❌ Hitilafu ya WABA Phone Numbers: ${err.message}`);
+        }
+
+        // 4. whatsapp_business_management -> GET /v20.0/{waba_id}/message_templates
+        try {
+          logs.push(`[4/5] Inatuma ombi la 'whatsapp_business_management' (GET /v20.0/${waba_id}/message_templates)...`);
+          const templateResp = await fetch(`https://graph.facebook.com/v20.0/${waba_id}/message_templates`, {
+            headers: { "Authorization": `Bearer ${meta_token}` }
+          });
+          const templateData: any = await templateResp.json();
+          if (templateResp.ok) {
+            const count = templateData.data?.length || 0;
+            logs.push(`✅ Imefanikiwa! Imepata templates ${count} za WhatsApp.`);
+          } else {
+            logs.push(`⚠️ Onyo la WABA Templates: ${templateData.error?.message || JSON.stringify(templateData)}`);
+          }
+        } catch (err: any) {
+          logs.push(`❌ Hitilafu ya WABA Templates: ${err.message}`);
+        }
+      } else {
+        logs.push(`ℹ️ Tunasasisha: WhatsApp Business Account ID haikuwekwa, hivyo hatua ya [2], [3] na [4] imerukwa.`);
+      }
+
+      // 5. whatsapp_business_management -> GET /v20.0/{phone_number_id}
+      if (phone_number_id) {
+        try {
+          logs.push(`[5/5] Inatuma ombi la 'whatsapp_business_management' (GET /v20.0/${phone_number_id})...`);
+          const phResp = await fetch(`https://graph.facebook.com/v20.0/${phone_number_id}`, {
+            headers: { "Authorization": `Bearer ${meta_token}` }
+          });
+          const phData: any = await phResp.json();
+          if (phResp.ok) {
+            logs.push(`✅ Imefanikiwa! Maelezo ya namba ya simu ya Meta (${phData.display_phone_number || phone_number_id}) yamepatikana.`);
+          } else {
+            logs.push(`⚠️ Onyo la Phone ID GET: ${phData.error?.message || JSON.stringify(phData)}`);
+          }
+        } catch (err: any) {
+          logs.push(`❌ Hitilafu ya Phone ID GET: ${err.message}`);
+        }
+      } else {
+        logs.push(`ℹ️ Tunasasisha: Phone Number ID haikuwekwa, hivyo hatua ya [5] imerukwa.`);
+      }
+
+      res.json({ success: true, logs });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // API 6C: WhatsApp Webhook verification (GET)
+  app.get("/api/webhook/whatsapp", (req, res) => {
+    let mode = "";
+    let token = "";
+    let challenge = "";
+
+    console.log("[WhatsApp Webhook Verification] Raw Query:", JSON.stringify(req.query));
+
+    for (const key of Object.keys(req.query)) {
+      const val = req.query[key];
+      if (typeof val === 'string' || typeof val === 'number') {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey.includes("mode")) mode = String(val);
+        if (lowerKey.includes("verify_token") || lowerKey.includes("token")) token = String(val);
+        if (lowerKey.includes("challenge")) challenge = String(val);
+      } else if (typeof val === 'object' && val !== null) {
+        const obj = val as Record<string, any>;
+        for (const subKey of Object.keys(obj)) {
+          const subVal = obj[subKey];
+          const lowerSubKey = subKey.toLowerCase();
+          if (lowerSubKey.includes("mode")) mode = String(subVal);
+          if (lowerSubKey.includes("verify_token") || lowerSubKey.includes("token")) token = String(subVal);
+          if (lowerSubKey.includes("challenge")) challenge = String(subVal);
+        }
+      }
+    }
+
+    console.log(`[WhatsApp Webhook Verification] Parsed -> Mode: "${mode}", Token: "${token}", Challenge: "${challenge}"`);
+
+    if (mode === "subscribe" && token === "EventCardWhatsAppWebhookVerifyToken2026") {
+      console.log("[WhatsApp Webhook] Verification successful!");
+      res.status(200).set("Content-Type", "text/plain").send(challenge);
+      return;
+    }
+    
+    res.status(403).send("Forbidden");
+  });
+
+  // API 6D: WhatsApp Webhook message & status receiver (POST)
+  app.post("/api/webhook/whatsapp", async (req, res) => {
+    const body = req.body;
+    console.log("[WhatsApp Webhook] Event Received:", JSON.stringify(body, null, 2));
+
+    // Acknowledge Meta immediately
+    res.sendStatus(200);
+
+    try {
+      if (body.object === 'whatsapp_business_account' && body.entry) {
+        const db = await readDBLatest();
+        let databaseUpdated = false;
+
+        for (const entry of body.entry) {
+          if (entry.changes) {
+            for (const change of entry.changes) {
+              if (change.value) {
+                const value = change.value;
+
+                // Handle status updates
+                if (value.statuses) {
+                  for (const status of value.statuses) {
+                    const recipientPhone = status.recipient_id; // e.g. 255712345678 or "712345678"
+                    const messageStatus = status.status; // "sent", "delivered", "read", "failed"
+                    console.log(`[WhatsApp Webhook] Message ID ${status.id} to ${recipientPhone} is now: ${messageStatus}`);
+
+                    // Clean the phone to find corresponding guest
+                    const cleanPhone = recipientPhone.replace(/\D/g, '');
+                    
+                    // Match with guests in database and update real-time delivery report
+                    if (db.guests) {
+                      for (const guest of db.guests) {
+                        const guestCleanPhone = (guest.phone || "").replace(/\D/g, '');
+                        if (guestCleanPhone && (guestCleanPhone === cleanPhone || cleanPhone.endsWith(guestCleanPhone) || guestCleanPhone.endsWith(cleanPhone))) {
+                          let displayStatus = guest.whatsappStatus;
+                          if (messageStatus === 'read') {
+                            displayStatus = "Imesomwa";
+                          } else if (messageStatus === 'delivered') {
+                            displayStatus = "Imefika";
+                          } else if (messageStatus === 'sent') {
+                            displayStatus = "Imetumia";
+                          } else if (messageStatus === 'failed') {
+                            displayStatus = "Imeshindikana";
+                          }
+
+                          if (guest.whatsappStatus !== displayStatus) {
+                            guest.whatsappStatus = displayStatus;
+                            databaseUpdated = true;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // Handle incoming RSVP keyword replies
+                if (value.messages) {
+                  for (const message of value.messages) {
+                    const fromPhone = message.from ? message.from.replace(/\D/g, '') : '';
+                    const textBody = message.text?.body ? message.text.body.trim().toLowerCase() : '';
+                    console.log(`[WhatsApp Webhook] Text reply from ${fromPhone}: "${textBody}"`);
+
+                    if (fromPhone && textBody && db.guests) {
+                      for (const guest of db.guests) {
+                        const guestCleanPhone = (guest.phone || "").replace(/\D/g, '');
+                        if (guestCleanPhone && (guestCleanPhone === fromPhone || fromPhone.endsWith(guestCleanPhone) || guestCleanPhone.endsWith(fromPhone))) {
+                          // Try to automatically process RSVPs
+                          let newRsvp: 'Ndio' | 'Hapana' | 'Sina uhakika' | null = null;
+                          if (textBody.includes('ndio') || textBody.includes('yes') || textBody.includes('nitakuja') || textBody.includes('1')) {
+                            newRsvp = 'Ndio';
+                          } else if (textBody.includes('hapana') || textBody.includes('no') || textBody.includes('sitakuja') || textBody.includes('2')) {
+                            newRsvp = 'Hapana';
+                          } else if (textBody.includes('sina uhakika') || textBody.includes('maybe') || textBody.includes('3')) {
+                            newRsvp = 'Sina uhakika';
+                          }
+
+                          if (newRsvp && guest.rsvpStatus !== newRsvp) {
+                            guest.rsvpStatus = newRsvp;
+                            databaseUpdated = true;
+                            console.log(`[WhatsApp Webhook] Auto-updated RSVP for ${guest.name} to ${newRsvp} via text reply!`);
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (databaseUpdated) {
+          await writeDB(db);
+        }
+      }
+    } catch (err) {
+      console.error("[WhatsApp Webhook] Error parsing webhook payload:", err);
     }
   });
 
