@@ -202,6 +202,34 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
       resolvedParams.push(guestData?.name || "Mgeni wetu");
       resolvedParams.push(eventData?.hostName || "Familia yetu");
       resolvedParams.push(eventData?.name || "Sherehe yetu");
+    } else if (count === 4) {
+      resolvedParams.push(guestData?.name || "Mgeni wetu");
+      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(eventData?.date || "");
+      resolvedParams.push(eventData?.eventHallName || "Ukumbi wa Sherehe");
+    } else if (count === 5) {
+      resolvedParams.push(guestData?.name || "Mgeni wetu");
+      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(eventData?.date || "");
+      resolvedParams.push(eventData?.eventHallName || "Ukumbi wa Sherehe");
+      resolvedParams.push(`${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`);
+    } else if (count === 6) {
+      // Contribution Invite mapping (Removed link)
+      resolvedParams.push(guestData?.name || "Mgeni wetu");
+      resolvedParams.push(eventData?.hostName || "Familia yetu");
+      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(eventData?.date || "Tarehe");
+      resolvedParams.push(eventData?.deadlineDate || "Tarehe ya Mwisho");
+      resolvedParams.push(eventData?.paymentMethods || "Namba za Michango");
+    } else if (count === 7) {
+      // Contribution Reminder mapping (Removed link)
+      resolvedParams.push(guestData?.name || "Mgeni wetu");
+      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(String(guestData?.pledgeAmount || 0));
+      resolvedParams.push(String(guestData?.paidAmount || 0));
+      resolvedParams.push(String((guestData?.pledgeAmount || 0) - (guestData?.paidAmount || 0)));
+      resolvedParams.push(eventData?.deadlineDate || "Tarehe ya Mwisho");
+      resolvedParams.push(eventData?.paymentMethods || "Namba za Michango");
     } else {
       for (let i = 0; i < count; i++) {
         if (i < standardValues.length) {
@@ -245,9 +273,13 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         const token = (metaConfig.meta_token || "").trim();
         const phoneId = (metaConfig.phone_number_id || "").trim();
         let templateName = (reqTemplateName || metaConfig.template_name || "").trim();
-        const templateLang = (metaConfig.template_lang || "sw").trim();
+        let templateLang = (metaConfig.template_lang || "sw").trim();
         
-        console.log(`[Meta WhatsApp] Dispatching to ${formattedPhone} using template ${templateName}`);
+        // Normalize common language names to ISO codes expected by Meta
+        if (templateLang.toLowerCase() === 'swahili') templateLang = 'sw';
+        if (templateLang.toLowerCase() === 'english') templateLang = 'en';
+        
+        console.log(`[Meta WhatsApp] Dispatching to ${formattedPhone} using template ${templateName} in ${templateLang}`);
         
         // Fetch database once to resolve both guest eventId and template settings
         let db: any = null;
@@ -510,7 +542,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         let response;
         let respText = "";
         let attempt = 0;
-        const maxAttempts = 3;
+        const maxAttempts = 10;
         let success = false;
 
         while (attempt < maxAttempts) {
@@ -562,19 +594,16 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                 const defaultTemplate = (metaConfig.template_name || "").trim();
                 const defaultLang = (metaConfig.template_lang || "sw").trim();
 
-                // Strategy 1: Try language fallback first if we haven't tried the other common one yet
-                if (payload.template.language.code === 'sw' && !combinedMsg.includes("tried_en")) {
-                  console.log(`[Meta WhatsApp Self-Healing] Template "${templateName}" not found in 'sw'. Attempting fallback to 'en'...`);
-                  payload.template.language.code = 'en';
-                  // Use a marker in logs/state if needed, but for now we just try it
-                  healAttempted = true;
-                } else if (payload.template.language.code === 'en' && !combinedMsg.includes("tried_sw")) {
-                  console.log(`[Meta WhatsApp Self-Healing] Template "${templateName}" not found in 'en'. Attempting fallback to 'sw'...`);
-                  payload.template.language.code = 'sw';
+                // Strategy 1: Try language fallback first on the first failure
+                if (attempt === 1) {
+                  const currentLang = payload.template.language.code;
+                  const otherLang = currentLang === 'sw' ? 'en' : 'sw';
+                  console.log(`[Meta WhatsApp Self-Healing] Template "${templateName}" not found in '${currentLang}'. Attempting fallback to '${otherLang}'...`);
+                  payload.template.language.code = otherLang;
                   healAttempted = true;
                 } 
-                // Strategy 2: Try falling back to the configured default template name
-                else if (templateName !== defaultTemplate && defaultTemplate) {
+                // Strategy 2: Try falling back to the configured default template name on second failure
+                else if (attempt === 2 && templateName !== defaultTemplate && defaultTemplate) {
                   console.log(`[Meta WhatsApp Self-Healing] Custom template "${templateName}" not found. Falling back to configured default: "${defaultTemplate}" in language "${defaultLang}"`);
                   templateName = defaultTemplate;
                   payload.template.name = templateName;
@@ -605,56 +634,76 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                   }
                   healAttempted = true;
                 } else {
-                  // Final fallback: try 'mwaliko_wa_sherehe' or 'kadi_mwaliko' if we haven't tried them yet
-                  const genericFallbacks = ['mwaliko_wa_sherehe', 'kadi_mwaliko'];
+                  // Strategy 3: Try generic fallbacks based on message type
+                  let genericFallbacks = [];
+                  const lowerText = (text || "").toLowerCase();
+                  if (lowerText.includes("shukrani") || lowerText.includes("asante") || lowerText.includes("thanks")) {
+                    genericFallbacks = ['asante_kushiriki', 'shukrani', 'shukrani_mchango'];
+                  } else if (lowerText.includes("ukumbusho") || lowerText.includes("reminder") || lowerText.includes("hifadhi") || lowerText.includes("tarehe")) {
+                    genericFallbacks = ['ukumbusho', 'reminder', 'hifadhi_tarehe', 'mwaliko_wa_sherehe'];
+                  } else {
+                    genericFallbacks = ['mwaliko_wa_sherehe', 'kadi_mwaliko', 'mwaliko'];
+                  }
+
                   for (const fallback of genericFallbacks) {
                     if (templateName !== fallback) {
                       console.log(`[Meta WhatsApp Self-Healing] Exhausted options. Trying generic fallback: "${fallback}"...`);
                       templateName = fallback;
                       payload.template.name = templateName;
-                      payload.template.language.code = "sw"; // Try Swahili first for generic
+                      payload.template.language.code = "sw";
                       
-                      // Enforce 12 params for these known invitation fallbacks
-                      const recoveredParams = getParamsForCount(12, guestData, eventData, text, templateParams);
-                      const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
-                      if (bodyCompIdx !== -1) {
-                        payload.template.components[bodyCompIdx].parameters = recoveredParams;
-                      } else {
-                        payload.template.components.push({
+                      let countToTry = 12;
+                      const lowerFallback = fallback.toLowerCase();
+                      if (lowerFallback === 'asante_kushiriki') countToTry = 2;
+                      if (lowerFallback === 'shukrani') countToTry = 2;
+                      if (lowerFallback === 'ukumbusho' || lowerFallback === 'reminder') countToTry = 3;
+                      if (lowerFallback === 'hifadhi_tarehe') countToTry = 3;
+                      
+                      const recoveredParams = getParamsForCount(countToTry, guestData, eventData, text, templateParams);
+                      
+                      // For generic fallbacks, structure is often just the body. Clear others to avoid header/button errors
+                      payload.template.components = [
+                        {
                           type: "body",
                           parameters: recoveredParams
-                        });
-                      }
+                        }
+                      ];
                       
                       healAttempted = true;
                       break;
                     }
                   }
-                  
-                  if (!healAttempted) {
-                    throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika Meta dashboard yako. Tafadhali hakikisha jina na lugha ya template vinalingana na vile vilivyoko kule Meta.`);
-                  }
+                }
+                
+                if (!healAttempted) {
+                  const detail = errObj.error.error_data?.details || errObj.error.message || "";
+                  throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${detail}) halipatikani katika Meta dashboard yako. Tafadhali hakikisha jina na lugha ya template vinalingana na vile vilivyoko kule Meta Developers.`);
                 }
               }
 
               if (!healAttempted) {
-                const lowerCombined = combinedMsg.toLowerCase();
+                const lowerCombined = (combinedMsg || "").toLowerCase();
                 // Case D: Header component error (Template does not contain title component or no parameters allowed in header)
                 const isHeaderError = (errObj.error?.code === 132018 && (lowerCombined.includes("header") || lowerCombined.includes("title"))) || 
-                                     combinedMsg.includes("header") || 
-                                     combinedMsg.includes("Title") || 
-                                     combinedMsg.includes("title") || 
-                                     combinedMsg.includes("does not contain title component") || 
-                                     combinedMsg.includes("no parameters allowed in header") || 
-                                     combinedMsg.includes("Template does not contain header component") || 
-                                     combinedMsg.includes("not contain title component") || 
-                                     combinedMsg.includes("not contain header component");
+                                     lowerCombined.includes("header") || 
+                                     lowerCombined.includes("title") || 
+                                     lowerCombined.includes("does not contain title component") || 
+                                     lowerCombined.includes("no parameters allowed in header") || 
+                                     lowerCombined.includes("template does not contain header component") || 
+                                     lowerCombined.includes("not contain title component") || 
+                                     lowerCombined.includes("not contain header component");
 
                 if (isHeaderError) {
                   const headerCompIdx = payload.template.components.findIndex((c: any) => c.type === "header");
                   if (headerCompIdx !== -1) {
                     payload.template.components.splice(headerCompIdx, 1);
                     console.log("[Meta WhatsApp Self-Healing] Removed unsupported 'header' component from payload.");
+                    healAttempted = true;
+                  } else {
+                    // Meta is complaining about a header but we don't have one in our payload components
+                    // Try to clear ALL components except body as a last resort
+                    payload.template.components = payload.template.components.filter((c: any) => c.type === "body");
+                    console.log(`[Meta WhatsApp Self-Healing] Cleared non-body components due to header error (Attempt ${attempt})`);
                     healAttempted = true;
                   }
                 }
@@ -750,21 +799,50 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                     combinedMsg.match(/expected\s+(\d+)\s+params/i) ||
                     combinedMsg.match(/expected\s*(?:\:\s*)?\(?(\d+)\)?/i) ||
                     combinedMsg.match(/expected\s+(\d+)/i) ||
-                    combinedMsg.match(/params\s*\(?(\d+)\)?/i);
-                  if (countMatch && countMatch[1]) {
-                    const newExpectedCount = parseInt(countMatch[1], 10);
+                    combinedMsg.match(/expected number of params\s+(\d+)/i) ||
+                    combinedMsg.match(/number of localizable_params\s*\(\d+\)\s*does\s*not\s*match\s*the\s*expected\s*number\s*of\s*params\s*\((\d+)\)/i) ||
+                    combinedMsg.match(/localizable_params\s*\(\d+\)\s*does\s*not\s*match.*?expected.*?\((\d+)\)/i) ||
+                    combinedMsg.match(/match\s+the\s+expected\s+number\s+of\s+params\s*\((\d+)\)/i);
+                  
+                if (countMatch) {
+                    const newExpectedCount = parseInt(countMatch[2] || countMatch[1], 10);
                     const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams);
-                    const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
-                    if (bodyCompIdx !== -1) {
-                      payload.template.components[bodyCompIdx].parameters = recoveredParams;
-                    } else {
-                      payload.template.components.push({
+                    
+                    // If we have a mismatch error, it's often best to strip non-body components 
+                    // if it's not the first attempt, as they often cause cascading failures
+                    if (attempt > 3) {
+                      payload.template.components = [{
                         type: "body",
                         parameters: recoveredParams
-                      });
+                      }];
+                      console.log(`[Meta WhatsApp Self-Healing] Stripped non-body components and adjusted body params to ${newExpectedCount} (Attempt ${attempt})`);
+                    } else {
+                      const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
+                      if (bodyCompIdx !== -1) {
+                        payload.template.components[bodyCompIdx].parameters = recoveredParams;
+                      } else {
+                        payload.template.components.push({
+                          type: "body",
+                          parameters: recoveredParams
+                        });
+                      }
+                      console.log(`[Meta WhatsApp Self-Healing] Adjusted body parameters to exactly match count: ${newExpectedCount} (Attempt ${attempt})`);
                     }
-                    console.log(`[Meta WhatsApp Self-Healing] Adjusted body parameters to exactly match count: ${newExpectedCount}`);
                     healAttempted = true;
+                  } else {
+                    // If we can't find a count but we have a mismatch, try to adjust to what we have or what it asks
+                    // If detail says "does not match the expected number of params (3)"
+                    const altMatch = combinedMsg.match(/\((\d+)\)/);
+                    if (altMatch && altMatch[1]) {
+                       const count = parseInt(altMatch[1], 10);
+                       const recoveredParams = getParamsForCount(count, guestData, eventData, text, templateParams);
+                       const bodyIdx = payload.template.components.findIndex((c: any) => c.type === "body");
+                       if (bodyIdx !== -1) {
+                         payload.template.components[bodyIdx].parameters = recoveredParams;
+                         console.log(`[Meta WhatsApp Self-Healing] Last resort count adjustment to ${count}`);
+                         healAttempted = true;
+                       }
+                    }
                   }
                 }
               }
@@ -793,6 +871,14 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         }
 
         if (success) {
+          try {
+            const data = JSON.parse(respText);
+            if (data.messaging_product === "whatsapp" && data.messages && data.messages[0]) {
+               const metaId = data.messages[0].id;
+               data.log = `Meta ID: ${metaId}. ✓ Meta imepokea ujumbe. (KAMA UJUMBE HAUJAFIKA: Hakikisha mpokeaji amethibitisha namba yako kule Meta Sandbox au umeruhusu namba za Tanzania kule Meta!)`;
+               return JSON.stringify(data);
+            }
+          } catch(e) {}
           return respText;
         }
 
@@ -1138,6 +1224,36 @@ async function startServer() {
     } catch (e: any) {
       res.status(500).json({ status: "unhealthy", error: e.message });
     }
+  });
+
+  // WhatsApp Webhook verification (GET) - Moved early for reliability
+  app.get("/api/webhook/whatsapp", (req, res) => {
+    // Meta sends dot-separated query params like hub.mode, hub.verify_token, hub.challenge
+    const query = req.query as Record<string, any>;
+    const hub = query.hub as Record<string, any> | undefined;
+    
+    const mode = String(query["hub.mode"] || (hub ? hub.mode : "")).trim();
+    const token = String(query["hub.verify_token"] || (hub ? hub.verify_token : "")).trim();
+    const challenge = String(query["hub.challenge"] || (hub ? hub.challenge : "")).trim();
+
+    console.log(`[WhatsApp Webhook Verification] Attempt -> Mode: "${mode}", Token: "${token}", Challenge: "${challenge}"`);
+
+    // Health check for browser (if no params)
+    if (!mode && !token && !challenge) {
+      return res.status(200).send("WhatsApp Webhook Endpoint is Ready. Use this URL in Meta Dashboard.");
+    }
+
+    const VALID_TOKENS = ["KadiVerify2024", "EventCardWhatsAppWebhookVerifyToken2026"];
+
+    if (mode === "subscribe" && VALID_TOKENS.includes(token)) {
+      console.log("[WhatsApp Webhook] Verification successful!");
+      // Must return exactly the challenge value as plain text
+      res.setHeader("Content-Type", "text/plain");
+      return res.status(200).send(challenge);
+    }
+    
+    console.error(`[WhatsApp Webhook] Verification failed. Received Token: "${token}", Expected one of: ${VALID_TOKENS.join(", ")}`);
+    return res.status(403).send("Forbidden");
   });
 
   // API 1: Fetch overall state
@@ -1700,44 +1816,6 @@ async function startServer() {
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
-  });
-
-  // API 6C: WhatsApp Webhook verification (GET)
-  app.get("/api/webhook/whatsapp", (req, res) => {
-    let mode = "";
-    let token = "";
-    let challenge = "";
-
-    console.log("[WhatsApp Webhook Verification] Raw Query:", JSON.stringify(req.query));
-
-    for (const key of Object.keys(req.query)) {
-      const val = req.query[key];
-      if (typeof val === 'string' || typeof val === 'number') {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey.includes("mode")) mode = String(val);
-        if (lowerKey.includes("verify_token") || lowerKey.includes("token")) token = String(val);
-        if (lowerKey.includes("challenge")) challenge = String(val);
-      } else if (typeof val === 'object' && val !== null) {
-        const obj = val as Record<string, any>;
-        for (const subKey of Object.keys(obj)) {
-          const subVal = obj[subKey];
-          const lowerSubKey = subKey.toLowerCase();
-          if (lowerSubKey.includes("mode")) mode = String(subVal);
-          if (lowerSubKey.includes("verify_token") || lowerSubKey.includes("token")) token = String(subVal);
-          if (lowerSubKey.includes("challenge")) challenge = String(subVal);
-        }
-      }
-    }
-
-    console.log(`[WhatsApp Webhook Verification] Parsed -> Mode: "${mode}", Token: "${token}", Challenge: "${challenge}"`);
-
-    if (mode === "subscribe" && token === "EventCardWhatsAppWebhookVerifyToken2026") {
-      console.log("[WhatsApp Webhook] Verification successful!");
-      res.status(200).set("Content-Type", "text/plain").send(challenge);
-      return;
-    }
-    
-    res.status(403).send("Forbidden");
   });
 
   // API 6D: WhatsApp Webhook message & status receiver (POST)

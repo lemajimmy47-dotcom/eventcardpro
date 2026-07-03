@@ -219,7 +219,7 @@ export default function ContributionManager({
   // We prioritize event.smsTemplates (persisted in database), then safeLocalStorage (for client-side fallback), then default strings.
   const [tplPledge1En, setTplPledge1En] = useState<string>(() => {
     let saved = event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`);
-    const newDefault = `Hello {name},\nThe family of {host_name} requests your loving contribution to help make {event_name} a success on {date}.\nYour contribution is very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}\n\nContribution Details:\n{namba_za_malipo}\n\n{kiungo}\n\nThank you and God bless you!`;
+    const newDefault = `Hello {name},\n\nThe family of {host_name} warmly invites you to support our upcoming {event_name} scheduled for {date}.\n\nYour contribution is deeply appreciated and will play a vital role in making this celebration a success. We kindly request you to submit your pledge or contribution by {tarehe_ya_mwisho}.\n\nContribution Details:\n{namba_za_malipo}\n\nThank you for your love and support!`;
     if (saved && saved.includes('Tigo Pesa')) return saved; // Support people who modified the previous hardcoded one
     if (saved) {
       if (!/\{tarehe_ya_mwisho\}/i.test(saved)) {
@@ -247,7 +247,7 @@ export default function ContributionManager({
   });
   const [tplPledge1Sw, setTplPledge1Sw] = useState<string>(() => {
     let saved = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
-    const newDefault = `Habari {name},\nFamilia ya {host_name} inakuomba ushirikiane nasi kwa mchango wako wa upendo kufanikisha {event_name} itakayofanyika tarehe {date}.\nMchango wako, ni wa thamani sana kwetu na utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:\n{namba_za_malipo}\n\n{kiungo}\n\nAhsante na Mungu akubariki!`;
+    const newDefault = `Habari {name},\n\nFamilia ya {host_name} inakusalimu kwa unyenyekevu. Tunakuomba ushirikiane nasi kwa mchango wako wa upendo ili kufanikisha tukio letu la {event_name} litakalofanyika tarehe {date}.\n\nMchango wako ni wa thamani kubwa kwetu na utasaidia sana katika maandalizi ya jambo hili. Tunaomba uwasilishe mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nNamba za Michango:\n{namba_za_malipo}\n\nAhsante sana kwa upendo wako na Mungu akubariki!`;
     if (saved && saved.includes('Tigo Pesa')) return saved;
     if (saved) {
       if (!/\{tarehe_ya_mwisho\}/i.test(saved)) {
@@ -271,8 +271,8 @@ export default function ContributionManager({
   const [tplPledge2En, setTplPledge2En] = useState<string>(() => event.smsTemplates?.pledge2En || safeLocalStorage.getItem(`kadi_tpl_pledge2_en_${event.id}`) || `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nThank you deeply.`);
   const [tplPledge2Sw, setTplPledge2Sw] = useState<string>(() => event.smsTemplates?.pledge2Sw || safeLocalStorage.getItem(`kadi_tpl_pledge2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nAsante muno.`);
 
-  const [tplRem1En, setTplRem1En] = useState<string>(() => event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Hello {Mgeni},\n\nFriendly reminder regarding your contribution pledge for "{Tukio}".\n\nPledged: TZS {Ahadi}\n- Paid: TZS {Paid}\n- Balance Due: TZS {Balance}\n\nWishing you all the best, thank you!`);
-  const [tplRem1Sw, setTplRem1Sw] = useState<string>(() => event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Habari {Mgeni},\n\nKumbusho la kirafiki kuhusu mchango wako wa {Tukio}.\n\nAhadi: TZS {Ahadi}\n- Uliyolipa: TZS {Paid}\n- Salio lako: TZS {Balance}\n\nTunakutakia heri, Asante!`);
+  const [tplRem1En, setTplRem1En] = useState<string>(() => event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a friendly reminder regarding your contribution pledge for "{Tukio}".\n\nYour contribution status:\n- Pledged: TZS {Ahadi}\n- Already Paid: TZS {Paid}\n- Outstanding Balance: TZS {Balance}\n\nPlease complete your contribution by {tarehe_ya_mwisho}.\n\nYou can send your contribution via:\n{payment_methods}\n\nThank you for your generous support and God bless you.`);
+  const [tplRem1Sw, setTplRem1Sw] = useState<string>(() => event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n- Ahadi: TZS {Ahadi}\n- Tayari Umelipa: TZS {Paid}\n- Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`);
 
   const [tplRem2En, setTplRem2En] = useState<string>(() => event.smsTemplates?.rem2En || safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
   const [tplRem2Sw, setTplRem2Sw] = useState<string>(() => event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
@@ -318,7 +318,7 @@ export default function ContributionManager({
 
   // Sync state values when event.id or event.smsTemplates changes to handle transitions without unmounting context
   useEffect(() => {
-    const defaultEn1 = `Hello {name},\nThe family of {host_name} requests your loving contribution to help make {event_name} a success on {date}.\nYour contribution is very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}\n\nContribution Details:\n{namba_za_malipo}\n\n{kiungo}\n\nThank you and God bless you!`;
+    const defaultEn1 = `Hello {name},\n\nThe family of {host_name} warmly invites you to support our upcoming {event_name} scheduled for {date}.\n\nYour contribution is deeply appreciated and will play a vital role in making this celebration a success. We kindly request you to submit your pledge or contribution by {tarehe_ya_mwisho}.\n\nContribution Details:\n{namba_za_malipo}\n\nThank you for your love and support!`;
     let savedEn1 = event.smsTemplates?.pledge1En || safeLocalStorage.getItem(`kadi_tpl_pledge1_en_${event.id}`);
     if (!savedEn1 || savedEn1.includes('{Mgeni}') || savedEn1.includes('{Tukio}')) {
       setTplPledge1En(defaultEn1);
@@ -346,7 +346,7 @@ export default function ContributionManager({
     }
     
     let savedSw1 = event.smsTemplates?.pledge1Sw || safeLocalStorage.getItem(`kadi_tpl_pledge1_sw_${event.id}`);
-    const defaultSw1 = `Habari {name},\nFamilia ya {host_name} inakuomba ushirikiane nasi kwa mchango wako wa upendo kufanikisha {event_name} itakayofanyika tarehe {date}.\nMchango wako, ni wa thamani sana kwetu na utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:\n{namba_za_malipo}\n\n{kiungo}\n\nAhsante na Mungu akubariki!`;
+    const defaultSw1 = `Habari {name},\n\nFamilia ya {host_name} inakusalimu kwa unyenyekevu. Tunakuomba ushirikiane nasi kwa mchango wako wa upendo ili kufanikisha tukio letu la {event_name} litakalofanyika tarehe {date}.\n\nMchango wako ni wa thamani kubwa kwetu na utasaidiana sana katika maandalizi ya jambo hili. Tunaomba uwasilishe mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nNamba za Michango:\n{namba_za_malipo}\n\nAhsante sana kwa upendo wako na Mungu akubariki!`;
     if (!savedSw1 || savedSw1.includes('{Mgeni}') || savedSw1.includes('{Tukio}') || savedSw1.includes('kutumbukiza') || savedSw1.includes('bofya kitufe')) {
       setTplPledge1Sw(defaultSw1);
     } else {
@@ -369,8 +369,8 @@ export default function ContributionManager({
     setTplPledge2En(event.smsTemplates?.pledge2En || safeLocalStorage.getItem(`kadi_tpl_pledge2_en_${event.id}`) || `Dear {Mgeni},\n\nWe would be honored by your support in planning our upcoming event "{Tukio}".\n\nThank you deeply.`);
     setTplPledge2Sw(event.smsTemplates?.pledge2Sw || safeLocalStorage.getItem(`kadi_tpl_pledge2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nAsante muno.`);
 
-    setTplRem1En(event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Hello {Mgeni},\n\nFriendly reminder regarding your contribution pledge for "{Tukio}".\n\nPledged: TZS {Ahadi}\n- Paid: TZS {Paid}\n- Balance Due: TZS {Balance}\n\nWishing you all the best, thank you!`);
-    setTplRem1Sw(event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Habari {Mgeni},\n\nKumbusho la kirafiki kuhusu mchango wako wa {Tukio}.\n\nAhadi: TZS {Ahadi}\n- Uliyolipa: TZS {Paid}\n- Salio lako: TZS {Balance}\n\nTunakutakia heri, Asante!`);
+    setTplRem1En(event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a friendly reminder regarding your contribution pledge for "{Tukio}".\n\nYour contribution status:\n- Pledged: TZS {Ahadi}\n- Already Paid: TZS {Paid}\n- Outstanding Balance: TZS {Balance}\n\nPlease complete your contribution by {tarehe_ya_mwisho}.\n\nYou can send your contribution via:\n{payment_methods}\n\nThank you for your generous support and God bless you.`);
+    setTplRem1Sw(event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n- Ahadi: TZS {Ahadi}\n- Tayari Umelipa: TZS {Paid}\n- Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`);
 
     setTplRem2En(event.smsTemplates?.rem2En || safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
     setTplRem2Sw(event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
@@ -1010,7 +1010,7 @@ export default function ContributionManager({
     let processedTemplate = templateStr;
 
     // Robust protection: If the template is missing {namba_za_malipo} / {payment_methods}, auto-inject it!
-    if (templateType === 'Pledge') {
+    if (templateType === 'Pledge' || templateType === 'Reminder') {
       if (!/\{namba_za_malipo\}/i.test(processedTemplate) && !/\{payment_methods\}/i.test(processedTemplate)) {
         if (processedTemplate.includes("Namba za Michango:")) {
           processedTemplate = processedTemplate.replace("Namba za Michango:", "Namba za Michango:\n{namba_za_malipo}");
@@ -1026,7 +1026,8 @@ export default function ContributionManager({
         const matchKeywords = [
           "utafanikisha jambo hili.",
           "utafanikisha jambo hili,",
-          "utafanikisha jambo hili"
+          "utafanikisha jambo hili",
+          "Asante!"
         ];
         let injected = false;
         for (const kw of matchKeywords) {
@@ -1358,8 +1359,8 @@ export default function ContributionManager({
       if (messageTemplateIndex === 0) {
         setCustomPledgeTpl1(
           isEn 
-            ? `Hello {name},\nThe family of {host_name} requests your loving contribution to help make {event_name} a success on {date}.\nYour contribution is very valuable to us and will make this event a success.\nThe deadline to send your contribution is {tarehe_ya_mwisho}\n\nContribution Details:\n{namba_za_malipo}\n\n{kiungo}\n\nThank you and God bless you!`
-            : `Habari {name},\nFamilia ya {host_name} inakuomba ushirikiane nasi kwa mchango wako wa upendo kufanikisha {event_name} itakayofanyika tarehe {date}.\nMchango wako, ni wa thamani sana kwetu na utafanikisha jambo hili.\nMwisho wa kutuma mchango wako ni tarehe {tarehe_ya_mwisho}\n\nNamba za Michango:\n{namba_za_malipo}\n\n{kiungo}\n\nAhsante na Mungu akubariki!`
+            ? `Hello {name},\n\nThe family of {host_name} warmly invites you to support our upcoming {event_name} scheduled for {date}.\n\nYour contribution is deeply appreciated and will play a vital role in making this celebration a success. We kindly request you to submit your pledge or contribution by {tarehe_ya_mwisho}.\n\nContribution Details:\n{namba_za_malipo}\n\nThank you for your love and support!`
+            : `Habari {name},\n\nFamilia ya {host_name} inakusalimu kwa unyenyekevu. Tunakuomba ushirikiane nasi kwa mchango wako wa upendo ili kufanikisha tukio letu la {event_name} litakalofanyika tarehe {date}.\n\nMchango wako ni wa thamani kubwa kwetu na utasaidia sana katika maandalizi ya jambo hili. Tunaomba uwasilishe mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nNamba za Michango:\n{namba_za_malipo}\n\nAhsante sana kwa upendo wako na Mungu akubariki!`
         );
       } else {
         setCustomPledgeTpl2(
@@ -1372,8 +1373,8 @@ export default function ContributionManager({
       if (messageTemplateIndex === 0) {
         setCustomReminderTpl1(
           isEn
-            ? `Hello {Mgeni},\n\nFriendly reminder regarding your contribution pledge for "{Tukio}".\n\nPledged: TZS {Ahadi}\n- Paid: TZS {Paid}\n- Balance Due: TZS {Balance}\n\nWishing you all the best, thank you!`
-            : `Habari {Mgeni},\n\nKumbusho la kirafiki kuhusu mchango wako wa {Tukio}.\n\nAhadi: TZS {Ahadi}\n- Uliyolipa: TZS {Paid}\n- Salio lako: TZS {Balance}\n\nTunakutakia heri, Asante!`
+            ? `Dear {Mgeni},\n\nThis is a friendly reminder regarding your contribution pledge for "{Tukio}".\n\nYour contribution status:\n- Pledged: TZS {Ahadi}\n- Already Paid: TZS {Paid}\n- Outstanding Balance: TZS {Balance}\n\nPlease complete your contribution by {tarehe_ya_mwisho}.\n\nYou can send your contribution via:\n{payment_methods}\n\nThank you for your generous support and God bless you.`
+            : `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n- Ahadi: TZS {Ahadi}\n- Tayari Umelipa: TZS {Paid}\n- Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`
         );
       } else {
         setCustomReminderTpl2(

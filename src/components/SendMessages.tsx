@@ -897,9 +897,7 @@ Karibu sana!`);
           channel,
           scheduleTime: formattedScheduleTime,
           templateParams,
-          templateName: (messageType === 'invitation' && metaTemplateName) 
-            ? metaTemplateName 
-            : (messageType === 'thank-you' ? 'shukrani' : (messageType === 'reminder' ? 'ukumbusho' : 'kadi_mwaliko')),
+          templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
           imageUrl: settings.imageUrl || ""
         })
       });
@@ -1161,9 +1159,7 @@ Karibu sana!`);
             channel: channel,
             scheduleTime: formattedScheduleTime,
             templateParams: templateParams,
-            templateName: (messageType === 'invitation' && metaTemplateName) 
-              ? metaTemplateName 
-              : (messageType === 'thank-you' ? 'shukrani' : (messageType === 'reminder' ? 'ukumbusho' : 'kadi_mwaliko')),
+            templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
             imageUrl: settings.imageUrl || ""
           })
         });

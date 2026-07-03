@@ -62,7 +62,10 @@ export default function SMSGatewayConfig() {
                 setWhatsappMetaPhoneId(parsed.phone_number_id || '');
                 setWhatsappMetaWabaId(parsed.waba_id || '');
                 setWhatsappMetaTemplateName(parsed.template_name || 'kadi_mwaliko');
-                setWhatsappMetaLang(parsed.template_lang || 'sw');
+                let lang = parsed.template_lang || 'sw';
+                if (lang.toLowerCase() === 'swahili') lang = 'sw';
+                if (lang.toLowerCase() === 'english') lang = 'en';
+                setWhatsappMetaLang(lang);
                 setWhatsappUrlInput('');
               } else {
                 setWhatsappProvider('custom_webhook');
@@ -114,13 +117,17 @@ export default function SMSGatewayConfig() {
     // Serialize WhatsApp settings before dispatching to backend
     let finalWhatsappUrl = '';
     if (whatsappProvider === 'meta') {
+      let lang = whatsappMetaLang.trim().toLowerCase();
+      if (lang === 'swahili') lang = 'sw';
+      if (lang === 'english') lang = 'en';
+      
       finalWhatsappUrl = JSON.stringify({
         provider: 'meta',
         meta_token: whatsappMetaToken.trim(),
         phone_number_id: whatsappMetaPhoneId.trim(),
         waba_id: whatsappMetaWabaId.trim(),
         template_name: whatsappMetaTemplateName.trim(),
-        template_lang: whatsappMetaLang.trim()
+        template_lang: lang
       });
     } else if (whatsappProvider === 'custom_webhook') {
       finalWhatsappUrl = whatsappUrlInput.trim();
@@ -556,6 +563,15 @@ export default function SMSGatewayConfig() {
                       </button>
                     </div>
                   </div>
+
+                    <div className="space-y-1 mt-2 p-2 bg-black/20 rounded border border-white/5">
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase">💡 {isEn ? "TEMPLATE TIPS" : "USHAURI WA TEMPLATE"}</span>
+                      <p className="text-[8px] text-slate-400 leading-tight">
+                        {isEn 
+                          ? "Use simple lowercase names like 'mwaliko_wa_sherehe' or 'asante_kushiriki'. Meta names are sensitive to spaces and uppercase."
+                          : "Tumia majina madogo na rahisi kama 'mwaliko_wa_sherehe' au 'asante_kushiriki'. Meta inajali herufi kubwa/ndogo na nafasi (spaces)."}
+                      </p>
+                    </div>
 
                   <div className="border-t border-white/10 pt-3 mt-3 space-y-2 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
                     <span className="text-[10px] font-bold text-emerald-400 block uppercase">
