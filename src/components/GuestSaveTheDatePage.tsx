@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, customMessage }: Props) {
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const isEn = language === 'en';
 
   // Try to find if there is a custom image in saveTheDates on local storage fallback
@@ -40,6 +40,24 @@ export default function GuestSaveTheDatePage({ guest, event, saveTheDateImage, c
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center py-10 px-4 font-sans relative pb-32 overflow-hidden">
+      {/* Floating Language Switcher */}
+      <div className="absolute top-4 right-4 z-50 flex gap-1 bg-white/5 border border-white/10 p-1 rounded-full backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setLanguage('sw')}
+          className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider transition-all cursor-pointer ${!isEn ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-md' : 'text-slate-450 hover:text-white'}`}
+        >
+          SW
+        </button>
+        <button
+          type="button"
+          onClick={() => setLanguage('en')}
+          className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider transition-all cursor-pointer ${isEn ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-md' : 'text-slate-455 hover:text-white'}`}
+        >
+          EN
+        </button>
+      </div>
+
       {/* Background radial glow */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-rose-500/5 rounded-full blur-[100px]"></div>

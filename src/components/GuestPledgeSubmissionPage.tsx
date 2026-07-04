@@ -20,7 +20,10 @@ export default function GuestPledgeSubmissionPage({
   const { language, setLanguage } = useLanguage();
   const isEn = language === 'en';
   const displayGuestName = guest?.name || 'Jimson';
-  const [pledgeAmount, setPledgeAmount] = useState<string>('');
+  const hasAlreadyPledged = !!(guest && guest.pledgeAmount && guest.pledgeAmount > 0);
+  const [pledgeAmount, setPledgeAmount] = useState<string>(
+    hasAlreadyPledged ? Number(guest.pledgeAmount).toLocaleString('en-US') : ''
+  );
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,8 +32,11 @@ export default function GuestPledgeSubmissionPage({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const cleanAmount = pledgeAmount.replace(/\D/g, '');
+    const parsedAmount = parseInt(cleanAmount, 10);
+
     if (template) {
-      drawContributionCardToCanvas(canvas, event, template, guest, pledgeAmount ? `KIASI: TZS ${parseInt(pledgeAmount).toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
+      drawContributionCardToCanvas(canvas, event, template, guest, !isNaN(parsedAmount) ? `KIASI: TZS ${parsedAmount.toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
     } else {
       // Default fallback template if none provided
       const defaultTpl: ContributionCardTemplate = {
@@ -40,20 +46,23 @@ export default function GuestPledgeSubmissionPage({
         pledgeAmountSize: 28,
         deadlineSize: 14
       };
-      drawContributionCardToCanvas(canvas, event, defaultTpl, guest, pledgeAmount ? `KIASI: TZS ${parseInt(pledgeAmount).toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
+      drawContributionCardToCanvas(canvas, event, defaultTpl, guest, !isNaN(parsedAmount) ? `KIASI: TZS ${parsedAmount.toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
     }
   }, [pledgeAmount, template, event, guest, isEn]);
 
-  // Check URL query parameters for override language
+  // Check URL query parameters for override language or default to sw
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const urlLang = params.get('lang')?.toLowerCase();
-      if (urlLang === 'sw' || urlLang === 'en') {
-        setLanguage(urlLang as any);
+      if (urlLang === 'en') {
+        setLanguage('en');
+      } else {
+        setLanguage('sw');
       }
     } catch (e) {
       console.warn('Failed to parse URL lang parameter', e);
+      setLanguage('sw');
     }
   }, [setLanguage]);
 
@@ -70,18 +79,20 @@ export default function GuestPledgeSubmissionPage({
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '');
-    setPledgeAmount(raw);
+    const formatted = raw ? parseInt(raw, 10).toLocaleString('en-US') : '';
+    setPledgeAmount(formatted);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pledgeAmount || parseInt(pledgeAmount, 10) <= 0) {
+    const cleanAmount = pledgeAmount.replace(/\D/g, '');
+    if (!cleanAmount || parseInt(cleanAmount, 10) <= 0) {
       alert(isEn ? 'Please enter a valid contribution amount.' : 'Tafadhali ingiza kiasi sahihi cha mchango ili uwasilishe.');
       return;
     }
 
     setLoading(true);
-    const amountNum = parseInt(pledgeAmount, 10);
+    const amountNum = parseInt(cleanAmount, 10);
 
     try {
       // Call public pledge submission API
@@ -115,6 +126,24 @@ export default function GuestPledgeSubmissionPage({
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 relative font-sans overflow-x-hidden">
+      {/* Floating Language Switcher */}
+      <div className="absolute top-4 right-4 z-50 flex gap-1 bg-white/5 border border-white/10 p-1 rounded-full backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setLanguage('sw')}
+          className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider transition-all cursor-pointer ${!isEn ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+        >
+          SW
+        </button>
+        <button
+          type="button"
+          onClick={() => setLanguage('en')}
+          className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider transition-all cursor-pointer ${isEn ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+        >
+          EN
+        </button>
+      </div>
+
       {/* Background radial overlays */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[120%] aspect-square bg-[#0c1938]/40 blur-[130px] rounded-full"></div>
@@ -123,22 +152,14 @@ export default function GuestPledgeSubmissionPage({
       </div>
 
       <div className="w-full max-w-xl z-10 space-y-6 animate-fade-in" id="pledge-submission-container">
-        {/* Contribution Card Display */}
-        <div className="flex flex-col items-center justify-center space-y-4">
-          <div className="relative shadow-[0_32px_64px_-12px_rgba(0,0,0,0.6)] rounded-2xl overflow-hidden border border-white/5 bg-slate-950 max-w-full group">
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-rose-500/5 pointer-events-none"></div>
-            <canvas 
-              id="guest-pledge-live-canvas"
-              ref={canvasRef}
-              width={450 * 3} 
-              height={600 * 3}
-              className="w-full sm:max-w-[320px] h-auto block"
-            />
-          </div>
-          <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
-            <span className="flex h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{isEn ? "Digital Contribution Card" : "Kadi ya Mchango ya Kidijitali"}</span>
-          </div>
+        {/* Contribution Card Display - Hidden as requested */}
+        <div className="hidden">
+          <canvas 
+            id="guest-pledge-live-canvas"
+            ref={canvasRef}
+            width={450 * 3} 
+            height={600 * 3}
+          />
         </div>
 
         {/* Top Header Card */}
@@ -156,80 +177,103 @@ export default function GuestPledgeSubmissionPage({
 
         <div className="flex flex-col justify-center">
           {!isSubmitted ? (
-             <div className="backdrop-blur-md bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl relative">
-              <div className="absolute top-0 right-0 p-3 text-[10px] font-mono text-amber-400 font-extrabold flex items-center gap-1 bg-amber-500/10 rounded-bl-xl border-l border-b border-white/5">
-                <Landmark className="w-3.5 h-3.5" /> {isEn ? 'Official Pledge' : 'Ahadi Rasmi'}
-              </div>
-
-              <div className="space-y-2 pt-2">
-                <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Gift className="w-4 h-4 text-rose-400" />
-                  {isEn ? 'New Pledge Contribution' : 'MCHANGO MPYA WA AHADI'}
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  {isEn ? (
-                    <>
-                      Dear <strong>{displayGuestName}</strong>, you are welcome to enter your pledge contribution to support this event.
-                    </>
-                  ) : (
-                    <>
-                      Ndugu <strong>{displayGuestName}</strong>, unakaribishwa kuandikisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio hili.
-                    </>
-                  )}
-                </p>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <label htmlFor="pledge-input" className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
-                    {isEn ? 'Pledge Amount (TZS)' : 'Kiasi cha Ahadi (TZS)'}
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <span className="text-amber-500 font-bold text-sm">TZS</span>
-                    </div>
-                    <input
-                      id="pledge-input"
-                      type="text"
-                      inputMode="numeric"
-                      value={pledgeAmount}
-                      onChange={handleAmountChange}
-                      placeholder={isEn ? "Enter amount..." : "Weka kiasi hapa..."}
-                      className="block w-full pl-14 pr-4 py-4 bg-slate-900/50 border border-white/10 rounded-xl text-white font-mono text-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none"
-                    />
+            <div className="space-y-6">
+              {hasAlreadyPledged && (
+                <div className="backdrop-blur-md bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 text-center space-y-1.5 shadow-xl animate-fade-in">
+                  <div className="inline-flex p-2 rounded-full bg-amber-500/20 text-amber-400 mb-1">
+                    <ShieldCheck className="w-5 h-5" />
                   </div>
-                  {pledgeAmount && (
-                    <div className="flex justify-between items-center px-1">
-                      <span className="text-[10px] font-mono text-slate-400 uppercase">{isEn ? 'In Words:' : 'Kwa Maneno:'}</span>
-                      <span className="text-[11px] font-bold text-amber-400">{formatCurrency(pledgeAmount)}</span>
-                    </div>
-                  )}
+                  <h4 className="text-sm font-black text-amber-400 uppercase tracking-wider">
+                    {isEn ? "Pledge Already Registered" : "Ahadi Ilishasajiliwa"}
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
+                    {isEn 
+                      ? `Dear ${displayGuestName}, you have already registered a pledge of TZS ${guest.pledgeAmount?.toLocaleString()}.`
+                      : `Ndugu ${displayGuestName}, tayari ulisharekodi ahadi ya mchango ya TZS ${guest.pledgeAmount?.toLocaleString()}.`}
+                  </p>
+                </div>
+              )}
+
+              <div className={`backdrop-blur-md bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl relative transition-all duration-300 ${hasAlreadyPledged ? 'opacity-40 select-none pointer-events-none' : ''}`}>
+                <div className="absolute top-0 right-0 p-3 text-[10px] font-mono text-amber-400 font-extrabold flex items-center gap-1 bg-amber-500/10 rounded-bl-xl border-l border-b border-white/5">
+                  <Landmark className="w-3.5 h-3.5" /> {isEn ? 'Official Pledge' : 'Ahadi Rasmi'}
                 </div>
 
-                <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 space-y-2">
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">{isEn ? 'Collection Deadline' : 'Mwisho wa Kukusanya'}</span>
-                  </div>
-                  <p className="text-xs text-slate-300 font-medium">{formattedDeadline}</p>
+                <div className="space-y-2 pt-2">
+                  <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-rose-400" />
+                    {isEn ? 'New Pledge Contribution' : 'MCHANGO MPYA WA AHADI'}
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {isEn ? (
+                      <>
+                        Dear <strong>{displayGuestName}</strong>, you are welcome to enter your pledge contribution to support this event.
+                      </>
+                    ) : (
+                      <>
+                        Ndugu <strong>{displayGuestName}</strong>, unakaribishwa kuandikisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio hili.
+                      </>
+                    )}
+                  </p>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={loading || !pledgeAmount}
-                  className="w-full py-4 bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-rose-950/20 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <span>{isEn ? 'Submit My Pledge' : 'Wasilisha Ahadi Yangu'}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-             </div>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <label htmlFor="pledge-input" className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
+                      {isEn ? 'Pledge Amount (TZS)' : 'Kiasi cha Ahadi (TZS)'}
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                        <span className="text-amber-500/60 font-black text-sm sm:text-base tracking-wider">TZS</span>
+                      </div>
+                      <input
+                        id="pledge-input"
+                        type="text"
+                        inputMode="numeric"
+                        value={pledgeAmount}
+                        onChange={handleAmountChange}
+                        disabled={hasAlreadyPledged}
+                        placeholder={isEn ? "e.g. 500,000" : "Mfano: 500,000"}
+                        className="block w-full pl-16 sm:pl-20 pr-4 py-5 bg-slate-900/70 border border-white/15 rounded-xl text-amber-400 font-mono text-2xl sm:text-3xl font-black focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all outline-none tracking-wide placeholder-slate-600"
+                      />
+                    </div>
+                    {pledgeAmount && (
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[10px] font-mono text-slate-400 uppercase">{isEn ? 'In Words:' : 'Kwa Maneno:'}</span>
+                        <span className="text-[11px] font-bold text-amber-400">{formatCurrency(pledgeAmount)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 space-y-2">
+                    <div className="flex items-center gap-2 text-blue-400">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">{isEn ? 'Collection Deadline' : 'Mwisho wa Kukusanya'}</span>
+                    </div>
+                    <p className="text-xs text-slate-300 font-medium">{formattedDeadline}</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || !pledgeAmount || hasAlreadyPledged}
+                    className="w-full py-4 bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-rose-950/20 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {loading ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <span>
+                          {hasAlreadyPledged 
+                            ? (isEn ? 'Already Contributed' : 'Mchango Ulishawasilishwa') 
+                            : (isEn ? 'Submit My Pledge' : 'Wasilisha Ahadi Yangu')}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </div>
           ) : (
             <div className="backdrop-blur-md bg-white/[0.03] border border-emerald-500/20 rounded-2xl p-8 sm:p-10 space-y-6 shadow-2xl text-center relative overflow-hidden">
               <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>

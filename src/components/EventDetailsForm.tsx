@@ -712,7 +712,7 @@ export default function EventDetailsForm({ initialData, isAlreadySaved, onSave, 
                               canvas.height = height;
                               const ctx = canvas.getContext('2d');
                               ctx?.drawImage(img, 0, 0, width, height);
-                              const compressedDataUrl = canvas.toDataURL('image/webp', 0.98);
+                              const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
                               setFormData({ ...formData, eventImgUrl: compressedDataUrl });
                             };

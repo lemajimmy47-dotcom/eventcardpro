@@ -12,7 +12,7 @@ interface GuestInvitePageProps {
 }
 
 export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }: GuestInvitePageProps) {
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const isEn = language === 'en';
   const [rsvpStatus, setRsvpStatus] = useState(guest.rsvpStatus || 'Bado');
   const [rsvpGuestsCount, setRsvpGuestsCount] = useState(guest.rsvpGuestsCount || 1);
@@ -35,7 +35,7 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
         guest.cardType, 
         guest.code ? `EVENTCARD-${guest.code}` : `EVENTCARD-${guest.id}`,
         () => {
-            setCardImageUrl(canvas.toDataURL('image/webp', 0.98));
+            setCardImageUrl(canvas.toDataURL('image/jpeg', 0.95));
         }
     );
   }, [guest, event, settings]);
@@ -78,6 +78,23 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center py-8 px-4 font-sans relative pb-32">
+      {/* Floating Language Switcher */}
+      <div className="absolute top-4 right-4 z-50 flex gap-1 bg-white/5 border border-white/10 p-1 rounded-full backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setLanguage('sw')}
+          className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider transition-all cursor-pointer ${!isEn ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-md' : 'text-slate-450 hover:text-white'}`}
+        >
+          SW
+        </button>
+        <button
+          type="button"
+          onClick={() => setLanguage('en')}
+          className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider transition-all cursor-pointer ${isEn ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-md' : 'text-slate-455 hover:text-white'}`}
+        >
+          EN
+        </button>
+      </div>
       
       {/* Background Decor */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
@@ -116,29 +133,31 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
         </div>
 
         <div className="space-y-6">
-          <div className="bg-neutral-900/60 border border-white/5 rounded-3xl p-5 shadow-2xl backdrop-blur-md">
-            <div className="text-center space-y-4 mb-6">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto border border-emerald-500/20">
-                <span className="text-2xl">🎟️</span>
-              </div>
-              <div>
-                <h3 className="font-extrabold text-emerald-400 uppercase tracking-widest text-[14px]">{isEn ? 'RSVP - Confirm Attendance' : 'RSVP - Thibitisha Ushiriki'}</h3>
-                <p className="text-[11px] text-neutral-500 mt-1">{isEn ? 'Please make your selection below.' : 'Tafadhali chagua chaguo lako hapa chini.'}</p>
-              </div>
+          <div className="bg-neutral-900/60 border border-white/5 rounded-3xl p-6 shadow-2xl backdrop-blur-md">
+            <div className="text-center mb-6 space-y-2">
+              <p className="text-[12.5px] text-emerald-400 font-extrabold tracking-wider uppercase">
+                {isEn ? "🎟️ RSVP - CHOOSE YOUR OPTION" : "🎟️ RSVP - THIBITISHA USHIRIKI"}
+              </p>
+              <p className="text-xs text-neutral-300">
+                {isEn 
+                  ? "Your options are already open below. Please click one to confirm your attendance:" 
+                  : "Chaguo zako zipo wazi tayari hapa chini. Tafadhali bonyeza moja ili kuthibitisha ushiriki wako:"}
+              </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               <button 
                 onClick={() => performRsvpUpdate('Atahudhuria')}
                 disabled={rsvpUpdating}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition active:scale-95 disabled:opacity-50 text-[12.5px] cursor-pointer shadow-lg"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition active:scale-95 disabled:opacity-50 text-[13px] cursor-pointer shadow-lg flex items-center justify-center gap-2"
               >
                  {rsvpStatus === 'Atahudhuria' ? (isEn ? '✅ Attending' : '✅ Umehudhuria') : (isEn ? 'Yes, I will attend' : 'Ndio, Nitahudhuria')}
               </button>
+              
               <button 
                 onClick={() => performRsvpUpdate('Hatahudhuria')}
                 disabled={rsvpUpdating}
-                className="w-full py-4 bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold rounded-xl transition active:scale-95 disabled:opacity-50 text-[12.5px] cursor-pointer"
+                className="w-full py-4 bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold rounded-xl transition active:scale-95 disabled:opacity-50 text-[13px] cursor-pointer flex items-center justify-center gap-2"
               >
                  {rsvpStatus === 'Hatahudhuria' ? (isEn ? '❌ Declined' : '❌ Umeghairi') : (isEn ? 'No, I cannot attend' : 'Hapana, Nina Udhuru')}
               </button>
@@ -148,12 +167,12 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
                     href={event.mapsLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-extrabold rounded-xl transition active:scale-95 text-[12.5px] cursor-pointer flex items-center justify-center border border-white/10"
+                    className="w-full py-4 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 font-extrabold rounded-xl transition active:scale-95 text-[13px] cursor-pointer flex items-center justify-center border border-rose-500/20 gap-2 shadow-sm"
                   >
-                    📍 VIEW LOCATION
+                    📍 {isEn ? "VIEW LOCATION" : "ANGALIA RAMANI (LOCATION)"}
                   </a>
               ) : (
-                <div className="w-full py-4 bg-white/5 text-neutral-500 font-extrabold rounded-xl text-[12.5px] flex items-center justify-center border border-white/5 cursor-not-allowed">
+                <div className="w-full py-4 bg-white/5 text-neutral-500 font-extrabold rounded-xl text-[13px] flex items-center justify-center border border-white/5 cursor-not-allowed">
                   {isEn ? "LOCATION NOT AVAILABLE" : "LOCATION HAIJAPATIKANA"}
                 </div>
               )}

@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Eye, RefreshCw, CheckCircle, MessageCircle, AlertCircle, PlayCircle, ArrowRight, X, Clipboard, Check, ExternalLink, Settings, Key, HelpCircle } from 'lucide-react';
 import { EventDetails, Guest, TemplateSettings } from '../types';
-import { drawCardToCanvas } from '../utils/canvasHelper';
+import { drawCardToCanvas, generateGuestCardImage } from '../utils/canvasHelper';
 import { safeLocalStorage } from '../utils/storage';
+import { convertWebPToJpeg } from '../utils/imageUtils';
 
 interface SendMessagesProps {
   event: EventDetails;
@@ -61,7 +62,7 @@ export default function SendMessages({ event, settings, guests, language, onUpda
       guest.cardType, 
       guest.code ? `EVENTCARD-${guest.code}` : `EVENTCARD-${guest.id}`,
       () => {
-        setModalCardUrl(canvas.toDataURL('image/webp', 0.98));
+        setModalCardUrl(canvas.toDataURL('image/jpeg', 0.95));
         setModalImageLoaded(true);
       }
     );
@@ -709,9 +710,9 @@ Karibu sana!`);
       '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
       '{vazi}': event.dressCode || "[Vazi]",
       '{dressCode}': event.dressCode || "[Dress Code]",
-      '{Link}': (isSms || messageType === 'thank-you') ? "" : appUrl,
-      '{kiungo}': (isSms || messageType === 'thank-you') ? "" : appUrl,
-      '{inviteUrl}': (isSms || messageType === 'thank-you') ? "" : appUrl,
+      '{Link}': (messageType === 'thank-you') ? "" : appUrl,
+      '{kiungo}': (messageType === 'thank-you') ? "" : appUrl,
+      '{inviteUrl}': (messageType === 'thank-you') ? "" : appUrl,
       '{namba_mwaliko}': g.code || "[Code]",
       '{card_number}': g.code || "[Code]",
       '{inviteCode}': g.code || "[Code]",
@@ -737,21 +738,8 @@ Karibu sana!`);
       text = text.split(key).join(replacements[key]);
     });
 
-    text = text.trim();
-
-    if (isSms || messageType === 'thank-you') {
-      // Prevent any URLs or links from ever being added, and scrub any potential links in custom templates
-      text = text.replace(/https?:\/\/[^\s]+/gi, "");
-      text = text.replace(/[a-zA-Z0-9.-]+\.co\.tz[^\s]*/gi, "");
-      text = text.replace(/[a-zA-Z0-9.-]+\.app[^\s]*/gi, "");
-      text = text.replace(/[a-zA-Z0-9.-]+\.com[^\s]*/gi, "");
-      text = text.replace(/Kiungo:\s*/gi, "");
-      text = text.replace(/Link:\s*/gi, "");
-    } else {
-      if ((forceAppendLink && !text.includes(appUrl))) {
-        text += `\n\n${language === 'en' ? 'Link:' : 'Kiungo:'}\n${appUrl}`;
-      }
-    }
+    // Replace three or more consecutive newlines with two newlines to avoid huge gaps
+    text = text.replace(/\n\s*\n\s*\n+/g, '\n\n').trim();
 
     return text.trim();
   };
@@ -853,9 +841,9 @@ Karibu sana!`);
           '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
           '{vazi}': event.dressCode || "[Vazi]",
           '{dressCode}': event.dressCode || "[Dress Code]",
-          '{Link}': messageType === 'thank-you' ? "" : appUrl,
-          '{kiungo}': messageType === 'thank-you' ? "" : appUrl,
-          '{inviteUrl}': messageType === 'thank-you' ? "" : appUrl,
+          '{Link}': "",
+          '{kiungo}': "",
+          '{inviteUrl}': "",
           '{namba_mwaliko}': target.code || "[Code]",
           '{card_number}': target.code || "[Code]",
           '{inviteCode}': target.code || "[Code]",
@@ -886,6 +874,20 @@ Karibu sana!`);
       }
       
       // Use the simulation or Gateway API
+      let compatibleImageUrl = "";
+      try {
+        const qrCodeText = target.code || target.id;
+        compatibleImageUrl = await generateGuestCardImage(
+          event,
+          settings,
+          target.name,
+          target.cardType || "DOUBLE",
+          qrCodeText
+        );
+      } catch (err) {
+        console.error("Failed to generate dynamic guest card image:", err);
+        compatibleImageUrl = await convertWebPToJpeg(settings.imageUrl);
+      }
       const res = await fetch('/api/send-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -898,7 +900,7 @@ Karibu sana!`);
           scheduleTime: formattedScheduleTime,
           templateParams,
           templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
-          imageUrl: settings.imageUrl || ""
+          imageUrl: compatibleImageUrl
         })
       });
       
@@ -1115,9 +1117,9 @@ Karibu sana!`);
             '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
             '{vazi}': event.dressCode || "[Vazi]",
             '{dressCode}': event.dressCode || "[Dress Code]",
-            '{Link}': messageType === 'thank-you' ? "" : appUrl,
-            '{kiungo}': messageType === 'thank-you' ? "" : appUrl,
-            '{inviteUrl}': messageType === 'thank-you' ? "" : appUrl,
+            '{Link}': "",
+            '{kiungo}': "",
+            '{inviteUrl}': "",
             '{namba_mwaliko}': guest.code || "[Code]",
             '{card_number}': guest.code || "[Code]",
             '{inviteCode}': guest.code || "[Code]",
@@ -1148,6 +1150,20 @@ Karibu sana!`);
         }
         
         // 1. Send Main Message
+        let compatibleImageUrl = "";
+        try {
+          const qrCodeText = guest.code || guest.id;
+          compatibleImageUrl = await generateGuestCardImage(
+            event,
+            settings,
+            guest.name,
+            guest.cardType || "DOUBLE",
+            qrCodeText
+          );
+        } catch (err) {
+          console.error("Failed to generate dynamic guest card image:", err);
+          compatibleImageUrl = await convertWebPToJpeg(settings.imageUrl);
+        }
         const res = await fetch('/api/send-sms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1160,7 +1176,7 @@ Karibu sana!`);
             scheduleTime: formattedScheduleTime,
             templateParams: templateParams,
             templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
-            imageUrl: settings.imageUrl || ""
+            imageUrl: compatibleImageUrl
           })
         });
         

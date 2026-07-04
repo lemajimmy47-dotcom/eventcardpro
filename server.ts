@@ -164,7 +164,7 @@ function sanitizeMetaTemplateParam(val: any): string {
   return str || " ";
 }
 
-function getParamsForCount(count: number, guestData: any, eventData: any, fallbackText: string, incomingParams?: string[]): any[] {
+function getParamsForCount(count: number, guestData: any, eventData: any, fallbackText: string, incomingParams?: string[], templateName?: string): any[] {
   const resolvedParams: string[] = [];
   
   const standardValues = [
@@ -214,13 +214,24 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
       resolvedParams.push(eventData?.eventHallName || "Ukumbi wa Sherehe");
       resolvedParams.push(`${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`);
     } else if (count === 6) {
-      // Contribution Invite mapping (Removed link)
-      resolvedParams.push(guestData?.name || "Mgeni wetu");
-      resolvedParams.push(eventData?.hostName || "Familia yetu");
-      resolvedParams.push(eventData?.name || "Sherehe yetu");
-      resolvedParams.push(eventData?.date || "Tarehe");
-      resolvedParams.push(eventData?.deadlineDate || "Tarehe ya Mwisho");
-      resolvedParams.push(eventData?.paymentMethods || "Namba za Michango");
+      const lowerTemplate = (templateName || "").toLowerCase();
+      if ((lowerTemplate.includes("mwaliko") || lowerTemplate === "" || lowerTemplate.includes("sherehe") || lowerTemplate.includes("invite") || lowerTemplate.includes("wedding")) && !lowerTemplate.includes("mchango") && !lowerTemplate.includes("pledge") && !lowerTemplate.includes("ombi") && !lowerTemplate.includes("contribution")) {
+        resolvedParams.push(guestData?.name || "Mgeni wetu");
+        resolvedParams.push(eventData?.hostName || "Familia yetu");
+        resolvedParams.push(eventData?.name || "Sherehe yetu");
+        resolvedParams.push(eventData?.date || "Tarehe");
+        resolvedParams.push(eventData?.eventHallName || "Ukumbi wa Sherehe");
+        resolvedParams.push(`${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`);
+      } else {
+        // Contribution Invite mapping (Removed link)
+        resolvedParams.push(guestData?.name || "Mgeni wetu");
+        resolvedParams.push(eventData?.hostName || "Familia yetu");
+        resolvedParams.push(eventData?.name || "Sherehe yetu");
+        resolvedParams.push(eventData?.date || "Tarehe");
+        const dd = eventData?.contributionDeadline || eventData?.deadlineDate;
+        resolvedParams.push(dd ? new Date(dd).toLocaleDateString("sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : "Tarehe ya Mwisho");
+        let pmStr = ""; if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) { const mobile = eventData.paymentMethods.filter((m: any) => m.type === "Mobile"); const lipa = eventData.paymentMethods.filter((m: any) => m.type === "Lipa Namba"); const bank = eventData.paymentMethods.filter((m: any) => m.type === "Bank"); if (mobile.length > 0) { pmStr += "Namba za Simu:\n"; mobile.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (lipa.length > 0) { pmStr += "Lipa Namba:\n"; lipa.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (bank.length > 0) { pmStr += "Akaunti za Benki:\n"; bank.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } pmStr = pmStr.trim(); } else if (typeof eventData?.paymentMethods === "string" && eventData.paymentMethods) { pmStr = eventData.paymentMethods; } else { pmStr = "Namba za Michango"; } resolvedParams.push(pmStr);
+      }
     } else if (count === 7) {
       // Contribution Reminder mapping (Removed link)
       resolvedParams.push(guestData?.name || "Mgeni wetu");
@@ -228,8 +239,9 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
       resolvedParams.push(String(guestData?.pledgeAmount || 0));
       resolvedParams.push(String(guestData?.paidAmount || 0));
       resolvedParams.push(String((guestData?.pledgeAmount || 0) - (guestData?.paidAmount || 0)));
-      resolvedParams.push(eventData?.deadlineDate || "Tarehe ya Mwisho");
-      resolvedParams.push(eventData?.paymentMethods || "Namba za Michango");
+      const dd = eventData?.contributionDeadline || eventData?.deadlineDate;
+        resolvedParams.push(dd ? new Date(dd).toLocaleDateString("sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : "Tarehe ya Mwisho");
+      let pmStr = ""; if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) { const mobile = eventData.paymentMethods.filter((m: any) => m.type === "Mobile"); const lipa = eventData.paymentMethods.filter((m: any) => m.type === "Lipa Namba"); const bank = eventData.paymentMethods.filter((m: any) => m.type === "Bank"); if (mobile.length > 0) { pmStr += "Namba za Simu:\n"; mobile.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (lipa.length > 0) { pmStr += "Lipa Namba:\n"; lipa.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (bank.length > 0) { pmStr += "Akaunti za Benki:\n"; bank.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } pmStr = pmStr.trim(); } else if (typeof eventData?.paymentMethods === "string" && eventData.paymentMethods) { pmStr = eventData.paymentMethods; } else { pmStr = "Namba za Michango"; } resolvedParams.push(pmStr);
     } else {
       for (let i = 0; i < count; i++) {
         if (i < standardValues.length) {
@@ -327,10 +339,14 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         // Determine expected parameter count from fuzzy template name matching first to enforce official Meta template structure
         let expectedCount = 0;
         const lowerTemplateName = templateName.toLowerCase();
-        if (lowerTemplateName.includes('shukrani') || lowerTemplateName.includes('asante') || lowerTemplateName.includes('thanks') || lowerTemplateName.includes('thank_you') || lowerTemplateName.includes('thankyou')) {
-          expectedCount = 1;
-        } else if (lowerTemplateName.includes('mchango') || lowerTemplateName.includes('pledge') || lowerTemplateName.includes('ombi') || lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho')) {
-          expectedCount = 3;
+        if (lowerTemplateName.includes('mwaliko_wa_sherehe') || lowerTemplateName.includes('mwaliko_wa_sherehe_')) {
+          expectedCount = 12;
+        } else if (lowerTemplateName.includes('shukrani') || lowerTemplateName.includes('asante') || lowerTemplateName.includes('thanks') || lowerTemplateName.includes('thank_you') || lowerTemplateName.includes('thankyou')) {
+          expectedCount = 2;
+        } else if (lowerTemplateName.includes('mchango') || lowerTemplateName.includes('pledge') || lowerTemplateName.includes('ombi')) {
+          expectedCount = 6;
+        } else if (lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho')) {
+          expectedCount = 7;
         } else if (lowerTemplateName.includes('save') || lowerTemplateName.includes('date') || lowerTemplateName.includes('hifadhi') || lowerTemplateName.includes('tarehe')) {
           // Explicitly handle Save the Date with 3 params and NO buttons by default
           expectedCount = 3;
@@ -340,17 +356,17 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
 
         if (expectedCount > 0) {
           console.log(`[Meta WhatsApp] Fuzzy matched template ${templateName} to expected parameter count: ${expectedCount}`);
-          bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams);
+          bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams, templateName);
         } else if (Array.isArray(templateParams) && templateParams.length > 0) {
           // Fallback to trusting frontend count if no fuzzy match
           expectedCount = templateParams.length;
           console.log(`[Meta WhatsApp] No fuzzy match, using frontend templateParams count: ${expectedCount}`);
-          bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams);
+          bodyParams = getParamsForCount(expectedCount, guestData, eventData, text, templateParams, templateName);
         } else {
           if (templateName === 'kadi_mwaliko' && guestData && eventData) {
-            bodyParams = getParamsForCount(12, guestData, eventData, text, templateParams);
+            bodyParams = getParamsForCount(12, guestData, eventData, text, templateParams, templateName);
           } else if (templateName === 'shukrani' && guestData && eventData) {
-            bodyParams = getParamsForCount(1, guestData, eventData, text, templateParams);
+            bodyParams = getParamsForCount(1, guestData, eventData, text, templateParams, templateName);
           } else {
             // Fallback to dynamic params passed from frontend
             if (Array.isArray(templateParams) && templateParams.length > 0) {
@@ -388,7 +404,10 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         const isSaveTheDate = lowerTemplateName.includes('save') || lowerTemplateName.includes('date') || lowerTemplateName.includes('hifadhi') || lowerTemplateName.includes('tarehe');
         
         if (guestCode && !isSaveTheDate) {
-          const buttonParamVal = `?invite=${guestCode}&eventId=${eventId || ""}`;
+          let buttonParamVal = `?invite=${guestCode}&eventId=${eventId || ""}`;
+          if (lowerTemplateName.includes('mchango') || lowerTemplateName.includes('pledge') || lowerTemplateName.includes('ombi') || lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho')) {
+            buttonParamVal += `&pledge=true`;
+          }
           buttonParams.push({ type: "text", text: buttonParamVal });
         } else if (!isSaveTheDate) {
           // Check if any frontend template params look like URLs
@@ -418,7 +437,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           }
 
           if (imageUrl) {
-            const cacheKey = `${eventId}_${imageUrl.substring(0, 100)}_${imageUrl.length}`;
+            const cacheKey = `${eventId}_${guestId || phone || ""}_${imageUrl.substring(0, 100)}_${imageUrl.length}`;
             const cached = metaMediaCache.get(cacheKey);
             const now = Date.now();
 
@@ -539,6 +558,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
 
         const metaUrl = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
         let lastError: Error | null = null;
+        let rootErrorObj: any = null;
         let response;
         let respText = "";
         let attempt = 0;
@@ -560,10 +580,10 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
               body: JSON.stringify(payload)
             });
             respText = await response.text();
-            console.log(`[Meta WhatsApp] Attempt ${attempt} response:`, respText);
-
+            
             if (response.ok) {
               success = true;
+              console.log(`[Meta WhatsApp] Attempt ${attempt} SUCCESS.`);
               try {
                 const data = JSON.parse(respText);
                 if (data.messages && data.messages[0]) {
@@ -591,6 +611,8 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
               }
               // Case C: Template name / language not found - SELF HEALING FALLBACK
               if (errObj.error && errObj.error.code === 132001) {
+                if (attempt === 1) rootErrorObj = errObj; 
+
                 const defaultTemplate = (metaConfig.template_name || "").trim();
                 const defaultLang = (metaConfig.template_lang || "sw").trim();
 
@@ -612,16 +634,22 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                   // Re-evaluate expected count and params for fallback template
                   let newExpectedCount = 0;
                   const lowerFallbackName = templateName.toLowerCase();
-                  if (lowerFallbackName.includes('shukrani') || lowerFallbackName.includes('asante') || lowerFallbackName.includes('thanks') || lowerFallbackName.includes('thank_you') || lowerFallbackName.includes('thankyou')) {
-                    newExpectedCount = 1;
-                  } else if (lowerFallbackName.includes('mchango') || lowerFallbackName.includes('pledge') || lowerFallbackName.includes('ombi') || lowerFallbackName.includes('save') || lowerFallbackName.includes('date') || lowerFallbackName.includes('reminder') || lowerFallbackName.includes('ukumbusho') || lowerFallbackName.includes('hifadhi') || lowerFallbackName.includes('tarehe')) {
+                  if (lowerFallbackName.includes('mwaliko_wa_sherehe') || lowerFallbackName.includes('mwaliko_wa_sherehe_')) {
+                    newExpectedCount = 12;
+                  } else if (lowerFallbackName.includes('shukrani') || lowerFallbackName.includes('asante') || lowerFallbackName.includes('thanks') || lowerFallbackName.includes('thank_you') || lowerFallbackName.includes('thankyou')) {
+                    newExpectedCount = 2;
+                  } else if (lowerFallbackName.includes('mchango') || lowerFallbackName.includes('pledge') || lowerFallbackName.includes('ombi')) {
+                    newExpectedCount = 6;
+                  } else if (lowerFallbackName.includes('save') || lowerFallbackName.includes('date') || lowerFallbackName.includes('hifadhi') || lowerFallbackName.includes('tarehe')) {
                     newExpectedCount = 3;
+                  } else if (lowerFallbackName.includes('reminder') || lowerFallbackName.includes('ukumbusho')) {
+                    newExpectedCount = 7;
                   } else if (lowerFallbackName.includes('mwaliko') || lowerFallbackName.includes('kadi') || lowerFallbackName.includes('wedding') || lowerFallbackName.includes('invite') || lowerFallbackName.includes('sherehe') || lowerFallbackName.includes('invitation')) {
                     newExpectedCount = 12;
                   }
 
                   if (newExpectedCount > 0) {
-                    const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams);
+                    const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams, templateName);
                     const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
                     if (bodyCompIdx !== -1) {
                       payload.template.components[bodyCompIdx].parameters = recoveredParams;
@@ -656,10 +684,10 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                       const lowerFallback = fallback.toLowerCase();
                       if (lowerFallback === 'asante_kushiriki') countToTry = 2;
                       if (lowerFallback === 'shukrani') countToTry = 2;
-                      if (lowerFallback === 'ukumbusho' || lowerFallback === 'reminder') countToTry = 3;
+                      if (lowerFallback === 'ukumbusho' || lowerFallback === 'reminder') countToTry = 6;
                       if (lowerFallback === 'hifadhi_tarehe') countToTry = 3;
                       
-                      const recoveredParams = getParamsForCount(countToTry, guestData, eventData, text, templateParams);
+                      const recoveredParams = getParamsForCount(countToTry, guestData, eventData, text, templateParams, templateName);
                       
                       // For generic fallbacks, structure is often just the body. Clear others to avoid header/button errors
                       payload.template.components = [
@@ -735,7 +763,12 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                       }
                     }
                     if (!buttonParamVal && code) {
-                      buttonParamVal = `?invite=${code}&eventId=${eventId || ""}`;
+                      let baseVal = `?invite=${code}&eventId=${eventId || ""}`;
+                      const lowerFallback = (templateName || "").toLowerCase();
+                      if (lowerFallback.includes('mchango') || lowerFallback.includes('pledge') || lowerFallback.includes('ombi') || lowerFallback.includes('reminder') || lowerFallback.includes('ukumbusho')) {
+                        baseVal += `&pledge=true`;
+                      }
+                      buttonParamVal = baseVal;
                     }
                     if (buttonParamVal) {
                       const btnParams = [{ type: "text", text: buttonParamVal }];
@@ -795,6 +828,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                 // Case F: Body parameter mismatch
                 if (errObj.error?.code === 132000 || errObj.error?.code === 132018 || combinedMsg.includes("Number of parameters does not match") || combinedMsg.includes("number of localizable_params") || combinedMsg.includes("param") || combinedMsg.includes("parameter") || lowerCombined.includes("parameters in your template")) {
                   const countMatch = 
+                    combinedMsg.match(/expected number of params\s*\((\d+)\)/i) || 
                     combinedMsg.match(/expected number of params\s*(?:\:\s*)?\(?(\d+)\)?/i) || 
                     combinedMsg.match(/expected\s+(\d+)\s+params/i) ||
                     combinedMsg.match(/expected\s*(?:\:\s*)?\(?(\d+)\)?/i) ||
@@ -806,7 +840,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                   
                 if (countMatch) {
                     const newExpectedCount = parseInt(countMatch[2] || countMatch[1], 10);
-                    const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams);
+                    const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams, templateName);
                     
                     // If we have a mismatch error, it's often best to strip non-body components 
                     // if it's not the first attempt, as they often cause cascading failures
@@ -835,7 +869,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                     const altMatch = combinedMsg.match(/\((\d+)\)/);
                     if (altMatch && altMatch[1]) {
                        const count = parseInt(altMatch[1], 10);
-                       const recoveredParams = getParamsForCount(count, guestData, eventData, text, templateParams);
+                       const recoveredParams = getParamsForCount(count, guestData, eventData, text, templateParams, templateName);
                        const bodyIdx = payload.template.components.findIndex((c: any) => c.type === "body");
                        if (bodyIdx !== -1) {
                          payload.template.components[bodyIdx].parameters = recoveredParams;
@@ -848,6 +882,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
               }
 
             } catch (e: any) {
+              console.error("[Meta WhatsApp Self-Healing Error] Exception during self-healing block:", e);
               if (e.message.includes("Hitilafu ya Meta WhatsApp")) {
                 throw e;
               }
@@ -891,8 +926,14 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
             throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
           }
           if (errObj.error && errObj.error.code === 132001) {
+                if (attempt === 1) rootErrorObj = errObj; 
+
             throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
           }
+          if (rootErrorObj && rootErrorObj.error) {
+            throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${rootErrorObj.error.error_data?.details || "haipo"}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
+          }
+
           if (errObj.error) {
             const apiMsg = errObj.error.message || "Hitilafu isiyojulikana";
             const apiCode = errObj.error.code || "";
@@ -1465,6 +1506,24 @@ async function startServer() {
   });
 
   // API 3: Guest-scoped query to safely load an invite page on alternative devices
+  // API: Location Redirect
+  app.get("/api/location", async (req, res) => {
+    try {
+      const eventId = req.query.eventId as string;
+      if (!eventId) {
+        return res.status(400).send("Event ID missing. Location cannot be resolved.");
+      }
+      const db = await readDBLatest();
+      const event = db.events?.find((e: any) => e.id === eventId);
+      if (event && event.mapsLink) {
+        return res.redirect(event.mapsLink);
+      }
+      res.status(404).send("Location not configured for this event.");
+    } catch (error) {
+      res.status(500).send("Server error");
+    }
+  });
+
   app.get("/api/guest-lookup", async (req, res) => {
     try {
       const code = req.query.code as string;
@@ -1873,31 +1932,44 @@ async function startServer() {
                   }
                 }
 
-                // Handle incoming RSVP keyword replies
+                // Handle incoming RSVP keyword replies (and button/interactive responses)
                 if (value.messages) {
                   for (const message of value.messages) {
                     const fromPhone = message.from ? message.from.replace(/\D/g, '') : '';
-                    const textBody = message.text?.body ? message.text.body.trim().toLowerCase() : '';
-                    console.log(`[WhatsApp Webhook] Text reply from ${fromPhone}: "${textBody}"`);
+                    let textBody = '';
+                    if (message.text?.body) {
+                      textBody = message.text.body.trim().toLowerCase();
+                    } else if (message.button?.text) {
+                      textBody = message.button.text.trim().toLowerCase();
+                    } else if (message.button?.payload) {
+                      textBody = message.button.payload.trim().toLowerCase();
+                    } else if (message.interactive?.button_reply?.title) {
+                      textBody = message.interactive.button_reply.title.trim().toLowerCase();
+                    } else if (message.interactive?.button_reply?.id) {
+                      textBody = message.interactive.button_reply.id.trim().toLowerCase();
+                    }
+                    console.log(`[WhatsApp Webhook] Parsed reply content from ${fromPhone}: "${textBody}"`);
 
                     if (fromPhone && textBody && db.guests) {
                       for (const guest of db.guests) {
                         const guestCleanPhone = (guest.phone || "").replace(/\D/g, '');
                         if (guestCleanPhone && (guestCleanPhone === fromPhone || fromPhone.endsWith(guestCleanPhone) || guestCleanPhone.endsWith(fromPhone))) {
-                          // Try to automatically process RSVPs
-                          let newRsvp: 'Ndio' | 'Hapana' | 'Sina uhakika' | null = null;
-                          if (textBody.includes('ndio') || textBody.includes('yes') || textBody.includes('nitakuja') || textBody.includes('1')) {
-                            newRsvp = 'Ndio';
-                          } else if (textBody.includes('hapana') || textBody.includes('no') || textBody.includes('sitakuja') || textBody.includes('2')) {
-                            newRsvp = 'Hapana';
-                          } else if (textBody.includes('sina uhakika') || textBody.includes('maybe') || textBody.includes('3')) {
-                            newRsvp = 'Sina uhakika';
+                          // Try to automatically process RSVPs to system-wide standard values: 'Atahudhuria', 'Hatahudhuria', 'Labda'
+                          let newRsvp: 'Atahudhuria' | 'Hatahudhuria' | 'Labda' | null = null;
+                          if (textBody.includes('ndio') || textBody.includes('yes') || textBody.includes('nitakuja') || textBody.includes('nitahudhuria') || textBody.includes('atahudhuria') || textBody.includes('1')) {
+                            newRsvp = 'Atahudhuria';
+                          } else if (textBody.includes('hapana') || textBody.includes('no') || textBody.includes('sitakuja') || textBody.includes('sintahudhuria') || textBody.includes('hatahudhuria') || textBody.includes('2')) {
+                            newRsvp = 'Hatahudhuria';
+                          } else if (textBody.includes('sina uhakika') || textBody.includes('maybe') || textBody.includes('labda') || textBody.includes('3')) {
+                            newRsvp = 'Labda';
                           }
 
                           if (newRsvp && guest.rsvpStatus !== newRsvp) {
                             guest.rsvpStatus = newRsvp;
+                            guest.rsvpUpdatedAt = new Date().toISOString();
+                            guest.rsvpSeen = false;
                             databaseUpdated = true;
-                            console.log(`[WhatsApp Webhook] Auto-updated RSVP for ${guest.name} to ${newRsvp} via text reply!`);
+                            console.log(`[WhatsApp Webhook] Auto-updated RSVP for ${guest.name} to ${newRsvp} via WhatsApp reaction!`);
                           }
                         }
                       }

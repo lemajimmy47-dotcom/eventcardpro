@@ -624,11 +624,17 @@ export default function App() {
   // --- Render Layout ---
 
   if (isGuestLoading) {
+    const loadingMessage = isPledgeView
+      ? (language === 'en' ? 'Loading your contribution page...' : 'Inapakia Ukurasa wako wa Ahadi ya Mchango...')
+      : isStdView
+      ? (language === 'en' ? 'Loading Save The Date...' : 'Inapakia Taarifa ya Hifadhi Tarehe...')
+      : (language === 'en' ? 'Loading your digital invitation card...' : 'Inapakia Kadi Yako ya Mwaliko Kidigitali...');
+
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center font-sans p-6 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500 mb-6"></div>
         <p className="text-sm text-slate-350 font-bold uppercase tracking-widest animate-pulse">
-          Inapakia Kadi Yako ya Mwaliko Kidigitali...
+          {loadingMessage}
         </p>
         <p className="text-[10px] text-slate-500 font-mono mt-2.5 uppercase tracking-wider">
           EVENTCARD DIGITAL SYSTEM

@@ -14,9 +14,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { Guest, EventDetails, ContributionCardTemplate, ContributionPayment } from '../types';
-import { PREMADE_THEMES, drawContributionCardToCanvas } from '../utils/contributionCardDrawing';
+import { PREMADE_THEMES, drawContributionCardToCanvas, generateContributionCardImage } from '../utils/contributionCardDrawing';
 import { addPdfWatermarks } from '../utils/pdfWatermark';
 import { ReportWatermark } from './ReportWatermark';
+import { convertWebPToJpeg } from '../utils/imageUtils';
 
 const qrCache = new Map<string, HTMLImageElement>();
 
@@ -1107,14 +1108,14 @@ export default function ContributionManager({
     {
       id: 'rem-1',
       title: isEn ? 'Payment Reminder (Template 1)' : 'Kumbusho (Kiolezo cha 1)',
-      text: (name: string, evName: string, pledge: number, paid: number, bal: number) => 
-        formatTemplate(customReminderTpl1, name, evName, '', pledge, paid, bal, 'Reminder')
+      text: (name: string, evName: string, pledge: number, paid: number, bal: number, link: string = '') => 
+        formatTemplate(customReminderTpl1, name, evName, link, pledge, paid, bal, 'Reminder')
     },
     {
       id: 'rem-2',
       title: isEn ? 'Payment Reminder (Template 2)' : 'Kumbusho (Kiolezo cha 2)',
-      text: (name: string, evName: string, pledge: number, paid: number, bal: number) => 
-        formatTemplate(customReminderTpl2, name, evName, '', pledge, paid, bal, 'Reminder')
+      text: (name: string, evName: string, pledge: number, paid: number, bal: number, link: string = '') => 
+        formatTemplate(customReminderTpl2, name, evName, link, pledge, paid, bal, 'Reminder')
     }
   ];
 
@@ -1198,6 +1199,16 @@ export default function ContributionManager({
       setMessageLogs(prev => [startLog, ...prev]);
 
       try {
+        let pledgeText = '';
+        if (type === 'Pledge') {
+          pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
+        } else if (type === 'Reminder') {
+          const bal = (g.pledgeAmount || 0) - (g.paidAmount || 0);
+          pledgeText = `SALIO: TZS ${bal.toLocaleString()}`;
+        } else {
+          pledgeText = `KIASI: TZS ${(g.pledgeAmount || 0).toLocaleString()}`;
+        }
+        const compatibleImageUrl = await generateContributionCardImage(event, cardTemplate, g, pledgeText, isEn);
         const res = await fetch('/api/send-sms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1208,7 +1219,62 @@ export default function ContributionManager({
             text: text,
             channel: sendingChannel.toLowerCase(), // 'sms' or 'whatsapp'
             templateName: type === 'Pledge' ? 'kadi_mchango' : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
-            imageUrl: cardTemplate.imageUrl || ""
+            templateParams: (() => {
+              let paymentString = '';
+              if (event.paymentMethods && event.paymentMethods.length > 0) {
+                const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
+                const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
+                const bank = event.paymentMethods.filter(m => m.type === 'Bank');
+                if (mobile.length > 0) {
+                  paymentString += isEn ? "Mobile Money:\n" : "Namba za Simu:\n";
+                  mobile.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+                  paymentString += "\n";
+                }
+                if (lipa.length > 0) {
+                  paymentString += "Lipa Namba:\n";
+                  lipa.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+                  paymentString += "\n";
+                }
+                if (bank.length > 0) {
+                  paymentString += "Akaunti za Benki:\n";
+                  bank.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+                  paymentString += "\n";
+                }
+                paymentString = paymentString.trim();
+              } else {
+                paymentString = "[Tafadhali weka namba za malipo kwenye Settings]";
+              }
+
+              const deadlineStr = (event.contributionDeadline || event.date)
+                ? new Date(event.contributionDeadline || event.date).toLocaleDateString('sw-TZ', { day: 'numeric', month: 'long', year: 'numeric' })
+                : 'Mwisho';
+
+              if (type === 'Pledge') {
+                return [
+                  g.name,
+                  event.hostName || "Mwenyeji",
+                  event.name || "Sherehe",
+                  event.date || "",
+                  deadlineStr,
+                  paymentString
+                ];
+              } else if (type === 'Reminder') {
+                const p = g.pledgeAmount || 0;
+                const pd = g.paidAmount || 0;
+                return [
+                  g.name,
+                  event.name || 'Sherehe',
+                  p.toString(),
+                  pd.toString(),
+                  (p - pd).toString(),
+                  deadlineStr,
+                  paymentString
+                ];
+              } else {
+                return [g.name, event.name || 'Sherehe'];
+              }
+            })(),
+            imageUrl: compatibleImageUrl
           })
         });
 
@@ -1322,7 +1388,11 @@ export default function ContributionManager({
     } else if (type === 'Reminder') {
       const p = g.pledgeAmount || 0;
       const pd = g.paidAmount || 0;
-      text = reminderTemplates[messageTemplateIndex].text(g.name, event.name || 'Sherehe', p, pd, p - pd);
+      text = reminderTemplates[messageTemplateIndex].text(g.name, event.name || 'Sherehe', p, pd, p - pd, link);
+      // For SMS without {Kiungo} in template, let's append it if we are on SMS channel
+      if (((channel || sendingChannel).toLowerCase() === 'sms' && includeSmsLink && !text.includes(link)) || (forceAppendLink && !text.includes(link))) {
+        text += `\n\nKiungo/Link:\n${link}`;
+      }
     } else {
       text = thankTemplates[messageTemplateIndex].text(g.name, event.name || 'Sherehe');
     }
@@ -1767,7 +1837,7 @@ export default function ContributionManager({
       pledgeText,
       isEn,
       () => {
-        setModalCardUrl(canvas.toDataURL('image/webp', 0.98));
+        setModalCardUrl(canvas.toDataURL('image/jpeg', 0.95));
         setModalImageLoaded(true);
       }
     );
@@ -1808,7 +1878,7 @@ export default function ContributionManager({
       pledgeText,
       isEn,
       () => {
-        setQueueCardUrl(canvas.toDataURL('image/webp', 0.98));
+        setQueueCardUrl(canvas.toDataURL('image/jpeg', 0.95));
         setQueueCardLoaded(true);
       }
     );
@@ -1825,6 +1895,16 @@ export default function ContributionManager({
 
     if (channel === 'sms' || (channel === 'whatsapp' && isMetaWhatsApp)) {
       try {
+        let pledgeText = '';
+        if (type === 'Pledge') {
+          pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
+        } else if (type === 'Reminder') {
+          const bal = (g.pledgeAmount || 0) - (g.paidAmount || 0);
+          pledgeText = `SALIO: TZS ${bal.toLocaleString()}`;
+        } else {
+          pledgeText = `KIASI: TZS ${(g.pledgeAmount || 0).toLocaleString()}`;
+        }
+        const compatibleImageUrl = await generateContributionCardImage(event, cardTemplate, g, pledgeText, isEn);
         const res = await fetch('/api/send-sms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1835,7 +1915,62 @@ export default function ContributionManager({
             text: mainText,
             channel: channel, // Passes 'sms' or 'whatsapp' appropriately to server
             templateName: type === 'Pledge' ? 'kadi_mchango' : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
-            imageUrl: cardTemplate.imageUrl || ""
+            templateParams: (() => {
+              let paymentString = '';
+              if (event.paymentMethods && event.paymentMethods.length > 0) {
+                const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
+                const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
+                const bank = event.paymentMethods.filter(m => m.type === 'Bank');
+                if (mobile.length > 0) {
+                  paymentString += isEn ? "Mobile Money:\n" : "Namba za Simu:\n";
+                  mobile.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+                  paymentString += "\n";
+                }
+                if (lipa.length > 0) {
+                  paymentString += "Lipa Namba:\n";
+                  lipa.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+                  paymentString += "\n";
+                }
+                if (bank.length > 0) {
+                  paymentString += "Akaunti za Benki:\n";
+                  bank.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
+                  paymentString += "\n";
+                }
+                paymentString = paymentString.trim();
+              } else {
+                paymentString = "[Tafadhali weka namba za malipo kwenye Settings]";
+              }
+
+              const deadlineStr = (event.contributionDeadline || event.date)
+                ? new Date(event.contributionDeadline || event.date).toLocaleDateString('sw-TZ', { day: 'numeric', month: 'long', year: 'numeric' })
+                : 'Mwisho';
+
+              if (type === 'Pledge') {
+                return [
+                  g.name,
+                  event.hostName || "Mwenyeji",
+                  event.name || "Sherehe",
+                  event.date || "",
+                  deadlineStr,
+                  paymentString
+                ];
+              } else if (type === 'Reminder') {
+                const p = g.pledgeAmount || 0;
+                const pd = g.paidAmount || 0;
+                return [
+                  g.name,
+                  event.name || 'Sherehe',
+                  p.toString(),
+                  pd.toString(),
+                  (p - pd).toString(),
+                  deadlineStr,
+                  paymentString
+                ];
+              } else {
+                return [g.name, event.name || 'Sherehe'];
+              }
+            })(),
+            imageUrl: compatibleImageUrl
           })
         });
 

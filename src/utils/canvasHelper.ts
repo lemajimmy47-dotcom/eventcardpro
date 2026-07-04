@@ -4,24 +4,52 @@ import QRCode from 'qrcode';
 const imageCache = new Map<string, HTMLImageElement>();
 const qrCache = new Map<string, HTMLImageElement>();
 
+function isLightColor(hex: string): boolean {
+  if (!hex || typeof hex !== 'string' || hex.startsWith('url')) return true;
+  let color = hex.replace('#', '');
+  if (color.length === 3) {
+    color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2];
+  }
+  if (color.length !== 6) return true;
+  const r = parseInt(color.substring(0, 2), 16);
+  const g = parseInt(color.substring(2, 4), 16);
+  const b = parseInt(color.substring(4, 6), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 125;
+}
+
 function getOrCreateQRImage(text: string, callback: (img: HTMLImageElement) => void) {
-  const cached = qrCache.get(text);
+  const textToEncode = text || "EVENTCARD";
+  const cached = qrCache.get(textToEncode);
   if (cached) {
     callback(cached);
     return;
   }
 
-  QRCode.toDataURL(text, {
+  QRCode.toDataURL(textToEncode, {
     margin: 1,
     color: {
       dark: '#000000',
       light: '#ffffff'
     }
   }, (err, url) => {
-    if (err || !url) return;
+    if (err || !url) {
+      console.error("[canvasHelper] QR Code generation failed:", err);
+      const dummyImg = new Image();
+      dummyImg.onload = () => {
+        qrCache.set(textToEncode, dummyImg);
+        callback(dummyImg);
+      };
+      dummyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      return;
+    }
     const img = new Image();
     img.onload = () => {
-      qrCache.set(text, img);
+      qrCache.set(textToEncode, img);
+      callback(img);
+    };
+    img.onerror = () => {
+      console.error("[canvasHelper] QR Image loading failed");
       callback(img);
     };
     img.src = url;
@@ -43,16 +71,29 @@ export function drawCardToCanvas(
   const w = canvas.width;
   const h = canvas.height;
 
+  // Safe fallback template coordinates if any are undefined or NaN
+  const guestNameX = typeof settings.guestNameX === 'number' && !isNaN(settings.guestNameX) ? settings.guestNameX : 50;
+  const guestNameY = typeof settings.guestNameY === 'number' && !isNaN(settings.guestNameY) ? settings.guestNameY : 45;
+  const guestNameSize = typeof settings.guestNameSize === 'number' && !isNaN(settings.guestNameSize) ? settings.guestNameSize : 24;
+
+  const qrCodeX = typeof settings.qrCodeX === 'number' && !isNaN(settings.qrCodeX) ? settings.qrCodeX : 50;
+  const qrCodeY = typeof settings.qrCodeY === 'number' && !isNaN(settings.qrCodeY) ? settings.qrCodeY : 75;
+  const qrCodeSize = typeof settings.qrCodeSize === 'number' && !isNaN(settings.qrCodeSize) ? settings.qrCodeSize : 120;
+
+  const cardTypeX = typeof settings.cardTypeX === 'number' && !isNaN(settings.cardTypeX) ? settings.cardTypeX : 50;
+  const cardTypeY = typeof settings.cardTypeY === 'number' && !isNaN(settings.cardTypeY) ? settings.cardTypeY : 15;
+  const cardTypeSize = typeof settings.cardTypeSize === 'number' && !isNaN(settings.cardTypeSize) ? settings.cardTypeSize : 14;
+
   // Render overlay items (Guest Name, QR Code, and Card Type Badge)
   const renderOverlays = () => {
     const baseW = settings.orientation === 'landscape' ? 600 : 450;
     const scale = w / baseW;
     // 1. Draw Dynamic Guest Name
     ctx.save();
-    const nameX = (settings.guestNameX / 100) * w;
-    const nameY = (settings.guestNameY / 100) * h;
-    ctx.fillStyle = settings.guestNameColor || settings.textColor;
-    ctx.font = `bold ${(settings.guestNameSize || 32) * scale}px "${settings.fontFamily || 'Inter'}", sans-serif`;
+    const nameX = (guestNameX / 100) * w;
+    const nameY = (guestNameY / 100) * h;
+    ctx.fillStyle = settings.guestNameColor || settings.textColor || '#d97706';
+    ctx.font = `bold ${(guestNameSize || 32) * scale}px "${settings.fontFamily || 'Inter'}", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(guestName || 'MGENI WA HESHIMA / GUEST NAME', nameX, nameY);
@@ -61,11 +102,11 @@ export function drawCardToCanvas(
     // 2. Draw Dynamic Card Type Badge at relative coordinates
     if (cardType) {
       ctx.save();
-      const badgeX = (settings.cardTypeX / 100) * w;
-      const badgeY = (settings.cardTypeY / 100) * h;
+      const badgeX = (cardTypeX / 100) * w;
+      const badgeY = (cardTypeY / 100) * h;
       
       const badgeText = cardType.toUpperCase();
-      ctx.font = `bold ${(settings.cardTypeSize || 13) * scale}px "${settings.fontFamily || 'Inter'}", sans-serif`;
+      ctx.font = `bold ${(cardTypeSize || 13) * scale}px "${settings.fontFamily || 'Inter'}", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
@@ -75,10 +116,11 @@ export function drawCardToCanvas(
       const paddingH = 12 * scale;
       const paddingV = 6 * scale;
       const rectW = textWidth + paddingH * 2;
-      const rectH = ((settings.cardTypeSize || 13) * scale) + paddingV * 2;
+      const rectH = ((cardTypeSize || 13) * scale) + paddingV * 2;
       
-      // Draw background pill
-      ctx.fillStyle = settings.cardTypeColor || settings.textColor || '#fbbf24';
+      // Draw background pill - fallback to warm gold/amber
+      const badgeBg = settings.cardTypeColor || '#fbbf24';
+      ctx.fillStyle = badgeBg;
       const rx = badgeX - rectW / 2;
       const ry = badgeY - rectH / 2;
       const radius = rectH / 2;
@@ -87,18 +129,18 @@ export function drawCardToCanvas(
       ctx.roundRect ? ctx.roundRect(rx, ry, rectW, rectH, radius) : ctx.rect(rx, ry, rectW, rectH);
       ctx.fill();
       
-      // Draw text in a deep dark tone
-      ctx.fillStyle = '#060a13';
+      // Draw text in high contrast color (dark charcoal if badge is light, otherwise white)
+      ctx.fillStyle = isLightColor(badgeBg) ? '#121824' : '#ffffff';
       ctx.fillText(badgeText, badgeX, badgeY);
       ctx.restore();
     }
 
     // 3. Draw QR Code at relative coordinates
-    const qrX = (settings.qrCodeX / 100) * w;
-    const qrY = (settings.qrCodeY / 100) * h;
-    const qrSize = (settings.qrCodeSize || 100) * scale;
+    const qrX = (qrCodeX / 100) * w;
+    const qrY = (qrCodeY / 100) * h;
+    const qrSize = (qrCodeSize || 100) * scale;
 
-    const cachedQR = qrCache.get(qrCodeText);
+    const cachedQR = qrCache.get(qrCodeText || 'EVENTCARD');
     if (cachedQR) {
       ctx.save();
       // Draw a subtle border frame behind the QR to make it stand out on complex backgrounds
@@ -258,5 +300,109 @@ export function drawCardToCanvas(
 
     if (onImageLoaded) onImageLoaded();
   }
+}
+
+export function ensureAssetsLoaded(
+  settings: TemplateSettings,
+  qrCodeText: string,
+  callback: () => void
+) {
+  let bgLoaded = false;
+  let qrLoaded = false;
+
+  const checkDone = () => {
+    if (bgLoaded && qrLoaded) {
+      callback();
+    }
+  };
+
+  const isWebImage = settings.imageUrl && (
+    settings.imageUrl.startsWith('data:') || 
+    settings.imageUrl.startsWith('http://') || 
+    settings.imageUrl.startsWith('https://') || 
+    settings.imageUrl.startsWith('/')
+  );
+
+  if (isWebImage) {
+    const src = settings.imageUrl!;
+    const cachedImg = imageCache.get(src);
+    if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+      bgLoaded = true;
+      checkDone();
+    } else {
+      const img = cachedImg || new Image();
+      if (!cachedImg) {
+        img.crossOrigin = 'anonymous';
+        imageCache.set(src, img);
+      }
+      img.onload = () => {
+        bgLoaded = true;
+        checkDone();
+      };
+      img.onerror = () => {
+        bgLoaded = true;
+        checkDone();
+      };
+      if (!cachedImg) {
+        img.src = src;
+      }
+    }
+  } else {
+    bgLoaded = true;
+    checkDone();
+  }
+
+  getOrCreateQRImage(qrCodeText, () => {
+    qrLoaded = true;
+    checkDone();
+  });
+}
+
+export async function generateGuestCardImage(
+  event: EventDetails,
+  settings: TemplateSettings,
+  guestName: string,
+  cardType: string,
+  qrCodeText: string
+): Promise<string> {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const isLandscape = settings.orientation === 'landscape';
+    canvas.width = isLandscape ? 1200 : 900;
+    canvas.height = isLandscape ? 900 : 1200;
+
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        console.warn("[canvasHelper] Card image generation timed out, falling back to raw settings image");
+        resolve(settings.imageUrl || "");
+      }
+    }, 5000); // 5 second safety fallback timeout
+
+    ensureAssetsLoaded(settings, qrCodeText, () => {
+      drawCardToCanvas(
+        canvas,
+        event,
+        settings,
+        guestName,
+        cardType,
+        qrCodeText,
+        () => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            try {
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+              resolve(dataUrl);
+            } catch (e) {
+              console.error("[canvasHelper] Error exporting canvas to dataUrl", e);
+              resolve(settings.imageUrl || "");
+            }
+          }
+        }
+      );
+    });
+  });
 }
 

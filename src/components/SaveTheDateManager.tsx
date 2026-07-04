@@ -4,6 +4,7 @@ import { Send, Upload, Paperclip, MessageSquare, Check, Settings, AlertCircle, U
 import { SaveTheDate, Guest, EventDetails } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { safeLocalStorage } from '../utils/storage';
+import { convertWebPToJpeg } from '../utils/imageUtils';
 
 interface Props {
   eventDetails: EventDetails;
@@ -257,8 +258,8 @@ Karibu sana!`);
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(img, 0, 0, width, height);
-            // Badilisha kwenda WebP na ubora wa 98% (karibia na asili) ili kuzuia kupoteza ubora ukizoom
-            const compressedDataUrl = canvas.toDataURL('image/webp', 0.98);
+            // Badilisha kwenda JPEG na ubora wa 95% (karibia na asili) ili kuzuia kupoteza ubora ukizoom na kuhakikisha inasaidiwa na Meta WhatsApp
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
             setSelectedFile(compressedDataUrl);
             setIsDirty(true);
@@ -380,6 +381,7 @@ Karibu sana!`);
             return val !== undefined ? val : match;
           });
 
+          const compatibleImageUrl = await convertWebPToJpeg(selectedFile);
           const res = await fetch('/api/send-sms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -391,7 +393,7 @@ Karibu sana!`);
               channel: 'whatsapp',
               templateParams,
               templateName: 'hifadhi_tarehe',
-              imageUrl: selectedFile || ""
+              imageUrl: compatibleImageUrl
             })
           });
 
@@ -538,6 +540,7 @@ Karibu sana!`);
                 return val !== undefined ? val : match;
               });
 
+              const compatibleImageUrl = await convertWebPToJpeg(selectedFile);
               const res = await fetch('/api/send-sms', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -549,7 +552,7 @@ Karibu sana!`);
                   channel: 'whatsapp',
                   templateParams,
                   templateName: 'hifadhi_tarehe',
-                  imageUrl: selectedFile || ""
+                  imageUrl: compatibleImageUrl
                 })
               });
 

@@ -201,3 +201,30 @@ export const drawContributionCardToCanvas = (
     drawFallback();
   }
 };
+
+export async function generateContributionCardImage(
+  evt: EventDetails,
+  tpl: ContributionCardTemplate,
+  guest: Guest,
+  pledgeText: string,
+  isEn: boolean = false
+): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') {
+      resolve(tpl.imageUrl || '');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 900;
+    
+    drawContributionCardToCanvas(canvas, evt, tpl, guest, pledgeText, isEn, () => {
+      try {
+        resolve(canvas.toDataURL('image/jpeg', 0.95));
+      } catch (err) {
+        console.error("Failed to generate contribution card image:", err);
+        resolve(tpl.imageUrl || '');
+      }
+    });
+  });
+}
