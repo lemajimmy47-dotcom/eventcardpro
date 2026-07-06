@@ -990,7 +990,8 @@ export default function App() {
           // Filtered list states based on live search
           const filteredGuests = activeGuests.filter(g => 
             g.name.toLowerCase().includes(guestListSearch.toLowerCase()) ||
-            g.phone.toLowerCase().includes(guestListSearch.toLowerCase())
+            g.phone.toLowerCase().includes(guestListSearch.toLowerCase()) ||
+            `P-${g.id.substring(0, 6).toUpperCase()}`.toLowerCase().includes(guestListSearch.toLowerCase())
           );
 
           const sentGuestsList = activeGuests.filter(g => g.whatsappStatus === 'Imetumia' || g.smsStatus === 'Imetumia');
@@ -1453,8 +1454,10 @@ export default function App() {
                           >
                             <div className="flex flex-col text-left min-w-0">
                               <span className="text-white font-bold text-xs truncate max-w-[170px]">{guest.name}</span>
-                              <div className="flex items-center space-x-1.5 text-slate-450 text-[10px] font-mono mt-0.5">
-                                <span>{guest.phone}</span>
+                              <div className="flex items-center space-x-1.5 text-slate-450 text-[10px] font-mono mt-0.5 flex-wrap">
+                                <span className="text-amber-500 font-bold">P-{guest.id.substring(0, 6).toUpperCase()}</span>
+                                <span>•</span>
+                                <span>{guest.phone || (language === 'sw' ? 'Hakuna Simu' : 'No Phone')}</span>
                                 {(guest.smsStatus === 'Imetumia' || guest.whatsappStatus === 'Imetumia') && (
                                   <>
                                     <span>•</span>

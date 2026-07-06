@@ -152,21 +152,53 @@ function sanitizeHttpHeaders(headers: any, settings: any): Record<string, string
   return cleanHeaders;
 }
 
-function sanitizeMetaTemplateParam(val: any): string {
+function sanitizeMetaTemplateParam(val: any, allowNewlines: boolean = false): string {
   if (val === undefined || val === null) return " ";
   let str = String(val);
-  // Replace newlines, carriage returns, and tabs with spaces
-  str = str.replace(/[\r\n\t]+/g, ' ');
-  // Replace multiple spaces (2 or more spaces) with a single space to avoid the "more than 4 consecutive spaces" rule
-  str = str.replace(/ {2,}/g, ' ');
-  // Trim the result
-  str = str.trim();
-  return str || " ";
+  
+  // Replace literal double-escaped newlines/tabs
+  str = str.replace(/\\n/g, '\n').replace(/\\r/g, '\n').replace(/\\t/g, ' ');
+  
+  // Replace unicode line separators
+  str = str.replace(/[\u2028\u2029]/g, '\n');
+  
+  // Replace carriage returns and tabs
+  str = str.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\t/g, ' ');
+  
+  // Split into lines, trim each, and filter out empty lines
+  const lines = str.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+    
+  if (lines.length === 0) return " ";
+  
+  // Meta WhatsApp template parameters NEVER allow newlines/tabs or more than 4 consecutive spaces.
+  // Therefore, we MUST ignore allowNewlines and ALWAYS join with " | " to prevent API failures.
+  let joined = lines.join(' | ');
+  
+  // Collapse ANY consecutive whitespace (spaces, invisible chars) into a single space
+  joined = joined.replace(/\s{2,}/g, ' ');
+  
+  return joined.trim() || " ";
+}
+
+function toNonBreaking(str: string): string {
+  return str.replace(/ /g, '\u00A0');
 }
 
 function getParamsForCount(count: number, guestData: any, eventData: any, fallbackText: string, incomingParams?: string[], templateName?: string): any[] {
   const resolvedParams: string[] = [];
   
+  const isContribution = (templateName || "").toLowerCase().includes("mchango") || 
+                         (templateName || "").toLowerCase().includes("pledge") || 
+                         (templateName || "").toLowerCase().includes("ombi") ||
+                         (templateName || "").toLowerCase().includes("reminder") ||
+                         (templateName || "").toLowerCase().includes("ukumbusho") ||
+                         (templateName || "").toLowerCase().includes("kumbusho") ||
+                         (templateName || "").toLowerCase().includes("ahadi") ||
+                         (templateName || "").toLowerCase().includes("rem1") ||
+                         (templateName || "").toLowerCase().includes("rem2");
+
   const standardValues = [
     guestData?.name || "Mgeni wetu", // 1. Guest Name
     eventData?.hostName || "Familia yetu", // 2. Host Name
@@ -175,11 +207,11 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
     eventData?.eventHallName || "Ukumbi wa Sherehe", // 5. Venue
     `${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`, // 6. Time
     guestData?.code || guestData?.id || "N/A", // 7. Card Number
-    guestData?.cardType || "Kadi ya Kawaida", // 8. Card Type
-    eventData?.contact1Name || "Msimamizi 1", // 9. Contact 1 Name
-    eventData?.contact1 || "", // 10. Contact 1 Phone
-    eventData?.contact2Name || "Msimamizi 2", // 11. Contact 2 Name
-    eventData?.contact2 || "" // 12. Contact 2 Phone
+    isContribution ? "" : (guestData?.cardType || "Kadi ya Kawaida"), // 8. Card Type
+    isContribution ? "" : (eventData?.contact1Name || "Msimamizi 1"), // 9. Contact 1 Name
+    isContribution ? "" : (eventData?.contact1 || ""), // 10. Contact 1 Phone
+    isContribution ? "" : (eventData?.contact2Name || "Msimamizi 2"), // 11. Contact 2 Name
+    isContribution ? "" : (eventData?.contact2 || "") // 12. Contact 2 Phone
   ];
 
   if (Array.isArray(incomingParams) && incomingParams.length > 0) {
@@ -230,7 +262,37 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
         resolvedParams.push(eventData?.date || "Tarehe");
         const dd = eventData?.contributionDeadline || eventData?.deadlineDate;
         resolvedParams.push(dd ? new Date(dd).toLocaleDateString("sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : "Tarehe ya Mwisho");
-        let pmStr = ""; if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) { const mobile = eventData.paymentMethods.filter((m: any) => m.type === "Mobile"); const lipa = eventData.paymentMethods.filter((m: any) => m.type === "Lipa Namba"); const bank = eventData.paymentMethods.filter((m: any) => m.type === "Bank"); if (mobile.length > 0) { pmStr += "Namba za Simu:\n"; mobile.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (lipa.length > 0) { pmStr += "Lipa Namba:\n"; lipa.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (bank.length > 0) { pmStr += "Akaunti za Benki:\n"; bank.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } pmStr = pmStr.trim(); } else if (typeof eventData?.paymentMethods === "string" && eventData.paymentMethods) { pmStr = eventData.paymentMethods; } else { pmStr = "Namba za Michango"; } resolvedParams.push(pmStr);
+        let pmStr = "";
+        if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) {
+          const items: string[] = [];
+          eventData.paymentMethods.forEach((m: any) => {
+            const isMixx = String(m.provider || '').trim().toLowerCase().includes('mixx') || String(m.provider || '').trim().toLowerCase().includes('yas');
+            let itemStr = "";
+            if (m.type === "Mobile") {
+              if (isMixx) {
+                itemStr = `📱 Mixx By Yas: ${m.number} (${m.name})`;
+              } else {
+                itemStr = `📱 ${m.provider}: ${m.number} (${m.name})`;
+              }
+            } else if (m.type === "Lipa Namba") {
+              itemStr = `💳 ${m.provider}: ${m.number} (${m.name})`;
+            } else if (m.type === "Bank") {
+              itemStr = `🏦 ${m.provider}: ${m.number} (${m.name})`;
+            }
+            if (itemStr) {
+              items.push(itemStr);
+            }
+          });
+          pmStr = items.join("\n");
+        } else if (typeof eventData?.paymentMethods === "string" && eventData.paymentMethods) {
+          const lines = eventData.paymentMethods.split('\n')
+            .map((line: string) => line.trim())
+            .filter((line: string) => line.length > 0);
+          pmStr = lines.join('\n');
+        } else {
+          pmStr = "Namba za Michango";
+        }
+        resolvedParams.push(pmStr);
       }
     } else if (count === 7) {
       // Contribution Reminder mapping (Removed link)
@@ -241,7 +303,37 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
       resolvedParams.push(String((guestData?.pledgeAmount || 0) - (guestData?.paidAmount || 0)));
       const dd = eventData?.contributionDeadline || eventData?.deadlineDate;
         resolvedParams.push(dd ? new Date(dd).toLocaleDateString("sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : "Tarehe ya Mwisho");
-      let pmStr = ""; if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) { const mobile = eventData.paymentMethods.filter((m: any) => m.type === "Mobile"); const lipa = eventData.paymentMethods.filter((m: any) => m.type === "Lipa Namba"); const bank = eventData.paymentMethods.filter((m: any) => m.type === "Bank"); if (mobile.length > 0) { pmStr += "Namba za Simu:\n"; mobile.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (lipa.length > 0) { pmStr += "Lipa Namba:\n"; lipa.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } if (bank.length > 0) { pmStr += "Akaunti za Benki:\n"; bank.forEach((m: any) => pmStr += `${m.provider}: ${m.number} (${m.name})\n`); pmStr += "\n"; } pmStr = pmStr.trim(); } else if (typeof eventData?.paymentMethods === "string" && eventData.paymentMethods) { pmStr = eventData.paymentMethods; } else { pmStr = "Namba za Michango"; } resolvedParams.push(pmStr);
+      let pmStr = "";
+      if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) {
+        const items: string[] = [];
+        eventData.paymentMethods.forEach((m: any) => {
+          const isMixx = String(m.provider || '').trim().toLowerCase().includes('mixx') || String(m.provider || '').trim().toLowerCase().includes('yas');
+          let itemStr = "";
+          if (m.type === "Mobile") {
+            if (isMixx) {
+              itemStr = `📱 Mixx By Yas: ${m.number} (${m.name})`;
+            } else {
+              itemStr = `📱 ${m.provider}: ${m.number} (${m.name})`;
+            }
+          } else if (m.type === "Lipa Namba") {
+            itemStr = `💳 ${m.provider}: ${m.number} (${m.name})`;
+          } else if (m.type === "Bank") {
+            itemStr = `🏦 ${m.provider}: ${m.number} (${m.name})`;
+          }
+          if (itemStr) {
+            items.push(itemStr);
+          }
+        });
+        pmStr = items.join("\n");
+      } else if (typeof eventData?.paymentMethods === "string" && eventData.paymentMethods) {
+        const lines = eventData.paymentMethods.split('\n')
+          .map((line: string) => line.trim())
+          .filter((line: string) => line.length > 0);
+        pmStr = lines.join('\n');
+      } else {
+        pmStr = "Namba za Michango";
+      }
+      resolvedParams.push(pmStr);
     } else {
       for (let i = 0; i < count; i++) {
         if (i < standardValues.length) {
@@ -253,7 +345,7 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
     }
   }
 
-  return resolvedParams.map(val => ({ type: "text", text: sanitizeMetaTemplateParam(val) }));
+  return resolvedParams.map(val => ({ type: "text", text: sanitizeMetaTemplateParam(val, true) }));
 }
 
 const metaMediaCache = new Map<string, { mediaId: string; timestamp: number }>();
@@ -345,7 +437,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           expectedCount = 2;
         } else if (lowerTemplateName.includes('mchango') || lowerTemplateName.includes('pledge') || lowerTemplateName.includes('ombi')) {
           expectedCount = 6;
-        } else if (lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho')) {
+        } else if (lowerTemplateName.includes('reminder') || lowerTemplateName.includes('ukumbusho') || lowerTemplateName.includes('kumbusho') || lowerTemplateName.includes('ahadi')) {
           expectedCount = 7;
         } else if (lowerTemplateName.includes('save') || lowerTemplateName.includes('date') || lowerTemplateName.includes('hifadhi') || lowerTemplateName.includes('tarehe')) {
           // Explicitly handle Save the Date with 3 params and NO buttons by default
@@ -380,20 +472,19 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
 
               if (templateParams.length > 12 && urlIndices.length > 0) {
                 templateParams.forEach((val, idx) => {
-                  const strVal = sanitizeMetaTemplateParam(val);
                   if (urlIndices.includes(idx)) {
-                    buttonParams.push({ type: "text", text: strVal });
+                    buttonParams.push({ type: "text", text: sanitizeMetaTemplateParam(val, false) });
                   } else {
-                    bodyParams.push({ type: "text", text: strVal });
+                    bodyParams.push({ type: "text", text: sanitizeMetaTemplateParam(val, true) });
                   }
                 });
               } else {
                 templateParams.forEach((val) => {
-                  bodyParams.push({ type: "text", text: sanitizeMetaTemplateParam(val) });
+                  bodyParams.push({ type: "text", text: sanitizeMetaTemplateParam(val, true) });
                 });
               }
             } else {
-              bodyParams.push({ type: "text", text: sanitizeMetaTemplateParam(text) });
+              bodyParams.push({ type: "text", text: sanitizeMetaTemplateParam(text, true) });
             }
           }
         }
@@ -642,7 +733,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                     newExpectedCount = 6;
                   } else if (lowerFallbackName.includes('save') || lowerFallbackName.includes('date') || lowerFallbackName.includes('hifadhi') || lowerFallbackName.includes('tarehe')) {
                     newExpectedCount = 3;
-                  } else if (lowerFallbackName.includes('reminder') || lowerFallbackName.includes('ukumbusho')) {
+                  } else if (lowerFallbackName.includes('reminder') || lowerFallbackName.includes('ukumbusho') || lowerFallbackName.includes('kumbusho') || lowerFallbackName.includes('ahadi')) {
                     newExpectedCount = 7;
                   } else if (lowerFallbackName.includes('mwaliko') || lowerFallbackName.includes('kadi') || lowerFallbackName.includes('wedding') || lowerFallbackName.includes('invite') || lowerFallbackName.includes('sherehe') || lowerFallbackName.includes('invitation')) {
                     newExpectedCount = 12;
@@ -765,24 +856,38 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                     if (!buttonParamVal && code) {
                       let baseVal = `?invite=${code}&eventId=${eventId || ""}`;
                       const lowerFallback = (templateName || "").toLowerCase();
-                      if (lowerFallback.includes('mchango') || lowerFallback.includes('pledge') || lowerFallback.includes('ombi') || lowerFallback.includes('reminder') || lowerFallback.includes('ukumbusho')) {
+                      if (lowerFallback.includes('mchango') || lowerFallback.includes('pledge') || lowerFallback.includes('ombi') || lowerFallback.includes('reminder') || lowerFallback.includes('ukumbusho') || lowerFallback.includes('kumbusho') || lowerFallback.includes('ahadi')) {
                         baseVal += `&pledge=true`;
                       }
                       buttonParamVal = baseVal;
                     }
                     if (buttonParamVal) {
                       const btnParams = [{ type: "text", text: buttonParamVal }];
-                      if (btnCompIdx !== -1) {
-                        payload.template.components[btnCompIdx].parameters = btnParams;
-                        console.log(`[Meta WhatsApp Self-Healing] Updated existing button component with parameter: "${buttonParamVal}"`);
+                      let targetIndex = "0";
+                      const idxMatch = lowerCombined.match(/button at index (\d+)/i);
+                      if (idxMatch && idxMatch[1]) {
+                        targetIndex = idxMatch[1];
+                      }
+                      
+                      const exactBtnCompIdx = payload.template.components.findIndex((c: any) => (c.type === "button" || c.type === "buttons") && String(c.index) === targetIndex);
+                      
+                      if (exactBtnCompIdx !== -1) {
+                        payload.template.components[exactBtnCompIdx].parameters = btnParams;
+                        console.log(`[Meta WhatsApp Self-Healing] Updated existing button component (index ${targetIndex}) with parameter: "${buttonParamVal}"`);
                       } else {
-                        payload.template.components.push({
-                          type: "button",
-                          index: "0",
-                          sub_type: "url",
-                          parameters: btnParams
-                        });
-                        console.log(`[Meta WhatsApp Self-Healing] Added missing button component with parameter: "${buttonParamVal}"`);
+                        if (btnCompIdx !== -1 && !payload.template.components[btnCompIdx].index) {
+                           payload.template.components[btnCompIdx].index = targetIndex;
+                           payload.template.components[btnCompIdx].parameters = btnParams;
+                           payload.template.components[btnCompIdx].sub_type = "url";
+                        } else {
+                          payload.template.components.push({
+                            type: "button",
+                            sub_type: "url",
+                            index: targetIndex,
+                            parameters: btnParams
+                          });
+                        }
+                        console.log(`[Meta WhatsApp Self-Healing] Added missing button component (index ${targetIndex}) with parameter: "${buttonParamVal}"`);
                       }
                       healAttempted = true;
                     } else {
@@ -800,7 +905,10 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                              lowerCombined.includes("extra parameter") ||
                              lowerCombined.includes("not contain button") ||
                              lowerCombined.includes("invalid parameters for button") ||
-                             lowerCombined.includes("no parameters allowed for button")) {
+                             lowerCombined.includes("no parameters allowed for button") ||
+                             lowerCombined.includes("must be of type quickreply") ||
+                             lowerCombined.includes("quickreply") ||
+                             lowerCombined.includes("quick reply")) {
                     if (btnCompIdx !== -1) {
                       // Remove ALL button components to be safe
                       const initialCount = payload.template.components.length;

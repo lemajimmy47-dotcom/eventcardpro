@@ -114,6 +114,11 @@ export default function ContributionManager({
   const [modalPaymentDate, setModalPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [modalPaymentNotes, setModalPaymentNotes] = useState('');
 
+  const formatNumberWithCommas = (value: string) => {
+    const clean = value.replace(/\D/g, '');
+    return clean ? parseInt(clean, 10).toLocaleString('en-US') : '';
+  };
+
   // Selected preset message template id
   const [messageTemplateIndex, setMessageTemplateIndex] = useState(0);
   const [sendingChannel, setSendingChannel] = useState<'SMS' | 'WhatsApp'>('SMS');
@@ -198,6 +203,14 @@ export default function ContributionManager({
     return false;
   }, [gatewaySettings.whatsappUrl]);
 
+  const metaTemplateName = React.useMemo(() => {
+    if (!gatewaySettings.whatsappUrl) return null;
+    try {
+      const parsed = JSON.parse(gatewaySettings.whatsappUrl);
+      return parsed.template_name || null;
+    } catch(e) { return null; }
+  }, [gatewaySettings.whatsappUrl]);
+
   useEffect(() => {
     fetchRealSmsBalance();
     fetch('/api/sms-settings')
@@ -273,7 +286,7 @@ export default function ContributionManager({
   const [tplPledge2Sw, setTplPledge2Sw] = useState<string>(() => event.smsTemplates?.pledge2Sw || safeLocalStorage.getItem(`kadi_tpl_pledge2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nAsante muno.`);
 
   const [tplRem1En, setTplRem1En] = useState<string>(() => event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a friendly reminder regarding your contribution pledge for "{Tukio}".\n\nYour contribution status:\n- Pledged: TZS {Ahadi}\n- Already Paid: TZS {Paid}\n- Outstanding Balance: TZS {Balance}\n\nPlease complete your contribution by {tarehe_ya_mwisho}.\n\nYou can send your contribution via:\n{payment_methods}\n\nThank you for your generous support and God bless you.`);
-  const [tplRem1Sw, setTplRem1Sw] = useState<string>(() => event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n- Ahadi: TZS {Ahadi}\n- Tayari Umelipa: TZS {Paid}\n- Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`);
+  const [tplRem1Sw, setTplRem1Sw] = useState<string>(() => event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n\n Ahadi: TZS {Ahadi}\n\n Tayari Umelipa: TZS {Paid}\n\n Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`);
 
   const [tplRem2En, setTplRem2En] = useState<string>(() => event.smsTemplates?.rem2En || safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
   const [tplRem2Sw, setTplRem2Sw] = useState<string>(() => event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
@@ -371,7 +384,7 @@ export default function ContributionManager({
     setTplPledge2Sw(event.smsTemplates?.pledge2Sw || safeLocalStorage.getItem(`kadi_tpl_pledge2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunapokea kwa furaha ahadi za michango kwa ajili ya maandalizi ya tukio la {Tukio}.\n\nAsante muno.`);
 
     setTplRem1En(event.smsTemplates?.rem1En || safeLocalStorage.getItem(`kadi_tpl_rem1_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a friendly reminder regarding your contribution pledge for "{Tukio}".\n\nYour contribution status:\n- Pledged: TZS {Ahadi}\n- Already Paid: TZS {Paid}\n- Outstanding Balance: TZS {Balance}\n\nPlease complete your contribution by {tarehe_ya_mwisho}.\n\nYou can send your contribution via:\n{payment_methods}\n\nThank you for your generous support and God bless you.`);
-    setTplRem1Sw(event.smsTemplates?.rem1Sw || safeLocalStorage.getItem(`kadi_tpl_rem1_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n- Ahadi: TZS {Ahadi}\n- Tayari Umelipa: TZS {Paid}\n- Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`);
+    setTplRem1Sw(event.smsTemplates?.rem1Sw || `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n\n Ahadi: TZS {Ahadi}\n\n Tayari Umelipa: TZS {Paid}\n\n Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`);
 
     setTplRem2En(event.smsTemplates?.rem2En || safeLocalStorage.getItem(`kadi_tpl_rem2_en_${event.id}`) || `Dear {Mgeni},\n\nThis is a respectful reminder to complete your pending outstanding contribution balance to support our event "{Tukio}".\n\nBalance Due: TZS {Balance}\n\nThank you sincerely for your generosity.`);
     setTplRem2Sw(event.smsTemplates?.rem2Sw || safeLocalStorage.getItem(`kadi_tpl_rem2_sw_${event.id}`) || `Ndugu {Mgeni},\n\nTunakukumbusha kwa heshima kabisa kukamilisha ahadi yako ya mchango kwa ajili ya kufanikisha tukio la {Tukio}.\n\nSalio linalobaki: TZS {Balance}\n\nAsante sana kwa ukarimu wako.`);
@@ -471,8 +484,8 @@ export default function ContributionManager({
     setNewGuestName(g.name);
     setNewGuestPhone(g.phone || '');
     setNewGuestCategory((g.cardType as any) || 'SINGLE');
-    setNewGuestPledge(String(g.pledgeAmount || 0));
-    setNewGuestPaid(String(g.paidAmount || 0));
+    setNewGuestPledge(g.pledgeAmount ? g.pledgeAmount.toLocaleString('en-US') : '0');
+    setNewGuestPaid(g.paidAmount ? g.paidAmount.toLocaleString('en-US') : '0');
     setShowQuickAddGuest(true);
   };
 
@@ -814,26 +827,28 @@ export default function ContributionManager({
 
   // Filter guests
   const filteredGuests = activeEventGuests.filter(g => {
+    const refCode = `P-${g.id.substring(0, 6).toUpperCase()}`;
     const nameMatch = g.name.toLowerCase().includes(searchQuery.toLowerCase());
     const phoneMatch = g.phone.toLowerCase().includes(searchQuery.toLowerCase());
     const typeMatch = g.cardType.toLowerCase().includes(searchQuery.toLowerCase());
+    const refMatch = refCode.toLowerCase().includes(searchQuery.toLowerCase());
     
     const currStatus = g.pledgeStatus || 'No Pledge';
     const statusMatch = statusFilter === 'All' ? true : currStatus === statusFilter;
 
-    return (nameMatch || phoneMatch || typeMatch) && statusMatch;
+    return (nameMatch || phoneMatch || typeMatch || refMatch) && statusMatch;
   });
 
   // Action methods
   const openPledgeModal = (guest: Guest) => {
     setTargetGuest(guest);
-    setModalPledgeAmount((guest.pledgeAmount || '').toString());
+    setModalPledgeAmount(guest.pledgeAmount ? guest.pledgeAmount.toLocaleString('en-US') : '');
     setIsPledgeModalOpen(true);
   };
 
   const handleSavePledge = () => {
     if (!targetGuest) return;
-    const pledgeNum = parseInt(modalPledgeAmount, 10) || 0;
+    const pledgeNum = parseInt(modalPledgeAmount.replace(/\D/g, ''), 10) || 0;
     const currentPaid = targetGuest.paidAmount || 0;
 
     let status: 'No Pledge' | 'Pledged' | 'Partially Paid' | 'Fully Paid' = 'No Pledge';
@@ -869,7 +884,7 @@ export default function ContributionManager({
 
   const handleRecordPayment = () => {
     if (!targetGuest) return;
-    const amtPaidNew = parseInt(modalPaymentAmount, 10) || 0;
+    const amtPaidNew = parseInt(modalPaymentAmount.replace(/\D/g, ''), 10) || 0;
     if (amtPaidNew <= 0) {
       alert('Tafadhali ingiza kiasi sahihi cha malipo.');
       return;
@@ -980,26 +995,43 @@ export default function ContributionManager({
   ) => {
     let paymentString = '';
     if (event.paymentMethods && event.paymentMethods.length > 0) {
-      const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
-      const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
-      const bank = event.paymentMethods.filter(m => m.type === 'Bank');
-      
-      if (mobile.length > 0) {
-        paymentString += isEn ? "Mobile Money:\n" : "Namba za Simu:\n";
-        mobile.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-        paymentString += "\n";
-      }
-      if (lipa.length > 0) {
-        paymentString += "Lipa Namba:\n";
-        lipa.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-        paymentString += "\n";
-      }
-      if (bank.length > 0) {
-        paymentString += "Akaunti za Benki:\n";
-        bank.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-        paymentString += "\n";
-      }
-      paymentString = paymentString.trim();
+                 const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
+                 const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
+                 const bank = event.paymentMethods.filter(m => m.type === 'Bank');
+                 
+                 const isMixx = (provider: string) => {
+                   const p = String(provider || '').trim().toLowerCase();
+                   return p === 'mixx by yas' || p === 'mixx by yass' || p.includes('mixx') || p.includes('yas');
+                 };
+ 
+                 const mobileNormal = mobile.filter(m => !isMixx(m.provider));
+                 const mobileMixx = mobile.filter(m => isMixx(m.provider));
+ 
+                 if (mobileNormal.length > 0) {
+                   paymentString += isEn ? "Mobile Money:\n\n" : "Namba za Simu:\n\n";
+                   mobileNormal.forEach(m => {
+                     paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                   });
+                 }
+                 if (mobileMixx.length > 0) {
+                   paymentString += "Mixx By Yas:\n\n";
+                   mobileMixx.forEach(m => {
+                     paymentString += `${m.number} (${m.name})\n\n`;
+                   });
+                 }
+                 if (lipa.length > 0) {
+                   paymentString += "Lipa Namba:\n\n";
+                   lipa.forEach(m => {
+                     paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                   });
+                 }
+                 if (bank.length > 0) {
+                   paymentString += isEn ? "Bank Accounts:\n\n" : "Akaunti za Benki:\n\n";
+                   bank.forEach(m => {
+                     paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                   });
+                 }
+                 paymentString = paymentString.trim();
     } else {
       paymentString = "[Tafadhali weka namba za malipo kwenye Settings]";
     }
@@ -1218,31 +1250,69 @@ export default function ContributionManager({
             phone: g.phone,
             text: text,
             channel: sendingChannel.toLowerCase(), // 'sms' or 'whatsapp'
-            templateName: type === 'Pledge' ? 'kadi_mchango' : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
+            templateName: type === 'Pledge' ? (metaTemplateName || 'kadi_mchango') : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
             templateParams: (() => {
               let paymentString = '';
+              const isWhatsapp = sendingChannel.toLowerCase() === 'whatsapp';
               if (event.paymentMethods && event.paymentMethods.length > 0) {
-                const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
-                const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
-                const bank = event.paymentMethods.filter(m => m.type === 'Bank');
-                if (mobile.length > 0) {
-                  paymentString += isEn ? "Mobile Money:\n" : "Namba za Simu:\n";
-                  mobile.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-                  paymentString += "\n";
+                if (isWhatsapp) {
+                  const items: string[] = [];
+                  event.paymentMethods.forEach(m => {
+                    const isMixx = String(m.provider || '').trim().toLowerCase().includes('mixx') || String(m.provider || '').trim().toLowerCase().includes('yas');
+                    if (m.type === 'Mobile') {
+                      if (isMixx) {
+                        items.push(`📱 Mixx By Yas: ${m.number} (${m.name})`);
+                      } else {
+                        items.push(`📱 ${m.provider}: ${m.number} (${m.name})`);
+                      }
+                    } else if (m.type === 'Lipa Namba') {
+                      items.push(`💳 ${m.provider}: ${m.number} (${m.name})`);
+                    } else if (m.type === 'Bank') {
+                      items.push(`🏦 ${m.provider}: ${m.number} (${m.name})`);
+                    }
+                  });
+                  paymentString = items.join('\n');
+                } else {
+                  const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
+                  const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
+                  const bank = event.paymentMethods.filter(m => m.type === 'Bank');
+                  
+                  const isMixx = (provider) => {
+                    const p = String(provider || '').trim().toLowerCase();
+                    return p === 'mixx by yas' || p === 'mixx by yass' || p.includes('mixx') || p.includes('yas');
+                  };
+
+                  const mobileNormal = mobile.filter(m => !isMixx(m.provider));
+                  const mobileMixx = mobile.filter(m => isMixx(m.provider));
+
+                  if (mobileNormal.length > 0) {
+                    paymentString += isEn ? "Mobile Money:\n\n" : "Namba za Simu:\n\n";
+                    mobileNormal.forEach(m => {
+                      paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  if (mobileMixx.length > 0) {
+                    paymentString += "Mixx By Yas:\n\n";
+                    mobileMixx.forEach(m => {
+                      paymentString += `${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  if (lipa.length > 0) {
+                    paymentString += "Lipa Namba:\n\n";
+                    lipa.forEach(m => {
+                      paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  if (bank.length > 0) {
+                    paymentString += isEn ? "Bank Accounts:\n\n" : "Akaunti za Benki:\n\n";
+                    bank.forEach(m => {
+                      paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  paymentString = paymentString.trim();
                 }
-                if (lipa.length > 0) {
-                  paymentString += "Lipa Namba:\n";
-                  lipa.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-                  paymentString += "\n";
-                }
-                if (bank.length > 0) {
-                  paymentString += "Akaunti za Benki:\n";
-                  bank.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-                  paymentString += "\n";
-                }
-                paymentString = paymentString.trim();
               } else {
-                paymentString = "[Tafadhali weka namba za malipo kwenye Settings]";
+                paymentString = isEn ? "[Please configure payment methods in settings]" : "[Tafadhali weka namba za malipo kwenye Settings]";
               }
 
               const deadlineStr = (event.contributionDeadline || event.date)
@@ -1444,7 +1514,7 @@ export default function ContributionManager({
         setCustomReminderTpl1(
           isEn
             ? `Dear {Mgeni},\n\nThis is a friendly reminder regarding your contribution pledge for "{Tukio}".\n\nYour contribution status:\n- Pledged: TZS {Ahadi}\n- Already Paid: TZS {Paid}\n- Outstanding Balance: TZS {Balance}\n\nPlease complete your contribution by {tarehe_ya_mwisho}.\n\nYou can send your contribution via:\n{payment_methods}\n\nThank you for your generous support and God bless you.`
-            : `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n- Ahadi: TZS {Ahadi}\n- Tayari Umelipa: TZS {Paid}\n- Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`
+            : `Ndugu {Mgeni},\n\nTunakukumbusha kwa upendo kuhusu ahadi yako ya mchango kwa ajili ya {Tukio}.\n\nTaarifa za mchango:\n\n Ahadi: TZS {Ahadi}\n\n Tayari Umelipa: TZS {Paid}\n\n Salio linalobaki: TZS {Balance}\n\nTafadhali kamilisha mchango wako kabla ya tarehe {tarehe_ya_mwisho}.\n\nUnaweza kutuma kupitia:\n\n{namba_za_malipo}\n\nAhsante sana kwa ushirikiano wako na Mungu akubariki.`
         );
       } else {
         setCustomReminderTpl2(
@@ -1914,31 +1984,69 @@ export default function ContributionManager({
             phone: g.phone,
             text: mainText,
             channel: channel, // Passes 'sms' or 'whatsapp' appropriately to server
-            templateName: type === 'Pledge' ? 'kadi_mchango' : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
+            templateName: type === 'Pledge' ? (metaTemplateName || 'kadi_mchango') : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
             templateParams: (() => {
               let paymentString = '';
+              const isWhatsapp = channel === 'whatsapp';
               if (event.paymentMethods && event.paymentMethods.length > 0) {
-                const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
-                const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
-                const bank = event.paymentMethods.filter(m => m.type === 'Bank');
-                if (mobile.length > 0) {
-                  paymentString += isEn ? "Mobile Money:\n" : "Namba za Simu:\n";
-                  mobile.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-                  paymentString += "\n";
+                if (isWhatsapp) {
+                  const items: string[] = [];
+                  event.paymentMethods.forEach(m => {
+                    const isMixx = String(m.provider || '').trim().toLowerCase().includes('mixx') || String(m.provider || '').trim().toLowerCase().includes('yas');
+                    if (m.type === 'Mobile') {
+                      if (isMixx) {
+                        items.push(`📱 Mixx By Yas: ${m.number} (${m.name})`);
+                      } else {
+                        items.push(`📱 ${m.provider}: ${m.number} (${m.name})`);
+                      }
+                    } else if (m.type === 'Lipa Namba') {
+                      items.push(`💳 ${m.provider}: ${m.number} (${m.name})`);
+                    } else if (m.type === 'Bank') {
+                      items.push(`🏦 ${m.provider}: ${m.number} (${m.name})`);
+                    }
+                  });
+                  paymentString = items.join('\n');
+                } else {
+                  const mobile = event.paymentMethods.filter(m => m.type === 'Mobile');
+                  const lipa = event.paymentMethods.filter(m => m.type === 'Lipa Namba');
+                  const bank = event.paymentMethods.filter(m => m.type === 'Bank');
+                  
+                  const isMixx = (provider) => {
+                    const p = String(provider || '').trim().toLowerCase();
+                    return p === 'mixx by yas' || p === 'mixx by yass' || p.includes('mixx') || p.includes('yas');
+                  };
+
+                  const mobileNormal = mobile.filter(m => !isMixx(m.provider));
+                  const mobileMixx = mobile.filter(m => isMixx(m.provider));
+
+                  if (mobileNormal.length > 0) {
+                    paymentString += isEn ? "Mobile Money:\n\n" : "Namba za Simu:\n\n";
+                    mobileNormal.forEach(m => {
+                      paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  if (mobileMixx.length > 0) {
+                    paymentString += "Mixx By Yas:\n\n";
+                    mobileMixx.forEach(m => {
+                      paymentString += `${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  if (lipa.length > 0) {
+                    paymentString += "Lipa Namba:\n\n";
+                    lipa.forEach(m => {
+                      paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  if (bank.length > 0) {
+                    paymentString += isEn ? "Bank Accounts:\n\n" : "Akaunti za Benki:\n\n";
+                    bank.forEach(m => {
+                      paymentString += `${m.provider}: ${m.number} (${m.name})\n\n`;
+                    });
+                  }
+                  paymentString = paymentString.trim();
                 }
-                if (lipa.length > 0) {
-                  paymentString += "Lipa Namba:\n";
-                  lipa.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-                  paymentString += "\n";
-                }
-                if (bank.length > 0) {
-                  paymentString += "Akaunti za Benki:\n";
-                  bank.forEach(m => paymentString += `${m.provider}: ${m.number} (${m.name})\n`);
-                  paymentString += "\n";
-                }
-                paymentString = paymentString.trim();
               } else {
-                paymentString = "[Tafadhali weka namba za malipo kwenye Settings]";
+                paymentString = isEn ? "[Please configure payment methods in settings]" : "[Tafadhali weka namba za malipo kwenye Settings]";
               }
 
               const deadlineStr = (event.contributionDeadline || event.date)
@@ -2094,6 +2202,9 @@ export default function ContributionManager({
     e.preventDefault();
     if (!newGuestName.trim()) return;
 
+    const parsedPledge = parseInt(newGuestPledge.replace(/\D/g, ''), 10) || 0;
+    const parsedPaid = parseInt(newGuestPaid.replace(/\D/g, ''), 10) || 0;
+
     if (editingGuestId) {
       const updatedGuests = guests.map(g => {
         if (g.id === editingGuestId) {
@@ -2102,11 +2213,11 @@ export default function ContributionManager({
             name: newGuestName.trim(),
             phone: newGuestPhone.trim(),
             cardType: newGuestCategory,
-            pledgeAmount: parseInt(newGuestPledge, 10) || 0,
-            paidAmount: parseInt(newGuestPaid, 10) || 0,
+            pledgeAmount: parsedPledge,
+            paidAmount: parsedPaid,
             pledgeStatus: ((): 'No Pledge' | 'Pledged' | 'Partially Paid' | 'Fully Paid' => {
-              const p = parseInt(newGuestPledge, 10) || 0;
-              const pd = parseInt(newGuestPaid, 10) || 0;
+              const p = parsedPledge;
+              const pd = parsedPaid;
               if (pd >= p && p > 0) return 'Fully Paid';
               if (pd > 0) return 'Partially Paid';
               if (p > 0) return 'Pledged';
@@ -2130,11 +2241,11 @@ export default function ContributionManager({
         rsvpStatus: 'Bado',
         rsvpGuestsCount: 0,
         checkedIn: false,
-        pledgeAmount: parseInt(newGuestPledge, 10) || 0,
-        paidAmount: parseInt(newGuestPaid, 10) || 0,
+        pledgeAmount: parsedPledge,
+        paidAmount: parsedPaid,
         pledgeStatus: ((): 'No Pledge' | 'Pledged' | 'Partially Paid' | 'Fully Paid' => {
-          const p = parseInt(newGuestPledge, 10) || 0;
-          const pd = parseInt(newGuestPaid, 10) || 0;
+          const p = parsedPledge;
+          const pd = parsedPaid;
           if (pd >= p && p > 0) return 'Fully Paid';
           if (pd > 0) return 'Partially Paid';
           if (p > 0) return 'Pledged';
@@ -2148,6 +2259,8 @@ export default function ContributionManager({
     setNewGuestName('');
     setNewGuestPhone('');
     setNewGuestCategory('SINGLE');
+    setNewGuestPledge('0');
+    setNewGuestPaid('0');
     setEditingGuestId(null);
   };
 
@@ -3212,7 +3325,12 @@ export default function ContributionManager({
 
                       return (
                         <tr key={g.id} className="hover:bg-white/5 transition-all">
-                          <td className="py-3.5 px-4 font-extrabold text-white uppercase">{g.name}</td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-extrabold text-white uppercase">{g.name}</div>
+                            <div className="text-[10px] text-amber-500 font-mono mt-0.5 font-bold">
+                              P-{g.id.substring(0, 6).toUpperCase()}
+                            </div>
+                          </td>
                           <td className="py-3.5 px-4 font-mono text-slate-400">{g.phone || (isEn ? 'None' : 'Hakuna')}</td>
                           <td className="py-3.5 px-4">
                             <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase font-mono bg-white/5 border border-white/5 text-slate-300">
@@ -4575,10 +4693,10 @@ export default function ContributionManager({
                     {isEn ? "Pledge (TZS)" : "Ahadi (TZS)"}
                   </label>
                   <input 
-                    type="number" 
+                    type="text" 
                     value={newGuestPledge}
-                    onChange={(e) => setNewGuestPledge(e.target.value)}
-                    placeholder="0"
+                    onChange={(e) => setNewGuestPledge(formatNumberWithCommas(e.target.value))}
+                    placeholder="500,000"
                     className="w-full bg-slate-950 border border-white/10 p-3 rounded-xl text-white font-mono text-xs focus:border-amber-500 outline-none transition"
                   />
                 </div>
@@ -4587,10 +4705,10 @@ export default function ContributionManager({
                     {isEn ? "Paid (TZS)" : "Malipo (TZS)"}
                   </label>
                   <input 
-                    type="number" 
+                    type="text" 
                     value={newGuestPaid}
-                    onChange={(e) => setNewGuestPaid(e.target.value)}
-                    placeholder="0"
+                    onChange={(e) => setNewGuestPaid(formatNumberWithCommas(e.target.value))}
+                    placeholder="500,000"
                     className="w-full bg-slate-950 border border-white/10 p-3 rounded-xl text-white font-mono text-xs focus:border-amber-500 outline-none transition"
                   />
                 </div>
@@ -4636,11 +4754,11 @@ export default function ContributionManager({
               </label>
               <input 
                 id="modal-input-pledge-field"
-                type="number"
+                type="text"
                 value={modalPledgeAmount}
-                onChange={e => setModalPledgeAmount(e.target.value)}
-                placeholder="e.g. 100000"
-                className="w-full bg-slate-950 border border-white/10 focus:border-amber-400 py-2.5 px-3 rounded-lg text-white font-bold font-mono outline-none"
+                onChange={e => setModalPledgeAmount(formatNumberWithCommas(e.target.value))}
+                placeholder="500,000"
+                className="w-full bg-slate-950 border border-white/10 focus:border-amber-400 py-3.5 px-4 rounded-xl text-center text-xl font-extrabold font-mono text-amber-400 outline-none"
               />
             </div>
 
@@ -4687,11 +4805,11 @@ export default function ContributionManager({
                 </label>
                 <input 
                   id="modal-input-pay-amount"
-                  type="number"
+                  type="text"
                   value={modalPaymentAmount}
-                  onChange={e => setModalPaymentAmount(e.target.value)}
-                  placeholder="e.g. 50000"
-                  className="w-full bg-slate-950 border border-white/10 py-2 px-3 rounded-lg text-white font-bold font-mono outline-none focus:border-emerald-500"
+                  onChange={e => setModalPaymentAmount(formatNumberWithCommas(e.target.value))}
+                  placeholder="500,000"
+                  className="w-full bg-slate-950 border border-white/10 focus:border-emerald-500 py-3.5 px-4 rounded-xl text-center text-xl font-extrabold font-mono text-emerald-400 outline-none"
                 />
               </div>
 
