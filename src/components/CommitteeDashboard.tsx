@@ -21,13 +21,15 @@ interface CommitteeDashboardProps {
   guests: Guest[];
   onUpdateEvent: (updated: EventDetails) => void;
   onUpdateGuests: (updated: Guest[]) => void;
+  onRefresh?: () => void;
 }
 
 export default function CommitteeDashboard({
   event,
   guests,
   onUpdateEvent,
-  onUpdateGuests
+  onUpdateGuests,
+  onRefresh
 }: CommitteeDashboardProps) {
   const { language } = useLanguage();
   const isEn = language === 'en';
@@ -289,14 +291,15 @@ export default function CommitteeDashboard({
     const interval = setInterval(() => {
       setSecondsToRefresh((prev) => {
         if (prev <= 1) {
-          // Reset timer
+          // Reset timer and trigger refresh
+          if (onRefresh) onRefresh();
           return 60;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [onRefresh]);
 
   // Compute metrics from guest pledges and payments
   const metrics = useMemo(() => {
@@ -1857,6 +1860,7 @@ export default function CommitteeDashboard({
                   <span className="text-[9.5px] font-mono text-slate-400">{isEn ? "Auto-refresh in:" : "Inajisafisha baada ya:"} <strong className="text-amber-400">{secondsToRefresh}s</strong></span>
                   <button 
                     onClick={() => {
+                      if (onRefresh) onRefresh();
                       setSecondsToRefresh(60);
                       addActivityLog(`${activeRole} Action`, 'Alifanya manual refresh kwenye Live Monitor feed');
                     }}

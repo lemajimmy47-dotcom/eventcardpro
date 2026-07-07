@@ -70,6 +70,14 @@ export async function initDB() {
       console.error("[CloudSQL Initializer] Dynamic table verification error:", dbAlterErr);
     }
 
+    try {
+      console.log("[CloudSQL Initializer] Ensuring 'orientation' column exists in 'template_settings' table...");
+      await db.execute(sql`ALTER TABLE "template_settings" ADD COLUMN IF NOT EXISTS "orientation" text DEFAULT 'portrait';`);
+      console.log("[CloudSQL Initializer] Column 'orientation' verified/added successfully.");
+    } catch (dbAlterErr) {
+      console.error("[CloudSQL Initializer] Dynamic table verification error:", dbAlterErr);
+    }
+
     // 1. If SQL database is empty, seed it from existing database.json
     // We wrap this in a timeout-like behavior or ensure it doesn't block forever
     console.log("[CloudSQL Initializer] Seeding from backup if needed...");

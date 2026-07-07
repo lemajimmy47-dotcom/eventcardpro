@@ -1539,21 +1539,19 @@ async function startServer() {
             let mergedRsvpUpdatedAt = cg.rsvpUpdatedAt;
             let mergedRsvpSeen = cg.rsvpSeen === undefined ? sg.rsvpSeen : cg.rsvpSeen;
 
-            // 1. Keep server RSVP status if the client has 'Bado' / empty but the server has a real RSVP response (submitted on other devices or by guest themselves)
+            // 1. Keep server RSVP status if the client has 'Bado' / empty but the server has a real RSVP response
             const serverHasRealRsvp = sg.rsvpStatus && sg.rsvpStatus !== "Bado";
             const clientLacksRsvp = !cg.rsvpStatus || cg.rsvpStatus === "Bado";
-            if (serverHasRealRsvp && clientLacksRsvp) {
+            
+            // Also check timestamp if both have real RSVPs (prefer server if newer)
+            const isServerRsvpNewer = sg.rsvpUpdatedAt && (!cg.rsvpUpdatedAt || new Date(sg.rsvpUpdatedAt) > new Date(cg.rsvpUpdatedAt));
+
+            if ((serverHasRealRsvp && clientLacksRsvp) || isServerRsvpNewer) {
               mergedRsvpStatus = sg.rsvpStatus;
               mergedRsvpGuestsCount = sg.rsvpGuestsCount;
               mergedRsvpComment = sg.rsvpComment;
               mergedRsvpUpdatedAt = sg.rsvpUpdatedAt;
               mergedRsvpSeen = sg.rsvpSeen;
-            }
-
-            // Also keep server metadata if server is newer or client lacks it
-            if (sg.rsvpUpdatedAt && (!cg.rsvpUpdatedAt || new Date(sg.rsvpUpdatedAt) > new Date(cg.rsvpUpdatedAt))) {
-               mergedRsvpUpdatedAt = sg.rsvpUpdatedAt;
-               mergedRsvpSeen = sg.rsvpSeen;
             }
 
             // 2. Keep server checked-in status if the server has checkedIn = true but client has it as false / falsy
@@ -1622,9 +1620,13 @@ async function startServer() {
         return res.status(400).send("Event ID missing. Location cannot be resolved.");
       }
       const db = await readDBLatest();
-      const event = db.events?.find((e: any) => e.id === eventId);
+      const event = db.eventsList?.find((e: any) => e.id === eventId);
       if (event && event.mapsLink) {
-        return res.redirect(event.mapsLink);
+        let redirectUrl = event.mapsLink.trim();
+        if (!redirectUrl.startsWith('http://') && !redirectUrl.startsWith('https://')) {
+          redirectUrl = 'https://' + redirectUrl;
+        }
+        return res.redirect(redirectUrl);
       }
       res.status(404).send("Location not configured for this event.");
     } catch (error) {
@@ -2018,7 +2020,10 @@ async function startServer() {
                     if (db.guests) {
                       for (const guest of db.guests) {
                         const guestCleanPhone = (guest.phone || "").replace(/\D/g, '');
-                        if (guestCleanPhone && (guestCleanPhone === cleanPhone || cleanPhone.endsWith(guestCleanPhone) || guestCleanPhone.endsWith(cleanPhone))) {
+                        if (guestCleanPhone) {
+                          const guestLast9 = guestCleanPhone.slice(-9);
+                          const cleanLast9 = cleanPhone.slice(-9);
+                          if (guestLast9 === cleanLast9 && guestLast9.length >= 7) {
                           let displayStatus = guest.whatsappStatus;
                           if (messageStatus === 'read') {
                             displayStatus = "Imesomwa";
@@ -2035,6 +2040,7 @@ async function startServer() {
                             databaseUpdated = true;
                           }
                         }
+                        }
                       }
                     }
                   }
@@ -2045,28 +2051,28 @@ async function startServer() {
                   for (const message of value.messages) {
                     const fromPhone = message.from ? message.from.replace(/\D/g, '') : '';
                     let textBody = '';
-                    if (message.text?.body) {
-                      textBody = message.text.body.trim().toLowerCase();
-                    } else if (message.button?.text) {
-                      textBody = message.button.text.trim().toLowerCase();
-                    } else if (message.button?.payload) {
-                      textBody = message.button.payload.trim().toLowerCase();
-                    } else if (message.interactive?.button_reply?.title) {
-                      textBody = message.interactive.button_reply.title.trim().toLowerCase();
-                    } else if (message.interactive?.button_reply?.id) {
-                      textBody = message.interactive.button_reply.id.trim().toLowerCase();
-                    }
+                    if (message.text?.body) textBody += message.text.body + ' ';
+                    if (message.button?.text) textBody += message.button.text + ' ';
+                    if (message.button?.payload) textBody += message.button.payload + ' ';
+                    if (message.interactive?.button_reply?.title) textBody += message.interactive.button_reply.title + ' ';
+                    if (message.interactive?.button_reply?.id) textBody += message.interactive.button_reply.id + ' ';
+                    if (message.interactive?.list_reply?.title) textBody += message.interactive.list_reply.title + ' ';
+                    if (message.interactive?.list_reply?.id) textBody += message.interactive.list_reply.id + ' ';
+                    textBody = textBody.trim().toLowerCase();
                     console.log(`[WhatsApp Webhook] Parsed reply content from ${fromPhone}: "${textBody}"`);
 
                     if (fromPhone && textBody && db.guests) {
                       for (const guest of db.guests) {
                         const guestCleanPhone = (guest.phone || "").replace(/\D/g, '');
-                        if (guestCleanPhone && (guestCleanPhone === fromPhone || fromPhone.endsWith(guestCleanPhone) || guestCleanPhone.endsWith(fromPhone))) {
+                        if (guestCleanPhone) {
+                          const guestLast9 = guestCleanPhone.slice(-9);
+                          const fromLast9 = fromPhone.slice(-9);
+                          if (guestLast9 === fromLast9 && guestLast9.length >= 7) {
                           // Try to automatically process RSVPs to system-wide standard values: 'Atahudhuria', 'Hatahudhuria', 'Labda'
                           let newRsvp: 'Atahudhuria' | 'Hatahudhuria' | 'Labda' | null = null;
-                          if (textBody.includes('ndio') || textBody.includes('yes') || textBody.includes('nitakuja') || textBody.includes('nitahudhuria') || textBody.includes('atahudhuria') || textBody.includes('1')) {
+                          if (textBody.includes('ndio') || textBody.includes('yes') || textBody.includes('nitakuja') || textBody.includes('nitahudhuria') || textBody.includes('atahudhuria') || textBody.includes('kuhudhuria') || textBody.includes('tatahudhuria') || textBody.includes('ntahudhuria') || textBody.includes('ntakuja') || textBody.includes('nakuja') || textBody.includes('1')) {
                             newRsvp = 'Atahudhuria';
-                          } else if (textBody.includes('hapana') || textBody.includes('no') || textBody.includes('sitakuja') || textBody.includes('sintahudhuria') || textBody.includes('hatahudhuria') || textBody.includes('2')) {
+                          } else if (textBody.includes('hapana') || textBody.includes('no') || textBody.includes('sitakuja') || textBody.includes('sintahudhuria') || textBody.includes('hatahudhuria') || textBody.includes('sitohudhuria') || textBody.includes('stahudhuria') || textBody.includes('2')) {
                             newRsvp = 'Hatahudhuria';
                           } else if (textBody.includes('sina uhakika') || textBody.includes('maybe') || textBody.includes('labda') || textBody.includes('3')) {
                             newRsvp = 'Labda';
@@ -2079,6 +2085,7 @@ async function startServer() {
                             databaseUpdated = true;
                             console.log(`[WhatsApp Webhook] Auto-updated RSVP for ${guest.name} to ${newRsvp} via WhatsApp reaction!`);
                           }
+                        }
                         }
                       }
                     }

@@ -759,6 +759,7 @@ export default function App() {
                 guests={portalGuests}
                 onUpdateEvent={updateEventDetails}
                 onUpdateGuests={updateGuests}
+                onRefresh={() => fetchData(true)}
             />
         </div>
       </div>
@@ -1878,6 +1879,7 @@ export default function App() {
               guests={activeGuests}
               onUpdateGuests={updateGuests}
               onUpdateEvent={updateEventDetails}
+              onRefresh={() => fetchData(true)}
             />
           </React.Fragment>
         );
