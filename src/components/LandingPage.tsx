@@ -160,7 +160,7 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                     {/* Styled Card Image in Mockup */}
                     <div className="my-2 border border-dashed border-blue-500/30 bg-blue-500/10 rounded-lg p-3 flex flex-col items-center justify-center">
                       <Heart className="w-6 h-6 text-purple-400 animate-pulse mb-1" />
-                      <p className="text-[10px] font-bold text-white">{language === 'sw' ? 'JUMA HAMISI' : 'JOHN SMITH'}</p>
+                      <p className="text-[10px] font-bold text-white">{language === 'sw' ? 'JIMSON LEMA' : 'JIMSON LEMA'}</p>
                       <span className="text-[8px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full mt-1">DOUBLE</span>
                     </div>
 

@@ -39,6 +39,7 @@ export const guests = pgTable("guests", {
   smsStatus: text("sms_status").default("Sijatuma"),
   whatsappStatus: text("whatsapp_status").default("Sijatuma"),
   rsvpStatus: text("rsvp_status").default("Bado"),
+  maxGuests: integer("max_guests").default(1),
   rsvpGuestsCount: integer("rsvp_guests_count").default(0),
   rsvpComment: text("rsvp_comment"),
   checkedIn: boolean("checked_in").default(false),
@@ -54,6 +55,8 @@ export const guests = pgTable("guests", {
   payments: jsonb("payments"),
   rsvpUpdatedAt: text("rsvp_updated_at"),
   rsvpSeen: boolean("rsvp_seen").default(true),
+  customFields: jsonb("custom_fields"),
+  tags: jsonb("tags"),
 });
 
 export const saveTheDates = pgTable("save_the_dates", {

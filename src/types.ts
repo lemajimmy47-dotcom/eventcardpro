@@ -160,6 +160,7 @@ export interface Guest {
   smsStatus: 'Sijatuma' | 'Inatuma' | 'Imetumia';
   whatsappStatus: 'Sijatuma' | 'Inatuma' | 'Imetumia';
   rsvpStatus: 'Bado' | 'Atahudhuria' | 'Hatahudhuria' | 'Labda';
+  maxGuests?: number; // Maximum guests allowed for this invitation
   rsvpGuestsCount: number;
   rsvpComment?: string;
   checkedIn: boolean;
@@ -169,6 +170,8 @@ export interface Guest {
   smsCount?: number;
   whatsappCount?: number;
   category?: string;
+  tags?: string[];
+  customFields?: Record<string, string>;
 
   // Contribution Module Fields
   pledgeAmount?: number;
@@ -212,13 +215,16 @@ export interface UserAccount {
   transactions: WalletTransaction[];
 }
 
+export type UserRole = 'Admin' | 'Treasurer' | 'Secretary' | 'Gatekeeper';
+
 export interface CommitteeMember {
   id: string;
   name: string;
   phone: string;
   email: string;
-  position: 'Chairperson' | 'Treasurer' | 'Secretary' | 'Committee Member' | 'Event Owner';
-  permissionLevel: 'Full Access' | 'Treasurer Access' | 'Viewer Access' | 'Summary Access';
+  role: UserRole;
+  position: string;
+  permissionLevel: string;
   token?: string;
 }
 

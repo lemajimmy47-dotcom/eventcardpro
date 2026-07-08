@@ -6,6 +6,7 @@ import { EventDetails, Guest, TemplateSettings } from '../types';
 import { drawCardToCanvas, generateGuestCardImage } from '../utils/canvasHelper';
 import { safeLocalStorage } from '../utils/storage';
 import { convertWebPToJpeg } from '../utils/imageUtils';
+import { isStatusSent } from '../utils/statusHelper';
 
 interface SendMessagesProps {
   event: EventDetails;
@@ -13,7 +14,7 @@ interface SendMessagesProps {
   guests: Guest[];
   language: string;
   onUpdateEvent: (event: EventDetails) => void;
-  onUpdateGuests: (guests: Guest[]) => void;
+  onUpdateGuests: (guests: Guest[], actionDesc?: string, skipServerSave?: boolean) => void;
   onNext: () => void;
 }
 
@@ -23,6 +24,26 @@ const PortalModal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 export default function SendMessages({ event, settings, guests, language, onUpdateEvent, onUpdateGuests, onNext }: SendMessagesProps) {
   const isEn = language === 'en';
+
+  const addSystemNotification = (type: 'payment' | 'pledge' | 'completed' | 'error' | 'guest' | 'rsvp', title: string, message: string) => {
+    try {
+      const saved = localStorage.getItem(`kadi_committee_notifications_${event.id}`);
+      const list = saved ? JSON.parse(saved) : [];
+      const newNotif = {
+        id: 'n-auto-' + Date.now() + Math.random().toString(36).substr(2, 5),
+        type,
+        title,
+        message,
+        createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }),
+        read: false
+      };
+      const updated = [newNotif, ...list].slice(0, 50);
+      localStorage.setItem(`kadi_committee_notifications_${event.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const [isSendingAll, setIsSendingAll] = useState(false);
   const [isBatchSending, setIsBatchSending] = useState(false);
   const [lastBatchId, setLastBatchId] = useState<string | null>(null);
@@ -181,8 +202,8 @@ Please click this link to view your special invitation card and confirm your att
 {kiungo}
 
 Contacts:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 You are warmly welcome!`;
 
@@ -199,8 +220,8 @@ Card Type: {card_type}
 {Link}
 
 Contacts:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 You are warmly welcome!`;
 
@@ -218,8 +239,8 @@ Bofya kiungo hiki ili kuona kadi yako ya mwaliko, ramani ya ukumbi, na kuthibiti
 {kiungo}
 
 Mawasiliano:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Karibu sana.`;
 
@@ -239,8 +260,8 @@ Uwepo wako ni wa thamani kubwa kwetu na utachangia kuifanya siku hii kuwa ya fur
 Ikiwa namba hii ipo WhatsApp, kadi yako ya mwaliko imetumwa huko pia.
 
 Mawasiliano:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Karibu sana.`;
 
@@ -260,8 +281,8 @@ Your presence is highly valued and will contribute to making this day joyous and
 If this number is on WhatsApp, your invitation card has been sent there as well.
 
 Contact:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 You are warmly welcome.`;
 
@@ -278,8 +299,8 @@ Aina ya Kadi: {card_type}
 {Link}
 
 Mawasiliano:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Karibu sana!`;
 
@@ -413,6 +434,10 @@ Karibu sana!`;
 Familia ya {host_name} inapenda kutoa shukrani za dhati kwa kuhudhuria {event_name}.
 Ushiriki wako umefanya sherehe yetu kuwa ya kipekee na yenye baraka.
 
+Mawasiliano:
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
+
 Asante sana na Mungu akubariki!`;
   });
 
@@ -426,6 +451,10 @@ Asante sana na Mungu akubariki!`;
     return `Hello {name},
 The family of {host_name} would like to express our deepest gratitude for attending {event_name}.
 Your presence made our event truly special and blessed.
+
+Contacts:
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Thank you very much and God bless you!`;
   });
@@ -521,17 +550,25 @@ Thank you very much and God bless you!`;
   };
 
    const executeResetTemplate = () => {
-    if (messageType === 'thank-you') {
+      if (messageType === 'thank-you') {
       if (language === 'en') {
         setThankYouTemplateEn(`Hello {name},
 The family of {host_name} would like to express our deepest gratitude for attending {event_name}.
 Your presence made our event truly special and blessed.
+
+Contacts:
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Thank you very much and God bless you!`);
       } else {
         setThankYouTemplateSw(`Habari {name},
 Familia ya {host_name} inapenda kutoa shukrani za dhati kwa kuhudhuria {event_name}.
 Ushiriki wako umefanya sherehe yetu kuwa ya kipekee na yenye baraka.
+
+Mawasiliano:
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Asante sana na Mungu akubariki!`);
       }
@@ -550,8 +587,8 @@ Card Type: {card_type}
 {Link}
 
 Contacts:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 You are warmly welcome!`);
       } else {
@@ -568,8 +605,8 @@ Aina ya Kadi: {card_type}
 {Link}
 
 Mawasiliano:
-{contact_1_name} - {contact_1_phone}
-{contact_2_name} - {contact_2_phone}
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Karibu sana!`);
       }
@@ -654,9 +691,9 @@ Karibu sana!`);
 
   // Status Metrics - Memoized
   const { countSmsSent, countWhatsappSent, countPending } = React.useMemo(() => {
-    const sms = filteredGuests.filter(g => g.smsStatus === 'Imetumia').length;
-    const wa = filteredGuests.filter(g => g.whatsappStatus === 'Imetumia').length;
-    const pending = filteredGuests.filter(g => g.smsStatus !== 'Imetumia' || g.whatsappStatus !== 'Imetumia').length;
+    const sms = filteredGuests.filter(g => isStatusSent(g.smsStatus)).length;
+    const wa = filteredGuests.filter(g => isStatusSent(g.whatsappStatus)).length;
+    const pending = filteredGuests.filter(g => !isStatusSent(g.smsStatus) || !isStatusSent(g.whatsappStatus)).length;
     return { countSmsSent: sms, countWhatsappSent: wa, countPending: pending };
   }, [filteredGuests]);
 
@@ -710,9 +747,9 @@ Karibu sana!`);
       '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
       '{vazi}': event.dressCode || "[Vazi]",
       '{dressCode}': event.dressCode || "[Dress Code]",
-      '{Link}': (messageType === 'thank-you') ? "" : appUrl,
-      '{kiungo}': (messageType === 'thank-you') ? "" : appUrl,
-      '{inviteUrl}': (messageType === 'thank-you') ? "" : appUrl,
+      '{Link}': (messageType === 'thank-you' || (isSms && !forceAppendLink)) ? "" : appUrl,
+      '{kiungo}': (messageType === 'thank-you' || (isSms && !forceAppendLink)) ? "" : appUrl,
+      '{inviteUrl}': (messageType === 'thank-you' || (isSms && !forceAppendLink)) ? "" : appUrl,
       '{namba_mwaliko}': g.code || "[Code]",
       '{card_number}': g.code || "[Code]",
       '{inviteCode}': g.code || "[Code]",
@@ -725,9 +762,15 @@ Karibu sana!`);
       '{8}': g.cardType || "DOUBLE",
       '{{card_type}}': g.cardType || "DOUBLE",
       '{mwasiliano}': contacts,
-      '{{9}}': contacts,
-      '{9}': contacts,
       '{{contacts}}': contacts,
+      '{{9}}': event.contact1Name || "",
+      '{9}': event.contact1Name || "",
+      '{{10}}': event.contact1 || "",
+      '{10}': event.contact1 || "",
+      '{{11}}': event.contact2Name || "",
+      '{11}': event.contact2Name || "",
+      '{{12}}': event.contact2 || "",
+      '{12}': event.contact2 || "",
       '{contact_1_name}': event.contact1Name || "",
       '{contact_1_phone}': event.contact1 || "",
       '{contact_2_name}': event.contact2Name || "",
@@ -740,6 +783,19 @@ Karibu sana!`);
 
     // Replace three or more consecutive newlines with two newlines to avoid huge gaps
     text = text.replace(/\n\s*\n\s*\n+/g, '\n\n').trim();
+    
+    // Clean up empty bulleted contact lines
+    text = text.replace(/-\s*:\s*\n/g, '').replace(/-\s*:\s*$/g, '');
+    
+    // Additional cleanup for partial contact info:
+    // 1. Remove trailing colons/dashes if phone is missing
+    text = text.replace(/- ([^:\n]+)[:\-]\s*(\n|$)/g, '- $1$2');
+    // 2. Remove leading colons/dashes if name is missing
+    text = text.replace(/- \s*[:\-]\s*([^:\n]+)/g, '- $1');
+    // 3. Fix weird double spacing or mixed punctuation
+    text = text.replace(/- \s+/g, '- ');
+    // 4. Remove empty lines in contact section if they became empty
+    text = text.replace(/\n-\s*\n/g, '\n');
 
     return text.trim();
   };
@@ -767,6 +823,25 @@ Karibu sana!`);
     } else {
       console.warn(`[Diagnostic] Guest not found for ID: ${guestId}`);
     }
+  };
+
+  const handleMarkManualSent = (guestId: string, channel: 'sms' | 'whatsapp') => {
+    const updated = guests.map(g => {
+      if (g.id === guestId) {
+        const currentSmsCount = typeof g.smsCount === 'number' ? g.smsCount : (isStatusSent(g.smsStatus) ? 1 : 0);
+        const currentWhatsappCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (isStatusSent(g.whatsappStatus) ? 1 : 0);
+        return {
+          ...g,
+          smsStatus: channel === 'sms' ? 'Imetumia' as const : g.smsStatus,
+          whatsappStatus: channel === 'whatsapp' ? 'Imetumia' as const : g.whatsappStatus,
+          smsCount: channel === 'sms' ? currentSmsCount + 1 : currentSmsCount,
+          whatsappCount: channel === 'whatsapp' ? currentWhatsappCount + 1 : currentWhatsappCount
+        };
+      }
+      return g;
+    });
+    onUpdateGuests(updated);
+    setActiveSendTarget(null);
   };
 
   const handleConfirmSent = async (guestId: string, channel: 'sms' | 'whatsapp') => {
@@ -856,9 +931,15 @@ Karibu sana!`);
           '{8}': target.cardType || "DOUBLE",
           '{{card_type}}': target.cardType || "DOUBLE",
           '{mwasiliano}': contacts,
-          '{{9}}': contacts,
-          '{9}': contacts,
           '{{contacts}}': contacts,
+          '{{9}}': event.contact1Name || "",
+          '{9}': event.contact1Name || "",
+          '{{10}}': event.contact1 || "",
+          '{10}': event.contact1 || "",
+          '{{11}}': event.contact2Name || "",
+          '{11}': event.contact2Name || "",
+          '{{12}}': event.contact2 || "",
+          '{12}': event.contact2 || "",
           '{contact_1_name}': event.contact1Name || "",
           '{contact_1_phone}': event.contact1 || "",
           '{contact_2_name}': event.contact2Name || "",
@@ -866,7 +947,10 @@ Karibu sana!`);
         };
 
         const regex = /\{\{[0-9]+\}\}|\{\{[a-zA-Z0-9_\-Hh]+\}\}|\{[a-zA-Z0-9_\-Hh]+\}/g;
-        const matches = rawTemplate.match(regex) || [];
+        const matches = (rawTemplate.match(regex) || []).filter(match => {
+          const lower = match.toLowerCase();
+          return !lower.includes('link') && !lower.includes('kiungo') && !lower.includes('url');
+        });
         templateParams = matches.map(match => {
           const val = replacements[match];
           return val !== undefined ? val : match;
@@ -907,18 +991,18 @@ Karibu sana!`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Utumaji kupitia gateway umeshindwa.");
 
-      // Secondary link sending has been completely disabled as per user instruction
-      if (false && channel === 'sms' && sendSmsLink) {
+      // Secondary link sending if explicitly requested
+      if (channel === 'sms' && sendSmsLink) {
         const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://eventcard.co.tz';
         const appUrl = `${currentOrigin}/?invite=${target.code || target.id}&eventId=${event.id}&lang=${language}`;
         // Short delay between messages
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 800));
         await fetch('/api/send-sms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             phone: target.phone,
-            text: `Pata kadi yako hapa: ${appUrl}`,
+            text: language === 'sw' ? `Pata kadi yako hapa: ${appUrl}` : `Get your card here: ${appUrl}`,
             channel: 'sms',
             scheduleTime: formattedScheduleTime
           })
@@ -930,22 +1014,24 @@ Karibu sana!`);
       // Update state
       const updated = guests.map(g => {
         if (g.id === guestId) {
-          const currentSmsCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === 'Imetumia' ? 1 : 0);
-          const currentWhatsappCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (g.whatsappStatus === 'Imetumia' ? 1 : 0);
+          const actualChannel = data.usedChannel || channel;
+          const currentSmsCount = typeof g.smsCount === 'number' ? g.smsCount : (isStatusSent(g.smsStatus) ? 1 : 0);
+          const currentWhatsappCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (isStatusSent(g.whatsappStatus) ? 1 : 0);
           return {
             ...g,
-            smsStatus: channel === 'sms' ? 'Imetumia' as const : g.smsStatus,
-            whatsappStatus: channel === 'whatsapp' ? 'Imetumia' as const : g.whatsappStatus,
-            smsCount: channel === 'sms' ? currentSmsCount + 1 : currentSmsCount,
-            whatsappCount: channel === 'whatsapp' ? currentWhatsappCount + 1 : currentWhatsappCount
+            smsStatus: actualChannel === 'sms' ? 'Imetumia' as const : g.smsStatus,
+            whatsappStatus: actualChannel === 'whatsapp' ? 'Imetumia' as const : g.whatsappStatus,
+            smsCount: actualChannel === 'sms' ? currentSmsCount + 1 : currentSmsCount,
+            whatsappCount: actualChannel === 'whatsapp' ? currentWhatsappCount + 1 : currentWhatsappCount
           };
         }
         return g;
       });
       onUpdateGuests(updated);
-
+      const dispChannel = data.usedChannel || channel;
+      const failoverText = data.failoverAttempted ? ` (Failover to ${dispChannel.toUpperCase()})` : '';
       setSendLogs(prev => [
-        `[${new Date().toLocaleTimeString()}] ✓ [${channel.toUpperCase()}] Imekamilika kwa ${target.name}${formattedScheduleTime ? ' (Scheduled)' : ''}. ${data.batchId ? `Batch ID: ${data.batchId}` : `Gateway Info: ${data.log || 'Sawa'}`}`,
+        `[${new Date().toLocaleTimeString()}] ✓ [${dispChannel.toUpperCase()}]${failoverText} Imekamilika kwa ${target.name}${formattedScheduleTime ? ' (Scheduled)' : ''}. ${data.batchId ? `Batch ID: ${data.batchId}` : `Gateway Info: ${data.log || 'Sawa'}`}`,
         ...prev
       ]);
       
@@ -1015,7 +1101,7 @@ Karibu sana!`);
         // Update all guest statuses locally
         const updated = guests.map(g => {
           if (pendingGuests.find(pg => pg.id === g.id)) {
-            const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === 'Imetumia' ? 1 : 0);
+            const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (isStatusSent(g.smsStatus) ? 1 : 0);
             return { 
               ...g, 
               smsStatus: 'Imetumia' as const,
@@ -1038,6 +1124,11 @@ Karibu sana!`);
           `[${new Date().toLocaleTimeString()}] ✗ BATCH FAILED. Sababu: ${err.message}`,
           ...prev
         ]);
+        addSystemNotification(
+          'error',
+          isEn ? 'Batch Dispatch Failed' : 'Utumaji wa Pamoja Umeshindwa',
+          isEn ? `Batch sending failed. Error: ${err.message}` : `Utumaji wa pamoja (Batch) umeshindwa. Hitilafu: ${err.message}`
+        );
         alert("Hitilafu katika utumaji wa Batch: " + err.message);
       } finally {
         setIsBatchSending(false);
@@ -1132,9 +1223,15 @@ Karibu sana!`);
             '{8}': guest.cardType || "DOUBLE",
             '{{card_type}}': guest.cardType || "DOUBLE",
             '{mwasiliano}': contacts,
-            '{{9}}': contacts,
-            '{9}': contacts,
             '{{contacts}}': contacts,
+            '{{9}}': event.contact1Name || "",
+            '{9}': event.contact1Name || "",
+            '{{10}}': event.contact1 || "",
+            '{10}': event.contact1 || "",
+            '{{11}}': event.contact2Name || "",
+            '{11}': event.contact2Name || "",
+            '{{12}}': event.contact2 || "",
+            '{12}': event.contact2 || "",
             '{contact_1_name}': event.contact1Name || "",
             '{contact_1_phone}': event.contact1 || "",
             '{contact_2_name}': event.contact2Name || "",
@@ -1142,7 +1239,10 @@ Karibu sana!`);
           };
 
           const regex = /\{\{[0-9]+\}\}|\{\{[a-zA-Z0-9_\-Hh]+\}\}|\{[a-zA-Z0-9_\-Hh]+\}/g;
-          const matches = rawTemplate.match(regex) || [];
+          const matches = (rawTemplate.match(regex) || []).filter(match => {
+            const lower = match.toLowerCase();
+            return !lower.includes('link') && !lower.includes('kiungo') && !lower.includes('url');
+          });
           templateParams = matches.map(match => {
             const val = replacements[match];
             return val !== undefined ? val : match;
@@ -1183,29 +1283,56 @@ Karibu sana!`);
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || "Mwituko batili");
         
+        const dispChannel = data.usedChannel || channel;
+        const failoverText = data.failoverAttempted ? ` (Failover to ${dispChannel.toUpperCase()})` : '';
+
         // Update local processing state and fire onUpdateGuests to parent
         processingGuests = processingGuests.map(g => {
           if (g.id === guest.id) {
-            const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === 'Imetumia' ? 1 : 0);
-            return { 
-              ...g, 
-              smsStatus: 'Imetumia' as const,
-              smsCount: currentCount + 1
+            const currentSmsCount = typeof g.smsCount === 'number' ? g.smsCount : (isStatusSent(g.smsStatus) ? 1 : 0);
+            const currentWhatsappCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (isStatusSent(g.whatsappStatus) ? 1 : 0);
+            return {
+              ...g,
+              smsStatus: dispChannel === 'sms' ? 'Imetumia' as const : g.smsStatus,
+              whatsappStatus: dispChannel === 'whatsapp' ? 'Imetumia' as const : g.whatsappStatus,
+              smsCount: dispChannel === 'sms' ? currentSmsCount + 1 : currentSmsCount,
+              whatsappCount: dispChannel === 'whatsapp' ? currentWhatsappCount + 1 : currentWhatsappCount
             };
           }
           return g;
         });
-        onUpdateGuests(processingGuests);
+        onUpdateGuests(processingGuests, "Sending in progress...", true);
 
         setSendLogs(prev => [
-          `[${new Date().toLocaleTimeString()}] ✓ Imetumwa kwa: ${guest.name}. Gateway: ${data.log || 'Sawa'}`,
+          `[${new Date().toLocaleTimeString()}] ✓ [${dispChannel.toUpperCase()}]${failoverText} Imetumwa kwa: ${guest.name}. Gateway: ${data.log || 'Sawa'}`,
           ...prev
         ]);
+
+        // Secondary link sending for Batch Dispatch if explicitly requested
+        if (dispChannel === 'sms' && sendSmsLink) {
+          // Short delay between messages
+          await new Promise(resolve => setTimeout(resolve, 800));
+          await fetch('/api/send-sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: guest.phone,
+              text: language === 'sw' ? `Pata kadi yako hapa: ${appUrl}` : `Get your card here: ${appUrl}`,
+              channel: 'sms',
+              scheduleTime: formattedScheduleTime
+            })
+          });
+        }
       } catch (err: any) {
         setSendLogs(prev => [
           `[${new Date().toLocaleTimeString()}] ✗ Imeshindwa kwa: ${guest.name}. Sababu: ${err.message}`,
           ...prev
         ]);
+        addSystemNotification(
+          'error',
+          isEn ? 'Message Delivery Failed' : 'Ujumbe Umeshindwa Kutumwa',
+          isEn ? `Failed to dispatch invitation to ${guest.name}. Reason: ${err.message}` : `Ujumbe wa mwaliko kwenda kwa ${guest.name} umeshindwa. Sababu: ${err.message}`
+        );
       }
 
       sentCount++;
@@ -1215,6 +1342,7 @@ Karibu sana!`);
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
 
+    onUpdateGuests(processingGuests, "Finished sending messages", false);
     setIsSendingAll(false);
     setCurrentSendingIndex(-1);
     setSendingProgress(100);
@@ -1652,13 +1780,13 @@ Karibu sana!`);
                       <td className="px-5 py-3 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                            guest.smsStatus === 'Imetumia' 
+                            isStatusSent(guest.smsStatus) 
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                               : 'bg-white/5 text-slate-400 border-white/10'
                           }`}>
                             {guest.smsStatus}
                           </span>
-                          {guest.smsStatus === 'Imetumia' && (
+                          {isStatusSent(guest.smsStatus) && (
                             <span className="text-[10px] text-slate-400 font-mono font-normal">
                               {isEn ? "Sent:" : "Zilizotumwa:"} <strong className="text-emerald-400 font-bold">{guest.smsCount || 1}</strong>
                             </span>
@@ -1670,13 +1798,13 @@ Karibu sana!`);
                       <td className="px-5 py-3 text-center">
                         <div className="flex flex-col items-center gap-1">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                            guest.whatsappStatus === 'Imetumia' 
+                            isStatusSent(guest.whatsappStatus) 
                               ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
                               : 'bg-white/5 text-slate-400 border-white/10'
                           }`}>
                             {guest.whatsappStatus}
                           </span>
-                          {guest.whatsappStatus === 'Imetumia' && (
+                          {isStatusSent(guest.whatsappStatus) && (
                             <span className="text-[10px] text-slate-400 font-mono font-normal">
                               {isEn ? "Sent:" : "Zilizotumwa:"} <strong className="text-blue-400 font-bold">{guest.whatsappCount || 1}</strong>
                             </span>
@@ -1700,7 +1828,7 @@ Karibu sana!`);
                         </button>
 
                         {/* Reset Status button */}
-                        {(guest.smsStatus === 'Imetumia' || guest.whatsappStatus === 'Imetumia') && (
+                        {(isStatusSent(guest.smsStatus) || isStatusSent(guest.whatsappStatus)) && (
                           <button
                             onClick={() => handleResetSingleGuest(guest.id)}
                             className="p-1 px-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-lg transition cursor-pointer text-[10px]"
@@ -1712,7 +1840,7 @@ Karibu sana!`);
 
                         <button
                           onClick={() => handleSendSingle(guest.id, 'sms')}
-                          disabled={guest.smsStatus === 'Imetumia' || isSendingAll}
+                          disabled={isStatusSent(guest.smsStatus) || isSendingAll}
                           className={`px-2 py-1.5 border rounded-lg font-bold transition text-[11px] cursor-pointer ${
                             activeSendTarget?.guest.id === guest.id && activeSendTarget.channel === 'sms'
                               ? 'bg-emerald-500 text-white border-emerald-400'
@@ -1723,7 +1851,7 @@ Karibu sana!`);
                         </button>
                         <button
                           onClick={() => handleSendSingle(guest.id, 'whatsapp')}
-                          disabled={guest.whatsappStatus === 'Imetumia' || isSendingAll}
+                          disabled={isStatusSent(guest.whatsappStatus) || isSendingAll}
                           className={`px-2 py-1.5 border rounded-lg font-bold transition text-[11px] cursor-pointer ${
                             activeSendTarget?.guest.id === guest.id && activeSendTarget.channel === 'whatsapp'
                               ? 'bg-blue-500 text-white border-blue-400'
@@ -2071,47 +2199,58 @@ Karibu sana!`);
               </div>
 
               {/* Action Buttons */}
-              <div className="flex space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveSendTarget(null)}
-                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-slate-300 transition cursor-pointer"
-                >
-                  {isEn ? 'Cancel' : 'Ghairi'}
-                </button>
-                
-                {activeSendTarget.channel === 'whatsapp' ? (
-                  isMetaWhatsApp ? (
+              <div className="flex flex-col space-y-3 pt-2">
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSendTarget(null)}
+                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-slate-300 transition cursor-pointer"
+                  >
+                    {isEn ? 'Cancel' : 'Ghairi'}
+                  </button>
+                  
+                  {activeSendTarget.channel === 'whatsapp' ? (
+                    isMetaWhatsApp ? (
+                      <button
+                        type="button"
+                        disabled={isDispatching}
+                        onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}
+                        className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
+                      >
+                        <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Send via WhatsApp' : 'Tuma Ujumbe (Send)')}</span>
+                      </button>
+                    ) : (
+                      <a
+                        href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getGuestMessageText(activeSendTarget.guest, false, true))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}
+                        className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span>{isDispatching ? (isEn ? 'Processing...' : 'Inachakata...') : (isEn ? 'Open WhatsApp' : 'Fungua WhatsApp')}</span>
+                      </a>
+                    )
+                  ) : (
                     <button
                       type="button"
                       disabled={isDispatching}
-                      onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}
-                      className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
+                      onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'sms')}
+                      className={`flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.30)] text-xs font-extrabold text-white transition cursor-pointer text-center ${isDispatching ? 'opacity-70 grayscale' : ''}`}
                     >
-                      <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Send via WhatsApp' : 'Tuma Ujumbe (Send)')}</span>
+                      <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Mark Sent ✓' : 'Kamilisha (Mark Sent) ✓')}</span>
                     </button>
-                  ) : (
-                    <a
-                      href={`https://wa.me/${cleanPhoneForWhatsapp(activeSendTarget.guest.phone)}?text=${encodeURIComponent(getGuestMessageText(activeSendTarget.guest, false, true))}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'whatsapp')}
-                      className={`flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.30)] text-xs font-extrabold text-white transition flex items-center justify-center space-x-1.5 cursor-pointer text-center ${isDispatching ? 'opacity-50 pointer-events-none' : ''}`}
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      <span>{isDispatching ? (isEn ? 'Processing...' : 'Inachakata...') : (isEn ? 'Open WhatsApp' : 'Fungua WhatsApp')}</span>
-                    </a>
-                  )
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isDispatching}
-                    onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'sms')}
-                    className={`flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.30)] text-xs font-extrabold text-white transition cursor-pointer text-center ${isDispatching ? 'opacity-70 grayscale' : ''}`}
-                  >
-                    <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Mark Sent ✓' : 'Kamilisha (Mark Sent) ✓')}</span>
-                  </button>
-                )}
+                  )}
+                </div>
+                
+                {/* Manual Marking fallback */}
+                <button
+                  type="button"
+                  onClick={() => handleMarkManualSent(activeSendTarget.guest.id, activeSendTarget.channel)}
+                  className="w-full py-2 bg-transparent hover:bg-white/5 border border-dashed border-white/20 rounded-xl text-[10px] font-bold text-slate-400 transition cursor-pointer"
+                >
+                  {isEn ? 'Wait, I sent it manually. Mark as Sent without using system API.' : 'Tayari nimeshatuma kwa mkono. Kamilisha bila kutumia Mfumo.'}
+                </button>
               </div>
             </motion.div>
           </div>

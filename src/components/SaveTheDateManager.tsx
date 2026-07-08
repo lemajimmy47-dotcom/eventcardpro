@@ -173,6 +173,10 @@ A formal invitation and admission card will reach you soon.
 
 View Card: {link}
 
+Contacts:
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
+
 You are warmly welcome!` : `Habari {name}
 
 Tafadhali hifadhi tarehe ya sherehe ya {event_name} itakayofanyika tarehe {date}.
@@ -180,6 +184,10 @@ Tafadhali hifadhi tarehe ya sherehe ya {event_name} itakayofanyika tarehe {date}
 Mwaliko rasmi pamoja na kadi ya kiingilio utakufikia hivi karibuni.
 
 Tazama Kadi: {link}
+
+Mawasiliano:
+- {contact_1_name}: {contact_1_phone}
+- {contact_2_name}: {contact_2_phone}
 
 Karibu sana!`);
           setSelectedFile(null);
@@ -314,7 +322,18 @@ Karibu sana!`);
         .replace(/{venue}/g, eventDetails.eventHallName || "")
         .replace(/{time}/g, `${eventDetails.time || ""} ${eventDetails.period || ""}`)
         .replace(/{card_number}/g, guestObj?.code || "[Code]")
-        .replace(/{card_type}/g, guestObj?.cardType || "DOUBLE");
+        .replace(/{card_type}/g, guestObj?.cardType || "DOUBLE")
+        .replace(/- : /g, ""); // Clean up if any contact is missing but template had bullets
+
+      // Additional cleanup for partial contact info:
+      // 1. Remove trailing colons/dashes if phone is missing
+      compiled = compiled.replace(/- ([^:\n]+)[:\-]\s*(\n|$)/g, '- $1$2');
+      // 2. Remove leading colons/dashes if name is missing
+      compiled = compiled.replace(/- \s*[:\-]\s*([^:\n]+)/g, '- $1');
+      // 3. Fix weird double spacing or mixed punctuation
+      compiled = compiled.replace(/- \s+/g, '- ');
+      // 4. Remove empty lines in contact section if they became empty
+      compiled = compiled.replace(/\n-\s*\n/g, '\n');
 
       if (!stripLink && !compiled.includes(guestLink)) {
         compiled += `\n\n${isEn ? 'View Card here' : 'Tazama Kadi hapa'}: ${guestLink}`;

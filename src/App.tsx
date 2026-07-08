@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart3, 
@@ -58,6 +58,7 @@ import AuditLogsPage from './components/AuditLogsPage';
 import { ConnectivityDebug } from './components/ConnectivityDebug';
 import { safeLocalStorage } from './utils/storage';
 import { EventDetails, Guest, TemplateSettings, UserAccount, CommitteeMember, CommitteeNotification, ContributionCardTemplate } from './types';
+import { isStatusSent } from './utils/statusHelper';
 
 // Types for navigation
 type AppTab = 
@@ -162,6 +163,8 @@ export default function App() {
   const [guestError, setGuestError] = useState<string | null>(null);
   const [isStdView, setIsStdView] = useState(false);
   const [isPledgeView, setIsPledgeView] = useState(false);
+  const [isSeatingView, setIsSeatingView] = useState(false);
+  const [isVenueView, setIsVenueView] = useState(false);
   const [isCommitteePortal, setIsCommitteePortal] = useState(false);
   const [portalEventId, setPortalEventId] = useState<string | null>(null);
   const [isScanOnlyPortal, setIsScanOnlyPortal] = useState(false);
@@ -205,6 +208,13 @@ export default function App() {
         setIsGuestLoading(true);
         setIsStdView(stdParam);
         setIsPledgeView(pledgeParam);
+        
+        const view = params.get('view') || params.get('mode');
+        if (view === 'seating' || view === 'table' || view === 'map' || view === 'tables') {
+          setIsSeatingView(true);
+        } else if (view === 'venue' || view === 'location' || view === 'ukumbi') {
+          setIsVenueView(true);
+        }
 
         const eventIdQuery = eventIdParam ? `&eventId=${encodeURIComponent(eventIdParam)}` : '';
         fetch(`/api/guest-lookup?code=${encodeURIComponent(inviteCode)}${eventIdQuery}`)
@@ -260,11 +270,17 @@ export default function App() {
           if (foundPrev) return foundPrev;
         }
 
-        // Fallback to persisted event ID
-        const savedEvId = data.userAccount?.activeEventId || localStorage.getItem('kadi_active_event_id');
-        if (savedEvId && currentEvents.length > 0) {
-          const found = currentEvents.find((e: any) => e.id === savedEvId);
-          if (found) targetEvent = found;
+        // Fallback to persisted event ID (prioritize a validated local storage selection, then DB selection)
+        const localSavedId = safeLocalStorage.getItem('kadi_active_event_id');
+        const dbSavedId = data.userAccount?.activeEventId;
+        
+        let found = currentEvents.find((e: any) => e.id === localSavedId);
+        if (!found && dbSavedId) {
+          found = currentEvents.find((e: any) => e.id === dbSavedId);
+        }
+
+        if (found) {
+          targetEvent = found;
         }
         return targetEvent;
       });
@@ -601,6 +617,250 @@ export default function App() {
     setShowLanding(true);
   };
 
+  // --- Global Notification Center & Quick Drawer State ---
+  const [globalNotifications, setGlobalNotifications] = useState<any[]>([]);
+  const [showNotificationsPopover, setShowNotificationsPopover] = useState(false);
+  const [isQuickDrawerOpen, setIsQuickDrawerOpen] = useState(false);
+  const [quickDrawerSection, setQuickDrawerSection] = useState<'guest' | 'payment'>('guest');
+
+  // Add Guest inputs
+  const [quickGuestName, setQuickGuestName] = useState('');
+  const [quickGuestPhone, setQuickGuestPhone] = useState('');
+  const [quickGuestCardType, setQuickGuestCardType] = useState<'SINGLE' | 'COUPLE' | 'TABLE'>('SINGLE');
+  const [quickGuestPledge, setQuickGuestPledge] = useState('');
+  const [quickGuestPaid, setQuickGuestPaid] = useState('');
+  const [quickGuestError, setQuickGuestError] = useState<string | null>(null);
+  const [quickGuestSuccess, setQuickGuestSuccess] = useState(false);
+
+  // Record Payment inputs
+  const [quickSelectedGuestId, setQuickSelectedGuestId] = useState('');
+  const [quickPledgeAmount, setQuickPledgeAmount] = useState('');
+  const [quickPaymentAmount, setQuickPaymentAmount] = useState('');
+  const [quickPaymentRef, setQuickPaymentRef] = useState('');
+  const [quickPaymentError, setQuickPaymentError] = useState<string | null>(null);
+  const [quickPaymentSuccess, setQuickPaymentSuccess] = useState(false);
+
+  // Sync initial notifications from localStorage
+  useEffect(() => {
+    if (eventDetails?.id) {
+      const saved = localStorage.getItem(`kadi_committee_notifications_${eventDetails.id}`);
+      if (saved) {
+        setGlobalNotifications(JSON.parse(saved));
+      } else {
+        const defaults = [
+          { id: 'n-1', type: 'pledge', title: 'Ahadi Mpya ya Mchango', message: 'Ally Khalfan amesajili ahadi mpya ya TZS 500,000.', createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }), read: false },
+          { id: 'n-2', type: 'payment', title: 'Malipo Mapya', message: 'Salma Khamis (Mweka Hazina) amesajili malipo ya TZS 300,000 kwa Ally Khalfan.', createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }), read: false },
+          { id: 'n-3', type: 'completed', title: 'Mchango Umekamilika', message: 'Fatma Said amekamilisha malipo yote ya ahadi yake ya TZS 1,000,000.', createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }), read: false }
+        ];
+        setGlobalNotifications(defaults);
+        localStorage.setItem(`kadi_committee_notifications_${eventDetails.id}`, JSON.stringify(defaults));
+      }
+    }
+  }, [eventDetails]);
+
+  // Reactive listener to generate real-time live notifications when guest data updates
+  const prevGuestsRef = useRef<Guest[]>([]);
+  useEffect(() => {
+    if (prevGuestsRef.current.length > 0 && activeGuests.length > 0 && eventDetails?.id) {
+      const newNotifications: any[] = [];
+      const savedNotifsStr = localStorage.getItem(`kadi_committee_notifications_${eventDetails.id}`);
+      let currentNotifs = savedNotifsStr ? JSON.parse(savedNotifsStr) : [];
+
+      // 1. Newly added guests
+      if (activeGuests.length > prevGuestsRef.current.length) {
+        const added = activeGuests.filter(g => !prevGuestsRef.current.some(pg => pg.id === g.id));
+        added.forEach(g => {
+          newNotifications.push({
+            id: 'n-auto-' + Date.now() + Math.random().toString(36).substr(2, 5),
+            type: 'guest',
+            title: language === 'sw' ? 'Mgeni Mpya' : 'New Guest',
+            message: language === 'sw' ? `${g.name} amesajiliwa kwenye orodha ya wageni.` : `${g.name} has been added to the guest list.`,
+            createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }),
+            read: false
+          });
+        });
+      }
+
+      // 2. RSVP changes
+      activeGuests.forEach(g => {
+        const prevG = prevGuestsRef.current.find(pg => pg.id === g.id);
+        if (prevG) {
+          if (g.rsvpStatus !== prevG.rsvpStatus && g.rsvpStatus !== 'Bado') {
+            const statusTxt = g.rsvpStatus === 'Atahudhuria' ? (language === 'sw' ? 'atakuja' : 'will attend') : (language === 'sw' ? 'hatakuja' : 'will not attend');
+            newNotifications.push({
+              id: 'n-auto-' + Date.now() + Math.random().toString(36).substr(2, 5),
+              type: 'rsvp',
+              title: language === 'sw' ? 'Mabadiliko ya RSVP' : 'RSVP Update',
+              message: language === 'sw' ? `${g.name} amebadilisha RSVP kuwa ${statusTxt}.` : `${g.name} updated RSVP to: ${statusTxt}.`,
+              createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }),
+              read: false
+            });
+          }
+
+          // 3. New Pledges or Payments
+          if ((g.pledgeAmount || 0) > (prevG.pledgeAmount || 0)) {
+            newNotifications.push({
+              id: 'n-auto-' + Date.now() + Math.random().toString(36).substr(2, 5),
+              type: 'pledge',
+              title: language === 'sw' ? 'Ahadi ya Mchango' : 'New Pledge',
+              message: language === 'sw' ? `${g.name} amesajili ahadi mpya ya TZS ${(g.pledgeAmount || 0).toLocaleString()}.` : `${g.name} pledged TZS ${(g.pledgeAmount || 0).toLocaleString()}.`,
+              createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }),
+              read: false
+            });
+          }
+
+          if ((g.paidAmount || 0) > (prevG.paidAmount || 0)) {
+            const addedPayment = (g.paidAmount || 0) - (prevG.paidAmount || 0);
+            newNotifications.push({
+              id: 'n-auto-' + Date.now() + Math.random().toString(36).substr(2, 5),
+              type: 'payment',
+              title: language === 'sw' ? 'Malipo ya Mchango' : 'Contribution Payment',
+              message: language === 'sw' ? `${g.name} amelipa mchango wa TZS ${addedPayment.toLocaleString()}.` : `${g.name} paid TZS ${addedPayment.toLocaleString()}.`,
+              createdAt: new Date().toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' }),
+              read: false
+            });
+          }
+        }
+      });
+
+      if (newNotifications.length > 0) {
+        const updated = [...newNotifications, ...currentNotifs].slice(0, 50);
+        setGlobalNotifications(updated);
+        localStorage.setItem(`kadi_committee_notifications_${eventDetails.id}`, JSON.stringify(updated));
+      }
+    }
+    prevGuestsRef.current = activeGuests;
+  }, [activeGuests, eventDetails, language]);
+
+  // Handle Quick Add Guest
+  const handleQuickAddGuest = (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuickGuestError(null);
+    setQuickGuestSuccess(false);
+
+    if (!eventDetails) {
+      setQuickGuestError(language === 'sw' ? 'Hakuna tukio lililochaguliwa.' : 'No active event selected.');
+      return;
+    }
+    if (!quickGuestName.trim()) {
+      setQuickGuestError(language === 'sw' ? 'Tafadhali weka jina la mgeni.' : 'Please enter guest name.');
+      return;
+    }
+
+    const newGuest: Guest = {
+      id: 'guest-' + Date.now(),
+      eventId: eventDetails.id,
+      code: 'EC-' + Math.floor(1000 + Math.random() * 9000),
+      name: quickGuestName.trim(),
+      phone: quickGuestPhone.trim(),
+      cardType: quickGuestCardType,
+      pledgeAmount: Number(quickGuestPledge) || 0,
+      paidAmount: Number(quickGuestPaid) || 0,
+      pledgeStatus: Number(quickGuestPaid) >= Number(quickGuestPledge) && Number(quickGuestPledge) > 0 ? 'Fully Paid' : Number(quickGuestPaid) > 0 ? 'Partially Paid' : Number(quickGuestPledge) > 0 ? 'Pledged' : 'No Pledge',
+      rsvpStatus: 'Bado',
+      rsvpGuestsCount: quickGuestCardType === 'TABLE' ? 10 : quickGuestCardType === 'COUPLE' ? 2 : 1,
+      checkedIn: false,
+      smsStatus: 'Sijatuma',
+      whatsappStatus: 'Sijatuma',
+      payments: Number(quickGuestPaid) > 0 ? [{
+        id: 'pay-' + Date.now(),
+        amount: Number(quickGuestPaid),
+        date: new Date().toLocaleDateString('sw-TZ'),
+        reference: 'Quick Drawer',
+        notes: 'Kutoka Quick Action Drawer'
+      }] : []
+    };
+
+    updateGuests([...activeGuests, newGuest], `Mgeni mpya aliongezwa kupitia Quick Drawer: ${quickGuestName}`);
+    
+    // Clear form and show success
+    setQuickGuestName('');
+    setQuickGuestPhone('');
+    setQuickGuestCardType('SINGLE');
+    setQuickGuestPledge('');
+    setQuickGuestPaid('');
+    setQuickGuestSuccess(true);
+    setTimeout(() => setQuickGuestSuccess(false), 3000);
+  };
+
+  // Handle Quick Record Contribution
+  const handleQuickRecordContribution = (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuickPaymentError(null);
+    setQuickPaymentSuccess(false);
+
+    if (!quickSelectedGuestId) {
+      setQuickPaymentError(language === 'sw' ? 'Tafadhali mchague mgeni.' : 'Please select a guest.');
+      return;
+    }
+
+    const targetGuest = activeGuests.find(g => g.id === quickSelectedGuestId);
+    if (!targetGuest) {
+      setQuickPaymentError(language === 'sw' ? 'Mgeni hajapatikana.' : 'Guest not found.');
+      return;
+    }
+
+    const pledgeAmt = Number(quickPledgeAmount);
+    const payAmt = Number(quickPaymentAmount);
+
+    if (isNaN(pledgeAmt) && isNaN(payAmt)) {
+      setQuickPaymentError(language === 'sw' ? 'Tafadhali weka kiasi halali cha ahadi au malipo.' : 'Please enter a valid pledge or payment amount.');
+      return;
+    }
+
+    const updated = activeGuests.map(g => {
+      if (g.id === quickSelectedGuestId) {
+        const pledgeVal = !isNaN(pledgeAmt) && pledgeAmt > 0 ? pledgeAmt : g.pledgeAmount || 0;
+        const paymentVal = !isNaN(payAmt) && payAmt > 0 ? payAmt : 0;
+        const newPaidAmount = (g.paidAmount || 0) + paymentVal;
+        const newPayments = [...(g.payments || [])];
+        if (paymentVal > 0) {
+          newPayments.push({
+            id: 'pay-' + Date.now(),
+            amount: paymentVal,
+            date: new Date().toLocaleDateString('sw-TZ'),
+            reference: quickPaymentRef.trim() || 'Quick Drawer',
+            notes: 'Kutoka Quick Action Drawer'
+          });
+        }
+        return {
+          ...g,
+          pledgeAmount: pledgeVal,
+          paidAmount: newPaidAmount,
+          payments: newPayments
+        };
+      }
+      return g;
+    });
+
+    updateGuests(updated, `Mchango umesajiliwa kwa haraka kwa: ${targetGuest.name}`);
+
+    // Clear and show success
+    setQuickSelectedGuestId('');
+    setQuickPledgeAmount('');
+    setQuickPaymentAmount('');
+    setQuickPaymentRef('');
+    setQuickPaymentSuccess(true);
+    setTimeout(() => setQuickPaymentSuccess(false), 3000);
+  };
+
+  // Mark all notifications as read
+  const handleMarkAllNotificationsAsRead = () => {
+    const updated = globalNotifications.map(n => ({ ...n, read: true }));
+    setGlobalNotifications(updated);
+    if (eventDetails?.id) {
+      localStorage.setItem(`kadi_committee_notifications_${eventDetails.id}`, JSON.stringify(updated));
+    }
+  };
+
+  // Clear all notifications
+  const handleClearGlobalNotifications = () => {
+    setGlobalNotifications([]);
+    if (eventDetails?.id) {
+      localStorage.setItem(`kadi_committee_notifications_${eventDetails.id}`, JSON.stringify([]));
+    }
+  };
+
   // --- RSVP Notification Badge Logic ---
   const unseenRsvps = useMemo(() => {
     return guests.filter(g => g.rsvpStatus && g.rsvpStatus !== 'Bado' && !g.rsvpSeen);
@@ -628,6 +888,10 @@ export default function App() {
       ? (language === 'en' ? 'Loading your contribution page...' : 'Inapakia Ukurasa wako wa Ahadi ya Mchango...')
       : isStdView
       ? (language === 'en' ? 'Loading Save The Date...' : 'Inapakia Taarifa ya Hifadhi Tarehe...')
+      : isSeatingView
+      ? (language === 'en' ? 'Loading Seating Map & Selection...' : 'INAPAKIA Ramani ya Meza na Uchaguzi...')
+      : isVenueView
+      ? (language === 'en' ? 'Loading Venue Location...' : 'Inapakia Ramani ya Ukumbi...')
       : (language === 'en' ? 'Loading your digital invitation card...' : 'Inapakia Kadi Yako ya Mwaliko Kidigitali...');
 
     return (
@@ -983,10 +1247,18 @@ export default function App() {
         {
           // Calculate stats for the active event
           const activeGuests = eventDetails ? guests.filter(g => g.eventId === eventDetails.id) : [];
+          const confirmedGuestsCount = activeGuests.filter(g => g.rsvpStatus === 'Atahudhuria').length;
+          const attendancePercentage = activeGuests.length > 0 ? (confirmedGuestsCount / activeGuests.length) * 100 : 0;
+          
           const unseenRsvps = activeGuests.filter(g => !g.checkedIn && g.rsvpStatus === 'Atahudhuria');
           const totalEvents = eventsList.length;
           const totalGuests = activeGuests.length;
-          const sentCards = activeGuests.filter(g => g.whatsappStatus === 'Imetumia' || g.smsStatus === 'Imetumia').length;
+          const sentCards = activeGuests.filter(g => 
+            isStatusSent(g.whatsappStatus) || 
+            isStatusSent(g.smsStatus) || 
+            (typeof g.whatsappCount === 'number' && g.whatsappCount > 0) ||
+            (typeof g.smsCount === 'number' && g.smsCount > 0)
+          ).length;
 
           // Filtered list states based on live search
           const filteredGuests = activeGuests.filter(g => 
@@ -995,7 +1267,12 @@ export default function App() {
             `P-${g.id.substring(0, 6).toUpperCase()}`.toLowerCase().includes(guestListSearch.toLowerCase())
           );
 
-          const sentGuestsList = activeGuests.filter(g => g.whatsappStatus === 'Imetumia' || g.smsStatus === 'Imetumia');
+          const sentGuestsList = activeGuests.filter(g => 
+            isStatusSent(g.whatsappStatus) || 
+            isStatusSent(g.smsStatus) ||
+            (typeof g.whatsappCount === 'number' && g.whatsappCount > 0) ||
+            (typeof g.smsCount === 'number' && g.smsCount > 0)
+          );
           const filteredSentGuests = sentGuestsList.filter(g => 
             g.name.toLowerCase().includes(sentListSearch.toLowerCase()) ||
             g.phone.toLowerCase().includes(sentListSearch.toLowerCase())
@@ -1459,11 +1736,11 @@ export default function App() {
                                 <span className="text-amber-500 font-bold">P-{guest.id.substring(0, 6).toUpperCase()}</span>
                                 <span>•</span>
                                 <span>{guest.phone || (language === 'sw' ? 'Hakuna Simu' : 'No Phone')}</span>
-                                {(guest.smsStatus === 'Imetumia' || guest.whatsappStatus === 'Imetumia') && (
+                                {(isStatusSent(guest.smsStatus) || isStatusSent(guest.whatsappStatus)) && (
                                   <>
                                     <span>•</span>
                                     <span className="text-[10px] text-slate-400 font-mono font-normal">
-                                      sms:{guest.smsCount || (guest.smsStatus === 'Imetumia' ? 1 : 0)} wa:{guest.whatsappCount || (guest.whatsappStatus === 'Imetumia' ? 1 : 0)}
+                                      sms:{guest.smsCount || (isStatusSent(guest.smsStatus) ? 1 : 0)} wa:{guest.whatsappCount || (isStatusSent(guest.whatsappStatus) ? 1 : 0)}
                                     </span>
                                   </>
                                 )}
@@ -1572,8 +1849,8 @@ export default function App() {
                   ) : (
                     <div className="space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                       {filteredSentGuests.map((guest) => {
-                        const viaWhatsApp = guest.whatsappStatus === 'Imetumia';
-                        const viaSMS = guest.smsStatus === 'Imetumia';
+                        const viaWhatsApp = isStatusSent(guest.whatsappStatus);
+                        const viaSMS = isStatusSent(guest.smsStatus);
 
                         return (
                           <div 
@@ -1733,6 +2010,37 @@ export default function App() {
                       </p>
                     )}
                   </div>
+                </div>
+
+                {/* Attendance Confirmation Progress Bar */}
+                <div className="space-y-3 pt-6 border-t border-white/5" id="attendance-progress-section">
+                  <div className="flex justify-between items-center text-[11px] font-bold">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-slate-300">
+                        {language === 'sw' ? 'Wageni Waliothibitisha' : 'Attendance Confirmation Rate'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 font-black">{attendancePercentage.toFixed(1)}%</span>
+                      <span className="text-slate-500 font-mono">
+                        ({confirmedGuestsCount}/{activeGuests.length})
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5 shadow-inner">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${attendancePercentage}%` }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                      className="h-full bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-500 rounded-full"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic">
+                    {language === 'sw' 
+                      ? '*Asilimia hii inawakilisha wageni waliobonyeza "Nitahudhuria" kwenye kadi zao mwaliko.' 
+                      : '*This percentage represents guests who have explicitly clicked "I will attend" on their digital invites.'}
+                  </p>
                 </div>
               </div>
 
@@ -2065,7 +2373,7 @@ export default function App() {
             </h2>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3.5">
             {/* Language Selector in Header */}
             <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
               <button 
@@ -2081,6 +2389,92 @@ export default function App() {
                 EN
               </button>
             </div>
+
+            {/* Real-time Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotificationsPopover(!showNotificationsPopover)}
+                className="p-2 bg-white/5 border border-white/10 rounded-xl text-slate-450 hover:text-white hover:bg-white/10 transition relative cursor-pointer flex items-center justify-center"
+              >
+                <Bell className="w-4 h-4" />
+                {globalNotifications.some(n => !n.read) && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotificationsPopover && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 mt-3 w-80 bg-slate-950/95 border border-white/10 rounded-2xl shadow-2xl p-4 z-50 space-y-3 backdrop-blur-md"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <span className="text-xs font-bold text-white uppercase font-mono">{language === 'sw' ? 'Taarifa za Mfumo' : 'System Notifications'}</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            handleMarkAllNotificationsAsRead();
+                            setShowNotificationsPopover(false);
+                          }}
+                          className="text-[9px] font-mono text-blue-400 hover:underline"
+                        >
+                          {language === 'sw' ? 'Soma Zote' : 'Read All'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleClearGlobalNotifications();
+                            setShowNotificationsPopover(false);
+                          }}
+                          className="text-[9px] font-mono text-slate-500 hover:text-white hover:underline"
+                        >
+                          {language === 'sw' ? 'Futa' : 'Clear'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                      {globalNotifications.length === 0 ? (
+                        <p className="text-center py-4 text-slate-550 text-xs font-mono">{language === 'sw' ? 'Hakuna taarifa kwa sasa.' : 'No alerts registered.'}</p>
+                      ) : (
+                        globalNotifications.map(n => (
+                          <div
+                            key={n.id}
+                            className={`p-2.5 rounded-xl border flex items-start gap-2.5 transition ${
+                              n.read 
+                                ? 'bg-white/[0.01] border-white/5 opacity-60' 
+                                : 'bg-white/[0.04] border-white/10'
+                            }`}
+                          >
+                            <span className="text-xs mt-0.5">
+                              {n.type === 'payment' ? '💰' : n.type === 'pledge' ? '🤝' : n.type === 'rsvp' ? '📩' : '👤'}
+                            </span>
+                            <div className="space-y-0.5 flex-1 min-w-0">
+                              <p className="font-extrabold text-[10.5px] text-white uppercase font-mono tracking-tight leading-tight">{n.title}</p>
+                              <p className="text-[10px] text-slate-300 leading-relaxed break-words">{n.message}</p>
+                              <p className="text-[8px] font-mono text-slate-500">{n.createdAt}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Quick Action Drawer Trigger Button */}
+            <button
+              onClick={() => {
+                setIsQuickDrawerOpen(true);
+                setQuickDrawerSection('guest');
+              }}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[10px] uppercase font-mono tracking-wider rounded-xl shadow-lg shadow-blue-900/20 flex items-center gap-1 transition cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>{language === 'sw' ? 'Njia ya Mkato' : 'Quick Access'}</span>
+            </button>
 
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center">
               <Users className="w-4 h-4 text-blue-400" />
@@ -2105,6 +2499,239 @@ export default function App() {
             </AnimatePresence>
           </div>
         </div>
+
+        {/* Quick Action Drawer Overlay */}
+        <AnimatePresence>
+          {isQuickDrawerOpen && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.5 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsQuickDrawerOpen(false)}
+                className="fixed inset-0 bg-black/70 z-50 cursor-pointer"
+              />
+
+              {/* Sidebar Drawer Container */}
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed top-0 right-0 h-full w-full max-w-md bg-[#070e1e]/98 border-l border-white/10 shadow-2xl z-50 flex flex-col p-6 backdrop-blur-xl"
+              >
+                <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-400" />
+                    <h3 className="font-extrabold text-white text-xs uppercase font-mono tracking-wider">
+                      {language === 'sw' ? 'Njia ya Mkato ya Haraka' : 'Quick Access Desk'}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsQuickDrawerOpen(false)}
+                    className="p-1.5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white transition cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Subtabs for Drawer (Add Guest / Record Payment) */}
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                  <button
+                    onClick={() => setQuickDrawerSection('guest')}
+                    className={`py-2 px-3 border rounded-xl font-mono text-[10px] font-bold text-center uppercase transition cursor-pointer ${
+                      quickDrawerSection === 'guest'
+                        ? 'bg-blue-600 border-blue-500 text-white font-extrabold shadow-lg shadow-blue-900/30'
+                        : 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:border-white/10'
+                    }`}
+                  >
+                    {language === 'sw' ? 'Sajili Mgeni' : 'Add Guest'}
+                  </button>
+                  <button
+                    onClick={() => setQuickDrawerSection('payment')}
+                    className={`py-2 px-3 border rounded-xl font-mono text-[10px] font-bold text-center uppercase transition cursor-pointer ${
+                      quickDrawerSection === 'payment'
+                        ? 'bg-blue-600 border-blue-500 text-white font-extrabold shadow-lg shadow-blue-900/30'
+                        : 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:border-white/10'
+                    }`}
+                  >
+                    {language === 'sw' ? 'Rekodi Mchango' : 'Record Payment'}
+                  </button>
+                </div>
+
+                {/* SECTION 1: ADD NEW GUEST FORM */}
+                {quickDrawerSection === 'guest' && (
+                  <form onSubmit={handleQuickAddGuest} className="space-y-4 flex-grow overflow-y-auto pr-1">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Jina Kamili la Mgeni *' : 'Full Guest Name *'}</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={language === 'sw' ? 'Mhe. John Doe' : 'e.g. Honorable John Doe'}
+                        value={quickGuestName}
+                        onChange={(e) => setQuickGuestName(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-sans"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Namba ya Simu' : 'Phone Number'}</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 255712345678"
+                        value={quickGuestPhone}
+                        onChange={(e) => setQuickGuestPhone(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Aina ya Kadi' : 'Card Type'}</label>
+                        <select
+                          value={quickGuestCardType}
+                          onChange={(e: any) => setQuickGuestCardType(e.target.value)}
+                          className="w-full bg-[#0a1120] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all"
+                        >
+                          <option value="SINGLE">{language === 'sw' ? 'SINGLE' : 'SINGLE'}</option>
+                          <option value="COUPLE">{language === 'sw' ? 'DOUBLE' : 'DOUBLE'}</option>
+                          <option value="TABLE">{language === 'sw' ? 'TABLE' : 'TABLE'}</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Kiasi cha Ahadi' : 'Pledge Amount'}</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 100000"
+                          value={quickGuestPledge}
+                          onChange={(e) => setQuickGuestPledge(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Kiasi Kilicholipwa Sasa (Optional)' : 'Amount Paid Now (Optional)'}</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 50000"
+                        value={quickGuestPaid}
+                        onChange={(e) => setQuickGuestPaid(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono"
+                      />
+                    </div>
+
+                    {quickGuestError && (
+                      <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>{quickGuestError}</span>
+                      </div>
+                    )}
+
+                    {quickGuestSuccess && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{language === 'sw' ? 'Mgeni amesajiliwa kikamilifu!' : 'Guest registered successfully!'}</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-blue-900/30 transition cursor-pointer text-center"
+                    >
+                      {language === 'sw' ? 'Hifadhi Mgeni' : 'Save Guest'}
+                    </button>
+                  </form>
+                )}
+
+                {/* SECTION 2: RECORD PAYMENT FORM */}
+                {quickDrawerSection === 'payment' && (
+                  <form onSubmit={handleQuickRecordContribution} className="space-y-4 flex-grow overflow-y-auto pr-1">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Chagua Mgeni *' : 'Select Guest *'}</label>
+                      <select
+                        value={quickSelectedGuestId}
+                        onChange={(e) => {
+                          setQuickSelectedGuestId(e.target.value);
+                          const selectedG = activeGuests.find(g => g.id === e.target.value);
+                          if (selectedG) {
+                            setQuickPledgeAmount(String(selectedG.pledgeAmount || ''));
+                          }
+                        }}
+                        className="w-full bg-[#0a1120] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all"
+                      >
+                        <option value="">-- {language === 'sw' ? 'Chagua Mgeni' : 'Choose Guest'} --</option>
+                        {activeGuests.map(g => (
+                          <option key={g.id} value={g.id}>
+                            {g.name} ({language === 'sw' ? 'Ahadi' : 'Pledge'}: TZS {(g.pledgeAmount || 0).toLocaleString()} / {language === 'sw' ? 'Lipa' : 'Paid'}: TZS {(g.paidAmount || 0).toLocaleString()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Update Ahadi' : 'Update Pledge'}</label>
+                        <input
+                          type="number"
+                          placeholder="TZS"
+                          value={quickPledgeAmount}
+                          onChange={(e) => setQuickPledgeAmount(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Ongeza Malipo' : 'Record Payment'}</label>
+                        <input
+                          type="number"
+                          placeholder="TZS"
+                          value={quickPaymentAmount}
+                          onChange={(e) => setQuickPaymentAmount(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase block font-bold">{language === 'sw' ? 'Namba ya Kumbukumbu / Reference' : 'Reference Number'}</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. MPESA-ABC123XYZ"
+                        value={quickPaymentRef}
+                        onChange={(e) => setQuickPaymentRef(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono"
+                      />
+                    </div>
+
+                    {quickPaymentError && (
+                      <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>{quickPaymentError}</span>
+                      </div>
+                    )}
+
+                    {quickPaymentSuccess && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{language === 'sw' ? 'Michango na malipo yamehifadhiwa kikamilifu!' : 'Contribution and payment saved successfully!'}</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-900/30 transition cursor-pointer text-center uppercase tracking-wider"
+                    >
+                      {language === 'sw' ? 'Rekodi Mchango' : 'Record Contribution'}
+                    </button>
+                  </form>
+                )}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </main>
 
     </div>

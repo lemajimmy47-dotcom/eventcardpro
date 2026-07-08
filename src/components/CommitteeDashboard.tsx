@@ -8,7 +8,8 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { EventDetails, Guest, CommitteeMember, CommitteeActivityLog, CommitteeNotification, ContributionPayment } from '../types';
 import { safeLocalStorage } from '../utils/storage';
-import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { isStatusSent } from '../utils/statusHelper';
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Legend } from 'recharts';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ContributionManager from './ContributionManager';
@@ -84,6 +85,14 @@ export default function CommitteeDashboard({
   useEffect(() => {
     safeLocalStorage.setItem(`kadi_event_files_${event.id}`, JSON.stringify(eventFiles));
   }, [eventFiles, event.id]);
+
+  // Keep notifications state in sync with local storage when guests or event changes
+  useEffect(() => {
+    const saved = safeLocalStorage.getItem(`kadi_committee_notifications_${event.id}`);
+    if (saved) {
+      setNotifications(JSON.parse(saved));
+    }
+  }, [guests, event.id]);
 
   // States for event files manager tab
   const [fileFilter, setFileFilter] = useState<'all' | 'pdf' | 'spreadsheet' | 'document' | 'image' | 'other'>('all');
@@ -899,8 +908,8 @@ export default function CommitteeDashboard({
     doc.line(10, 39, pageWidth - 10, 39);
 
     // Calculate overall statistics
-    const totalSmsSent = guests.reduce((sum, g) => sum + (g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)), 0);
-    const totalWhatsappSent = guests.reduce((sum, g) => sum + (g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)), 0);
+    const totalSmsSent = guests.reduce((sum, g) => sum + (g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)), 0);
+    const totalWhatsappSent = guests.reduce((sum, g) => sum + (g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)), 0);
 
     // Render depending on selection
     if (selectedReport === 'Summary') {
@@ -989,8 +998,8 @@ export default function CommitteeDashboard({
       const tableData = masterGuestList.map(g => {
         // match category guest record
         const matchingGuestObj = guests.find(gst => gst.id === g.id || gst.name === g.name);
-        const smsC = matchingGuestObj ? (matchingGuestObj.smsCount || (matchingGuestObj.smsStatus === 'Imetumia' ? 1 : 0)) : (g.clearance === 'Completed' ? 1 : 0);
-        const waC = matchingGuestObj ? (matchingGuestObj.whatsappCount || (matchingGuestObj.whatsappStatus === 'Imetumia' ? 1 : 0)) : (g.clearance === 'Completed' ? 1 : 0);
+        const smsC = matchingGuestObj ? (matchingGuestObj.smsCount || (isStatusSent(matchingGuestObj.smsStatus) ? 1 : 0)) : (g.clearance === 'Completed' ? 1 : 0);
+        const waC = matchingGuestObj ? (matchingGuestObj.whatsappCount || (isStatusSent(matchingGuestObj.whatsappStatus) ? 1 : 0)) : (g.clearance === 'Completed' ? 1 : 0);
         return [
           g.sn,
           g.name,
@@ -1031,8 +1040,8 @@ export default function CommitteeDashboard({
             name: g.name,
             phone: g.phone,
             p,
-            sms: g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-            wa: g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+            sms: g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+            wa: g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
           });
         });
       });
@@ -1115,8 +1124,8 @@ export default function CommitteeDashboard({
         (g.pledgeAmount || 0).toLocaleString(),
         (g.paidAmount || 0).toLocaleString(),
         ((g.pledgeAmount || 0) - (g.paidAmount || 0)).toLocaleString(),
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       // Add a Row for Grand Totals
@@ -1166,8 +1175,8 @@ export default function CommitteeDashboard({
         g.name,
         g.phone,
         (g.pledgeAmount || 0).toLocaleString(),
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       const sumPaid = fullyPaidList.reduce((sum, g) => sum + (g.pledgeAmount || 0), 0);
@@ -1210,8 +1219,8 @@ export default function CommitteeDashboard({
         g.phone,
         g.pledgeStatus || 'Pledged',
         (g.pledgeAmount || 0).toLocaleString(),
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       const sumPledge = activePledgeList.reduce((sum, g) => sum + (g.pledgeAmount || 0), 0);
@@ -1254,8 +1263,8 @@ export default function CommitteeDashboard({
         g.name,
         g.phone,
         `https://eventcard.co.tz/pledge/${g.code}`,
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       tableData.push([
@@ -1298,8 +1307,8 @@ export default function CommitteeDashboard({
         g.phone || '-',
         g.cardType || 'SINGLE',
         'SUCCESS SCAN',
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       tableData.push([
@@ -1387,8 +1396,8 @@ export default function CommitteeDashboard({
         g.cardType || 'SINGLE',
         g.rsvpStatus || 'Bado',
         g.rsvpGuestsCount || 1,
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       const sumRSVPPeople = guests.reduce((sum, g) => sum + (g.rsvpStatus === 'Atahudhuria' ? (g.rsvpGuestsCount || 1) : 0), 0);
@@ -1497,6 +1506,52 @@ export default function CommitteeDashboard({
     const list = [...guests].filter(g => (g.pledgeAmount || 0) > 0);
     return list.sort((a,b) => (b.pledgeAmount || 0) - (a.pledgeAmount || 0)).slice(0, 5);
   }, [guests]);
+
+  // Compute RSVP response data for the interactive charts
+  const rsvpChartData = useMemo(() => {
+    let attending = 0;
+    let absent = 0;
+    let maybe = 0;
+    let noResponse = 0;
+
+    guests.forEach(g => {
+      const status = g.rsvpStatus || 'Bado';
+      if (status === 'Atahudhuria') {
+        attending += (g.rsvpGuestsCount || 1);
+      } else if (status === 'Hatahudhuria') {
+        absent += 1;
+      } else if (status === 'Labda') {
+        maybe += 1;
+      } else {
+        noResponse += 1;
+      }
+    });
+
+    // If all are zero, provide default illustrative data
+    if (attending === 0 && absent === 0 && maybe === 0 && noResponse === 0) {
+      return [
+        { name: isEn ? 'Attending' : 'Atahudhuria', value: 35, color: '#10b981' },
+        { name: isEn ? 'Not Attending' : 'Hatahudhuria', value: 5, color: '#f43f5e' },
+        { name: isEn ? 'Maybe' : 'Labda', value: 10, color: '#eab308' },
+        { name: isEn ? 'No Response' : 'Bado Haijulikani', value: 50, color: '#64748b' },
+      ];
+    }
+
+    return [
+      { name: isEn ? 'Attending' : 'Atahudhuria', value: attending, color: '#10b981' },
+      { name: isEn ? 'Not Attending' : 'Hatahudhuria', value: absent, color: '#f43f5e' },
+      { name: isEn ? 'Maybe' : 'Labda', value: maybe, color: '#eab308' },
+      { name: isEn ? 'No Response' : 'Bado Haijulikani', value: noResponse, color: '#64748b' },
+    ].filter(item => item.value > 0);
+  }, [guests, isEn]);
+
+  // Compute Contribution stats data (Paid vs Remaining)
+  const pledgeStatusChartData = useMemo(() => {
+    return [
+      { name: isEn ? 'Paid' : 'Kiasi Kilicholipwa', value: metrics.totalPaidAmount, color: '#10b981' },
+      { name: isEn ? 'Outstanding' : 'Salio la Ahadi', value: metrics.outstandingBalance, color: '#f43f5e' }
+    ];
+  }, [metrics.totalPaidAmount, metrics.outstandingBalance, isEn]);
 
   // Printable PDF triggered view
   const handlePrintTrigger = () => {
@@ -2160,6 +2215,72 @@ export default function CommitteeDashboard({
 
           </div>
 
+          {/* Row 2: Interactive RSVP and Fundraising Chart Analysis */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            
+            {/* RSVP Response Donut Chart */}
+            <div className="backdrop-blur-md bg-white/[0.02] border border-white/10 rounded-3xl p-5 space-y-4">
+              <div className="border-b border-white/5 pb-2">
+                <h4 className="font-extrabold text-white text-xs uppercase font-mono tracking-wider">
+                  {isEn ? "RSVP Feedback Breakdown" : "Mchanganuo wa Majibu ya RSVP (Attendance Ratio)"}
+                </h4>
+                <p className="text-slate-400 text-[10.5px]">
+                  {isEn ? "Real-time attendance confirmation rate based on guest RSVP replies:" : "Mchanganuo wa asilimia na idadi ya wageni wanaohudhuria dhidi ya wasiohudhuria:"}
+                </p>
+              </div>
+
+              <div className="h-56 relative flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={rsvpChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {rsvpChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', fontSize: '11px', borderRadius: '8px' }} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '10.5px', fontFamily: 'monospace' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Cash Collection vs Outstanding Commitments Bar Chart */}
+            <div className="backdrop-blur-md bg-white/[0.02] border border-white/10 rounded-3xl p-5 space-y-4">
+              <div className="border-b border-white/5 pb-2">
+                <h4 className="font-extrabold text-white text-xs uppercase font-mono tracking-wider">
+                  {isEn ? "Fundraising Collections Balance" : "Ulinganifu wa Makusanyo na Deni (Collections Balance)"}
+                </h4>
+                <p className="text-slate-400 text-[10.5px]">
+                  {isEn ? "Comparison between collected cash and outstanding commitments:" : "Ulinganifu kati ya kiasi kilicholipwa sasa dhidi ya salio la ahadi ambazo hazijalipwa:"}
+                </p>
+              </div>
+
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={pledgeStatusChartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} tickFormatter={(v) => `TZS ${v.toLocaleString()}`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', fontSize: '11px', borderRadius: '8px' }} formatter={(value: any) => [`TZS ${value.toLocaleString()}`, isEn ? 'Amount' : 'Kiasi']} />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={45}>
+                      {pledgeStatusChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+          </div>
+
         </div>
       )}
 
@@ -2224,8 +2345,8 @@ export default function CommitteeDashboard({
             
             {/* Header info showing for other reports */}
             {selectedReport !== 'Summary' && (() => {
-              const totalSmsSent = guests.reduce((sum, g) => sum + (g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)), 0);
-              const totalWhatsappSent = guests.reduce((sum, g) => sum + (g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)), 0);
+              const totalSmsSent = guests.reduce((sum, g) => sum + (g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)), 0);
+              const totalWhatsappSent = guests.reduce((sum, g) => sum + (g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)), 0);
               return (
                 <div className="border-b border-white/10 pb-4 text-center justify-center space-y-1.5 pb-4">
                   <h1 className="text-sm font-black uppercase text-amber-400 tracking-wider">EVENTCARD COMMITTEE OFFICIAL LEDGER</h1>
@@ -2656,8 +2777,8 @@ export default function CommitteeDashboard({
                             <td className="py-2 px-3 text-right">TZS {(g.pledgeAmount || 0).toLocaleString()}</td>
                             <td className="py-2 px-3 text-right">TZS {(g.paidAmount || 0).toLocaleString()}</td>
                             <td className="py-2 px-3 text-right text-rose-400 font-black">TZS {b.toLocaleString()}</td>
-                            <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
-                            <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
+                            <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}</td>
+                            <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                           </tr>
                         );
                       })
@@ -2700,8 +2821,8 @@ export default function CommitteeDashboard({
                           <td className="py-2 px-3 font-bold uppercase">{g.name}</td>
                           <td className="py-2 px-3 text-slate-400">{g.phone || (isEn ? 'No phone' : 'Hakuna simu')}</td>
                           <td className="py-2 px-3 text-right text-emerald-400 font-black">TZS {(g.pledgeAmount || 0).toLocaleString()}</td>
-                          <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
-                          <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
+                          <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}</td>
+                          <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                         </tr>
                       ))
                     )}
@@ -2743,8 +2864,8 @@ export default function CommitteeDashboard({
                           <td className="py-2 px-3 font-bold uppercase">{g.name}</td>
                           <td className="py-2 px-3 text-amber-400 uppercase text-[9.5px]">{g.pledgeStatus}</td>
                           <td className="py-2 px-3 text-right font-black">TZS {(g.pledgeAmount || 0).toLocaleString()}</td>
-                          <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
-                          <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
+                          <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}</td>
+                          <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                         </tr>
                       ))
                     )}
@@ -2792,8 +2913,8 @@ export default function CommitteeDashboard({
                             <td className="py-2.5 px-3 font-bold uppercase">{g.name}</td>
                             <td className="py-2.5 px-3 text-slate-400 text-[9px]">{g.cardType}</td>
                             <td className="py-2.5 px-3 text-right text-emerald-400 font-black">SUCCESS</td>
-                            <td className="py-2.5 px-3 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
-                            <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
+                            <td className="py-2.5 px-3 text-center text-blue-400 font-bold">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}</td>
+                            <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                           </tr>
                         ))
                     )}
@@ -2833,8 +2954,8 @@ export default function CommitteeDashboard({
                           <td className="py-2 px-3 font-bold uppercase">{g.name}</td>
                           <td className="py-2 px-3 text-slate-400">{g.phone || 'Hakuna namba ya simu'}</td>
                           <td className="py-2 px-3 text-center text-slate-550 text-[10px]">https://eventcard.co.tz/pledge/{g.code}</td>
-                          <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
-                          <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
+                          <td className="py-2 px-3 text-center text-blue-400 font-bold">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}</td>
+                          <td className="py-2 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                         </tr>
                       ))
                     )}
@@ -2924,8 +3045,8 @@ export default function CommitteeDashboard({
                               </span>
                             </td>
                             <td className="py-2.5 px-4 text-center text-slate-300 font-bold">{g.rsvpStatus === 'Hatahudhuria' ? 0 : (g.rsvpGuestsCount || 1)}</td>
-                            <td className="py-2.5 px-4 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
-                            <td className="py-2.5 px-4 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
+                            <td className="py-2.5 px-4 text-center text-blue-400 font-bold">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}</td>
+                            <td className="py-2.5 px-4 text-center text-emerald-400 font-bold">{g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                           </tr>
                         ))}
                       </tbody>

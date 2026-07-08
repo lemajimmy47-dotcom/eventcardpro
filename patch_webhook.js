@@ -66,7 +66,7 @@ const webhookCode = `
       } else {
         return res.status(404).json({ error: "Guest not found matching the account reference or phone." });
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error("Mobile Money Webhook error:", e.message);
       res.status(500).json({ error: e.message });
     }

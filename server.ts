@@ -217,7 +217,13 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
   if (Array.isArray(incomingParams) && incomingParams.length > 0) {
     for (let i = 0; i < count; i++) {
       if (i < incomingParams.length) {
-        resolvedParams.push(incomingParams[i]);
+        const val = String(incomingParams[i] || "").trim();
+        const placeholderRegex = /^\{\{[a-zA-Z0-9_\-Hh]+\}\}|\{[a-zA-Z0-9_\-Hh]+\}$/;
+        if ((!val || placeholderRegex.test(val)) && i < standardValues.length) {
+          resolvedParams.push(standardValues[i]);
+        } else {
+          resolvedParams.push(incomingParams[i]);
+        }
       } else if (i < standardValues.length) {
         resolvedParams.push(standardValues[i]);
       } else {
@@ -1325,12 +1331,85 @@ Tafadhali ingia kwenye akaunti yako ya ${settings.provider === "meseji" ? "Mesej
   return responseContent;
 }
 
+
+// ==========================================
+// CRON: AUTOMATED PAYMENT REMINDERS
+// ==========================================
+function startPaymentRemindersCron() {
+  console.log("[Cron] Automated Payment Reminders service initialized.");
+  
+  // Run every 24 hours to check for pledges that need reminding
+  // For demo/testing, running it every 12 hours
+  setInterval(async () => {
+    try {
+      console.log("[Cron] Running payment reminders check...");
+      const db = await readDBLatest();
+      
+      const today = new Date();
+      const settings = db.smsGatewaySettings || { provider: "simulation" };
+
+      // We need to look through events
+      const events = db.events || [];
+      const guests = db.guests || [];
+
+      for (const event of events) {
+        if (!event.date) continue;
+        
+        // Parse event date (assumes DD/MM/YYYY or YYYY-MM-DD)
+        let eventDate;
+        if (event.date.includes('/')) {
+          const parts = event.date.split('/');
+          if (parts.length === 3) {
+             eventDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          }
+        } else {
+          eventDate = new Date(event.date);
+        }
+
+        if (isNaN(eventDate.getTime())) continue;
+
+        // Calculate days left
+        const diffTime = eventDate.getTime() - today.getTime();
+        const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        // Remind at exactly 30, 14, or 7 days before event
+        if (daysLeft === 30 || daysLeft === 14 || daysLeft === 7) {
+          console.log(`[Cron] Event ${event.name} is ${daysLeft} days away. Dispatching reminders...`);
+          
+          const eventGuests = guests.filter((g) => g.eventId === event.id);
+          for (const guest of eventGuests) {
+            const currentPledge = typeof guest.pledgeAmount === 'number' ? guest.pledgeAmount : 0;
+            const currentPaid = typeof guest.paidAmount === 'number' ? guest.paidAmount : 0;
+            const balance = currentPledge - currentPaid;
+
+            // Only remind if they pledged and have a balance
+            if (currentPledge > 0 && balance > 0) {
+              const reminderMsg = `Salaam ${guest.name}, tunakukumbusha kuhusu ahadi yako ya TZS ${currentPledge.toLocaleString()} kwa ajili ya ${event.name || 'sherehe'}. Bado kiasi cha TZS ${balance.toLocaleString()}. Tafadhali kamilisha malipo yako kabla ya tarehe ${event.date}. Asante!`;
+              
+              // Dispatch SMS quietly
+              console.log(`[Cron] Sending reminder to ${guest.phone}`);
+              await dispatchSMS(guest.phone, reminderMsg, 'sms', settings).catch(e => {
+                console.error("[Cron] Failed to send reminder SMS:", e.message);
+              });
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.error("[Cron] Error in payment reminders check:", e.message);
+    }
+  }, 12 * 60 * 60 * 1000); // 12 hours
+}
+
 async function startServer() {
   const initData = await initDB();
   await performSelfCleaningAndMigration(initData);
   
   const app = express();
   const PORT = 3000;
+
+  // Start the cron service
+  startPaymentRemindersCron();
 
   // Allow cross-origin requests from any external website
   app.use(cors());
@@ -1743,10 +1822,72 @@ async function startServer() {
     }
   });
 
+  // API to fetch table maps and layouts
+  app.get("/api/event-tables", async (req, res) => {
+    try {
+      const eventId = req.query.eventId as string;
+      if (!eventId) {
+        return res.status(400).json({ error: "Missing eventId" });
+      }
+
+      const db = await readDBLatest();
+      const guests = db.guests || [];
+      const eventGuests = guests.filter((g: any) => String(g.eventId) === String(eventId));
+
+      // Define standard tables (e.g. Meza #1 to Meza #12), and find any other custom tables from imported guest data
+      const standardTables = Array.from({ length: 12 }, (_, i) => `Meza #${i + 1}`);
+      const assignedTables = new Set<string>();
+
+      eventGuests.forEach((g: any) => {
+        const tableNum = g.customFields?.tableNumber;
+        if (tableNum) {
+          assignedTables.add(String(tableNum).trim());
+        }
+      });
+
+      // Merge standard tables and any custom assigned ones
+      const allTablesList = Array.from(new Set([...standardTables, ...assignedTables]))
+        .filter(Boolean)
+        .sort((a, b) => {
+          // Sort numerically if possible
+          const numA = parseInt(a.replace(/^\D+/g, ''), 10);
+          const numB = parseInt(b.replace(/^\D+/g, ''), 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return a.localeCompare(b);
+        });
+
+      // For each table, aggregate stats
+      const tablesData = allTablesList.map(table => {
+        const tableGuests = eventGuests.filter((g: any) => {
+          const t = g.customFields?.tableNumber;
+          return t && String(t).trim().toLowerCase() === table.toLowerCase();
+        });
+
+        const activeGuests = tableGuests.filter((g: any) => g.rsvpStatus === "Atahudhuria");
+        const headcount = activeGuests.reduce((sum, g) => sum + (g.rsvpGuestsCount || 1), 0);
+
+        return {
+          tableName: table,
+          headcount,
+          capacity: 10, // Default table capacity
+          guests: activeGuests.map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            rsvpGuestsCount: g.rsvpGuestsCount || 1,
+          }))
+        };
+      });
+
+      res.json({ tables: tablesData });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // API 4: RSVP response submission endpoint
   app.post("/api/rsvp-update", async (req, res) => {
     try {
-      const { guestId, rsvpStatus, rsvpGuestsCount, rsvpComment } = req.body;
+      const { guestId, rsvpStatus, rsvpGuestsCount, rsvpComment, tableNumber } = req.body;
       if (!guestId) {
         return res.status(400).json({ error: "Missing guestId" });
       }
@@ -1758,13 +1899,18 @@ async function startServer() {
       const updatedGuests = guests.map((g: any) => {
         if (g.id === guestId) {
           found = true;
+          const currentCustomFields = g.customFields || {};
           return {
             ...g,
             rsvpStatus,
             rsvpGuestsCount: rsvpStatus === "Atahudhuria" ? rsvpGuestsCount : 0,
             rsvpComment: rsvpComment || "",
             rsvpUpdatedAt: new Date().toISOString(),
-            rsvpSeen: false
+            rsvpSeen: false,
+            customFields: {
+              ...currentCustomFields,
+              tableNumber: tableNumber !== undefined ? tableNumber : (currentCustomFields.tableNumber || "")
+            }
           };
         }
         return g;
@@ -2198,7 +2344,27 @@ async function startServer() {
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const origin = `${protocol}://${host}`;
 
-      const result = await dispatchSMS(phone, text, channel || 'sms', settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl);
+      let result: string;
+      let usedChannel = channel || 'sms';
+      let failoverAttempted = false;
+      let failoverLog = '';
+
+      try {
+        result = await dispatchSMS(phone, text, usedChannel, settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl);
+      } catch (e: any) {
+        console.warn(`[Failover] Primary channel ${usedChannel} failed for ${phone}: ${e.message}`);
+        // Attempt failover
+        failoverAttempted = true;
+        failoverLog = `(Primary ${usedChannel} failed: ${e.message}) `;
+        usedChannel = usedChannel === 'whatsapp' ? 'sms' : 'whatsapp';
+        console.log(`[Failover] Falling back to secondary channel ${usedChannel} for ${phone}`);
+        try {
+          result = await dispatchSMS(phone, text, usedChannel, settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl);
+        } catch (e2: any) {
+          console.error(`[Failover] Secondary channel ${usedChannel} also failed for ${phone}: ${e2.message}`);
+          throw new Error(`Primary and Secondary channels both failed. Primary: ${e.message} | Secondary: ${e2.message}`);
+        }
+      }
       
       let batchId = null;
       try {
@@ -2211,7 +2377,7 @@ async function startServer() {
       if (guestId) {
         db.guests = (db.guests || []).map((g: any) => {
           if (g.id === guestId) {
-            if (channel === 'whatsapp') {
+            if (usedChannel === 'whatsapp') {
               const currentCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (g.whatsappStatus === 'Imetumia' ? 1 : 0);
               return { 
                 ...g, 
@@ -2232,7 +2398,7 @@ async function startServer() {
         await writeDB(db);
       }
       
-      res.json({ success: true, log: result, batchId });
+      res.json({ success: true, log: failoverLog + result, batchId, usedChannel, failoverAttempted });
     } catch (e: any) {
       console.error("SMS Dispatch error:", e.message);
       res.status(500).json({ error: `Failed to send SMS: ${e.message}` });
@@ -2704,6 +2870,76 @@ async function startServer() {
         guests: db.guests
       });
     } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Mobile Money API Webhook (Lipa Namba/Paybill Integration)
+  app.post("/api/webhooks/mobile-money", async (req, res) => {
+    try {
+      const { transactionId, amount, phone, accountReference } = req.body;
+      if (!amount || !phone || !accountReference) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const db = await readDBLatest();
+      let paymentRecorded = false;
+      let matchedGuest = null;
+
+      // Find the guest by accountReference (which could be the card code or ID) or phone number
+      db.guests = (db.guests || []).map((g: any) => {
+        if (!paymentRecorded && (g.code === accountReference || g.id === accountReference || g.phone.includes(phone))) {
+          matchedGuest = g;
+          const currentPaid = typeof g.paidAmount === 'number' ? g.paidAmount : 0;
+          const currentPledge = typeof g.pledgeAmount === 'number' ? g.pledgeAmount : 0;
+          const newTotalPaid = currentPaid + Number(amount);
+          
+          let status: "No Pledge" | "Pledged" | "Partially Paid" | "Fully Paid" = String(g.pledgeStatus || "No Pledge") as any;
+          if (newTotalPaid >= currentPledge && currentPledge > 0) {
+            status = 'Fully Paid';
+          } else if (newTotalPaid > 0) {
+            status = 'Partially Paid';
+          }
+
+          const updatedPayments = [...(g.payments || []), {
+            id: 'pay-' + Date.now(),
+            amount: Number(amount),
+            date: new Date().toLocaleDateString('sw-TZ'),
+            reference: transactionId || 'M-PESA/TIGO-PESA',
+            notes: 'Malipo ya Mtandao (Mobile Money)'
+          }];
+
+          paymentRecorded = true;
+          return {
+            ...g,
+            pledgeStatus: status,
+            paidAmount: newTotalPaid,
+            payments: updatedPayments
+          };
+        }
+        return g;
+      });
+
+      if (paymentRecorded && matchedGuest) {
+        // Record in Audit Logs
+        let currentLogs = db.auditLogs || [];
+        currentLogs = [{
+          id: 'log-' + Date.now() + Math.random().toString(36).substr(2, 5),
+          timestamp: new Date().toISOString(),
+          user: 'System API (Mobile Money)',
+          action: `Amepokea malipo (Mobile Money) kiasi cha TZS ${amount} kutoka kwa mgeni: ${matchedGuest.name}`,
+          details: `Transaction ID: ${transactionId || 'N/A'}`,
+          ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown IP'
+        }, ...currentLogs].slice(0, 500);
+        db.auditLogs = currentLogs;
+
+        await writeDB(db);
+        return res.json({ success: true, message: "Malipo yamepokelewa na kurekodiwa kikamilifu." });
+      } else {
+        return res.status(404).json({ error: "Guest not found matching the account reference or phone." });
+      }
+    } catch (e: any) {
+      console.error("Mobile Money Webhook error:", e.message);
       res.status(500).json({ error: e.message });
     }
   });

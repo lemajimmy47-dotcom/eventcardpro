@@ -4,6 +4,7 @@ import { Users, UserPlus, FileSpreadsheet, Search, Check, FileText, ArrowRight, 
 import { EventDetails, TemplateSettings, Guest } from '../types';
 import { drawCardToCanvas } from '../utils/canvasHelper';
 import { useLanguage } from '../context/LanguageContext';
+import { isStatusSent } from '../utils/statusHelper';
 
 import { safeLocalStorage } from '../utils/storage';
 
@@ -23,6 +24,33 @@ const isDuplicateGuestUniversal = (name: string, phone: string, existingGuests: 
 
     return nameMatches || phoneMatches;
   });
+};
+
+const standardisePhoneNumber = (phone: string): string => {
+  let clean = (phone || '').trim().replace(/\s+/g, '');
+  if (!clean) return '';
+
+  // If already starts with +
+  if (clean.startsWith('+')) {
+    return clean;
+  }
+
+  // If starts with 0 and is 10 digits long, e.g. 0714786751 or 06...
+  if (clean.startsWith('0') && clean.length === 10) {
+    return '+255' + clean.slice(1);
+  }
+
+  // If starts with 255 and is 12 digits long, e.g. 255714786751
+  if (clean.startsWith('255') && clean.length === 12) {
+    return '+' + clean;
+  }
+
+  // If is 9 digits long and starts with 6 or 7, e.g. 714786751
+  if (clean.length === 9 && (clean.startsWith('7') || clean.startsWith('6') || clean.startsWith('8') || clean.startsWith('9') || clean.startsWith('1') || clean.startsWith('2') || clean.startsWith('3') || clean.startsWith('4') || clean.startsWith('5'))) {
+    return '+255' + clean;
+  }
+
+  return clean;
 };
 
 interface LazyGuestCardImageProps {
@@ -257,7 +285,25 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [guestType, setGuestType] = useState<string>('DOUBLE');
+  const [guestMaxGuests, setGuestMaxGuests] = useState<number>(2);
   const [availableCategories, setAvailableCategories] = useState<string[]>(['SINGLE', 'DOUBLE', 'UNCLASSIFIED']);
+
+  // Tags & Custom Fields states for adding single guest
+  const [guestTags, setGuestTags] = useState('');
+  const [guestTableNumber, setGuestTableNumber] = useState('');
+  const [guestFoodPreference, setGuestFoodPreference] = useState('');
+
+  // Tags & Custom Fields states for editing guest
+  const [editGuestTags, setEditGuestTags] = useState('');
+  const [editGuestTableNumber, setEditGuestTableNumber] = useState('');
+  const [editGuestFoodPreference, setEditGuestFoodPreference] = useState('');
+  const [editGuestMaxGuests, setEditGuestMaxGuests] = useState<number>(2);
+
+  // Selected tag filter state
+  const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
+
+  // Conflict queue state for Smart Duplicate Resolution
+  const [conflictQueue, setConflictQueue] = useState<{ newGuest: Guest; existingGuest: Guest }[]>([]);
 
   // Edit guest state
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
@@ -269,7 +315,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
   // Bulk input field
   const [bulkTextInput, setBulkTextInput] = useState('');
   const [bulkMode, setBulkMode] = useState<'text' | 'file'>('text');
-  const [parsedFileGuests, setParsedFileGuests] = useState<{ name: string; phone: string; cardType: string }[]>([]);
+  const [parsedFileGuests, setParsedFileGuests] = useState<{ name: string; phone: string; cardType: string; tags?: string[]; customFields?: Record<string, string> }[]>([]);
   const [fileName, setFileName] = useState('');
   const [csvError, setCsvError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -313,7 +359,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
   const parseCSVFileContent = (content: string) => {
     setCsvError('');
     const lines = content.split(/\r?\n/);
-    const matchedList: { name: string; phone: string; cardType: string }[] = [];
+    const matchedList: { name: string; phone: string; cardType: string; tags?: string[]; customFields?: Record<string, string> }[] = [];
 
     const splitCSVLine = (line: string): string[] => {
       const result: string[] = [];
@@ -354,7 +400,23 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
           const rawType = parts[2].trim().toUpperCase();
           type = ['SINGLE', 'DOUBLE'].includes(rawType) ? rawType : 'UNCLASSIFIED';
         }
-        matchedList.push({ name, phone, cardType: type });
+
+        const tagsPart = parts[3] ? parts[3].trim() : '';
+        const parsedTags = tagsPart ? tagsPart.split(';').map(t => t.trim()).filter(Boolean) : [];
+
+        const tableNum = parts[4] ? parts[4].trim() : '';
+        const foodPref = parts[5] ? parts[5].trim() : '';
+        const customFieldsObj: Record<string, string> = {};
+        if (tableNum) customFieldsObj.tableNumber = tableNum;
+        if (foodPref) customFieldsObj.foodPreference = foodPref;
+
+        matchedList.push({ 
+          name, 
+          phone, 
+          cardType: type,
+          tags: parsedTags,
+          customFields: customFieldsObj
+        });
       }
     });
 
@@ -390,29 +452,72 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     e.preventDefault();
     if (parsedFileGuests.length === 0) return;
 
-    const newGuestsList: Guest[] = [];
+    const nonConflicts: Guest[] = [];
+    const conflicts: { newGuest: Guest; existingGuest: Guest }[] = [];
+
     parsedFileGuests.forEach((item, index) => {
       const id = 'G-' + (Date.now() + index).toString().slice(-6);
       const shortCode = 'IP-' + Math.floor(1100 + Math.random() * 8800);
+      const standardisedPhone = standardisePhoneNumber(item.phone);
+
+      const itemTags = item.tags ? item.tags : [];
+      const itemCustomFields = item.customFields ? item.customFields : {};
+
       const newGuest: Guest = {
         id,
         eventId: event.id,
         code: shortCode,
-        name: item.name,
-        phone: item.phone,
+        name: item.name.trim(),
+        phone: standardisedPhone,
         cardType: item.cardType,
         smsStatus: 'Sijatuma',
         whatsappStatus: 'Sijatuma',
         rsvpStatus: 'Bado',
         rsvpGuestsCount: item.cardType === 'DOUBLE' ? 2 : 1,
-        checkedIn: false
+        checkedIn: false,
+        tags: itemTags,
+        customFields: itemCustomFields
       };
 
-      newGuestsList.push(newGuest);
+      // Check for duplicate in existing guests
+      const existingDuplicate = guests.find(g => {
+        const normName = item.name.trim().toLowerCase();
+        const cleanPhone = standardisedPhone.replace(/\D/g, '');
+        const lastNdigits = cleanPhone.slice(-9);
+
+        const existingNormName = (g.name || '').trim().toLowerCase();
+        const existingCleanPhone = (g.phone || '').replace(/\D/g, '');
+        const existingLastNdigits = existingCleanPhone.slice(-9);
+
+        return (normName && existingNormName === normName) || (lastNdigits && existingLastNdigits && lastNdigits === existingLastNdigits);
+      });
+
+      // Check for duplicate in nonConflicts
+      const isSelfDuplicate = nonConflicts.some(g => {
+        const normName = item.name.trim().toLowerCase();
+        const cleanPhone = standardisedPhone.replace(/\D/g, '');
+        const lastNdigits = cleanPhone.slice(-9);
+
+        const existingNormName = g.name.trim().toLowerCase();
+        const existingCleanPhone = g.phone.replace(/\D/g, '');
+        const existingLastNdigits = existingCleanPhone.slice(-9);
+
+        return (normName && existingNormName === normName) || (lastNdigits && existingLastNdigits && lastNdigits === existingLastNdigits);
+      });
+
+      if (existingDuplicate) {
+        conflicts.push({ newGuest, existingGuest: existingDuplicate });
+      } else if (!isSelfDuplicate) {
+        nonConflicts.push(newGuest);
+      }
     });
 
-    if (newGuestsList.length > 0) {
-      handleUploadInBatches(newGuestsList, "Pakia wageni kupitia CSV");
+    if (nonConflicts.length > 0) {
+      handleUploadInBatches(nonConflicts, "Pakia wageni kupitia CSV");
+    }
+
+    if (conflicts.length > 0) {
+      setConflictQueue(prev => [...prev, ...conflicts]);
     }
 
     setIsBulkModalOpen(false);
@@ -447,16 +552,22 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
 
     setIsSubmitting(true);
 
-    if (isDuplicateGuestUniversal(guestName, guestPhone, guests)) {
-      alert(isEn 
-        ? "Stop! A guest with this name or phone number already exists in the system (Duplicate information found)." 
-        : (isEn ? "Warning! A guest with this name or phone number already exists in the system (Duplicate information found)." : "Hataza! Mgeni mwenye jina hili au namba hii ya simu tayari yupo kwenye mfumo (Duplicate information found)."));
-      setIsSubmitting(false);
-      return;
-    }
-
+    const standardisedPhone = standardisePhoneNumber(guestPhone);
     const finalType = ['SINGLE', 'DOUBLE'].includes(guestType) ? guestType : 'UNCLASSIFIED';
     const rsvpCount = finalType === 'DOUBLE' ? 2 : 1;
+
+    const parsedTags = guestTags
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+
+    const customFieldsObj: Record<string, string> = {};
+    if (guestTableNumber.trim()) {
+      customFieldsObj.tableNumber = guestTableNumber.trim();
+    }
+    if (guestFoodPreference.trim()) {
+      customFieldsObj.foodPreference = guestFoodPreference.trim();
+    }
 
     const shortCode = 'IP-' + Math.floor(1000 + Math.random() * 9000);
     const newGuest: Guest = {
@@ -464,14 +575,45 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
       eventId: event.id,
       code: shortCode,
       name: guestName.trim(),
-      phone: guestPhone.trim() || '',
+      phone: standardisedPhone,
       cardType: finalType,
       smsStatus: 'Sijatuma',
       whatsappStatus: 'Sijatuma',
       rsvpStatus: 'Bado',
+      maxGuests: guestMaxGuests,
       rsvpGuestsCount: rsvpCount,
-      checkedIn: false
+      checkedIn: false,
+      tags: parsedTags,
+      customFields: customFieldsObj
     };
+
+    // Check for duplicate in existing guests
+    const existingDuplicate = guests.find(g => {
+      const normName = guestName.trim().toLowerCase();
+      const cleanPhone = standardisedPhone.replace(/\D/g, '');
+      const lastNdigits = cleanPhone.slice(-9);
+
+      const existingNormName = (g.name || '').trim().toLowerCase();
+      const existingCleanPhone = (g.phone || '').replace(/\D/g, '');
+      const existingLastNdigits = existingCleanPhone.slice(-9);
+
+      return (normName && existingNormName === normName) || (lastNdigits && existingLastNdigits && lastNdigits === existingLastNdigits);
+    });
+
+    if (existingDuplicate) {
+      setConflictQueue([{ newGuest, existingGuest: existingDuplicate }]);
+      setIsSingleModalOpen(false);
+      setIsSubmitting(false);
+      // Reset form fields
+      setGuestName('');
+      setGuestPhone('');
+      setGuestType('DOUBLE');
+      setGuestMaxGuests(2);
+      setGuestTags('');
+      setGuestTableNumber('');
+      setGuestFoodPreference('');
+      return;
+    }
 
     onUpdateGuests([newGuest, ...guests], `Ameongeza mgeni mpya (Added Guest): ${newGuest.name}`);
     setIsSingleModalOpen(false);
@@ -481,6 +623,10 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     setGuestName('');
     setGuestPhone('');
     setGuestType('DOUBLE');
+    setGuestMaxGuests(2);
+    setGuestTags('');
+    setGuestTableNumber('');
+    setGuestFoodPreference('');
   };
 
   const handleAddBulkGuests = (e: React.FormEvent) => {
@@ -489,27 +635,31 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
 
     // Split rows on semi-colon or newlines
     const lines = bulkTextInput.split('\n');
-    const newGuestsList: Guest[] = [];
-    const duplicatesSkipped: string[] = [];
+    const nonConflicts: Guest[] = [];
+    const conflicts: { newGuest: Guest; existingGuest: Guest }[] = [];
 
     lines.forEach((line, index) => {
-      // Expect format: Jina la Mgeni, Namba ya Simu, CardType
+      // Expect format: Jina la Mgeni, Namba ya Simu, CardType, Tags, TableNumber, FoodPreference
       const parts = line.split(',');
       if (parts[0] && parts[0].trim()) {
         const name = parts[0].trim();
         const phone = parts[1] ? parts[1].trim() : '';
-
-        // Check for duplicates in existing guests or already processed list
-        if (isDuplicateGuestUniversal(name, phone, guests) || isDuplicateGuestUniversal(name, phone, newGuestsList)) {
-          duplicatesSkipped.push(`${name} (${phone})`);
-          return;
-        }
+        const standardisedPhone = standardisePhoneNumber(phone);
 
         let type = 'DOUBLE';
         if (parts[2]) {
           const rawType = parts[2].trim().toUpperCase();
           type = ['SINGLE', 'DOUBLE'].includes(rawType) ? rawType : 'UNCLASSIFIED';
         }
+
+        const tagsPart = parts[3] ? parts[3].trim() : '';
+        const parsedTags = tagsPart ? tagsPart.split(';').map(t => t.trim()).filter(Boolean) : [];
+
+        const tableNum = parts[4] ? parts[4].trim() : '';
+        const foodPref = parts[5] ? parts[5].trim() : '';
+        const customFieldsObj: Record<string, string> = {};
+        if (tableNum) customFieldsObj.tableNumber = tableNum;
+        if (foodPref) customFieldsObj.foodPreference = foodPref;
 
         const id = 'G-' + (Date.now() + index).toString().slice(-6);
         const shortCode = 'IP-' + Math.floor(1100 + Math.random() * 8800);
@@ -518,40 +668,100 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
           eventId: event.id,
           code: shortCode,
           name,
-          phone,
+          phone: standardisedPhone,
           cardType: type,
           smsStatus: 'Sijatuma',
           whatsappStatus: 'Sijatuma',
           rsvpStatus: 'Bado',
           rsvpGuestsCount: type === 'DOUBLE' ? 2 : 1,
-          checkedIn: false
+          checkedIn: false,
+          tags: parsedTags,
+          customFields: customFieldsObj
         };
 
-        newGuestsList.push(newGuest);
+        // Check for duplicate in existing guests
+        const existingDuplicate = guests.find(g => {
+          const normName = name.trim().toLowerCase();
+          const cleanPhone = standardisedPhone.replace(/\D/g, '');
+          const lastNdigits = cleanPhone.slice(-9);
+
+          const existingNormName = (g.name || '').trim().toLowerCase();
+          const existingCleanPhone = (g.phone || '').replace(/\D/g, '');
+          const existingLastNdigits = existingCleanPhone.slice(-9);
+
+          return (normName && existingNormName === normName) || (lastNdigits && existingLastNdigits && lastNdigits === existingLastNdigits);
+        });
+
+        // Check for duplicate in nonConflicts
+        const isSelfDuplicate = nonConflicts.some(g => {
+          const normName = name.trim().toLowerCase();
+          const cleanPhone = standardisedPhone.replace(/\D/g, '');
+          const lastNdigits = cleanPhone.slice(-9);
+
+          const existingNormName = g.name.trim().toLowerCase();
+          const existingCleanPhone = g.phone.replace(/\D/g, '');
+          const existingLastNdigits = existingCleanPhone.slice(-9);
+
+          return (normName && existingNormName === normName) || (lastNdigits && existingLastNdigits && lastNdigits === existingLastNdigits);
+        });
+
+        if (existingDuplicate) {
+          conflicts.push({ newGuest, existingGuest: existingDuplicate });
+        } else if (!isSelfDuplicate) {
+          nonConflicts.push(newGuest);
+        }
       }
     });
 
-    if (newGuestsList.length > 0) {
-      handleUploadInBatches(newGuestsList, "Ameongeza wageni wapya kwa pamoja");
-      if (duplicatesSkipped.length > 0) {
-        alert(isEn 
-          ? `Successfully started uploading ${newGuestsList.length} guests. ${duplicatesSkipped.length} duplicates with existing information were skipped.`
-          : `Inaanza kupakia wageni ${newGuestsList.length}. Wageni ${duplicatesSkipped.length} wenye taarifa za kufanana (duplicates) wamerukwa.`);
-      } else {
-        alert(isEn 
-          ? `Successfully started uploading ${newGuestsList.length} guests!`
-          : `Inaanza kupakia wageni ${newGuestsList.length}!`);
-      }
-    } else {
-      if (duplicatesSkipped.length > 0) {
-        alert(isEn
-          ? "No new guests registered because all of them already exist in the system (Duplication check failed)."
-          : `Hakuna mgeni mpya aliyesajiliwa kwani wote tayari wapo kwenye mfumo (Duplication check failed).`);
-      }
+    if (nonConflicts.length > 0) {
+      handleUploadInBatches(nonConflicts, "Ameongeza wageni wapya kwa pamoja");
     }
-    
+
+    if (conflicts.length > 0) {
+      setConflictQueue(prev => [...prev, ...conflicts]);
+    }
+
     setIsBulkModalOpen(false);
     setBulkTextInput('');
+  };
+
+  const handleResolveMerge = (newGuest: Guest, existingGuest: Guest) => {
+    // Merge tags
+    const existingTags = existingGuest.tags || [];
+    const newTags = newGuest.tags || [];
+    const mergedTags = Array.from(new Set([...existingTags, ...newTags]));
+
+    // Merge custom fields
+    const existingCF = existingGuest.customFields || {};
+    const newCF = newGuest.customFields || {};
+    const mergedCF = { ...existingCF, ...newCF };
+
+    const mergedGuest: Guest = {
+      ...existingGuest,
+      name: newGuest.name || existingGuest.name,
+      phone: newGuest.phone || existingGuest.phone,
+      cardType: newGuest.cardType !== 'UNCLASSIFIED' ? newGuest.cardType : existingGuest.cardType,
+      rsvpGuestsCount: newGuest.cardType !== 'UNCLASSIFIED' ? (newGuest.cardType === 'DOUBLE' ? 2 : 1) : (existingGuest.cardType === 'DOUBLE' ? 2 : 1),
+      tags: mergedTags,
+      customFields: mergedCF
+    };
+
+    const updatedList = guests.map(g => g.id === existingGuest.id ? mergedGuest : g);
+    onUpdateGuests(updatedList, `Ameunganisha mgeni (Merged Guest): ${mergedGuest.name}`);
+
+    // Remove first item from queue
+    setConflictQueue(prev => prev.slice(1));
+  };
+
+  const handleResolveSkip = () => {
+    // Remove first item from queue
+    setConflictQueue(prev => prev.slice(1));
+  };
+
+  const handleResolveKeepBoth = (newGuest: Guest) => {
+    onUpdateGuests([newGuest, ...guests], `Amesajili mgeni mpya sambamba na aliyepo (Kept both duplicate guests): ${newGuest.name}`);
+    // Remove first item from queue
+    setConflictQueue(prev => prev.slice(1));
   };
 
   const handleDeleteGuest = (id: string, name: string) => {
@@ -563,6 +773,10 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     setEditGuestName(guest.name);
     setEditGuestPhone(guest.phone);
     setEditGuestType(['SINGLE', 'DOUBLE'].includes(guest.cardType) ? guest.cardType : 'UNCLASSIFIED');
+    setEditGuestMaxGuests(guest.maxGuests || (guest.cardType === 'DOUBLE' ? 2 : 1));
+    setEditGuestTags(guest.tags ? guest.tags.join(', ') : '');
+    setEditGuestTableNumber(guest.customFields?.tableNumber || '');
+    setEditGuestFoodPreference(guest.customFields?.foodPreference || '');
   };
 
   const handleSaveEditGuest = (e: React.FormEvent) => {
@@ -571,13 +785,30 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
 
     const finalType = ['SINGLE', 'DOUBLE'].includes(editGuestType) ? editGuestType : 'UNCLASSIFIED';
     const rsvpCount = finalType === 'DOUBLE' ? 2 : 1;
+    const standardisedPhone = standardisePhoneNumber(editGuestPhone);
+
+    const parsedTags = editGuestTags
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+
+    const customFieldsObj: Record<string, string> = {};
+    if (editGuestTableNumber.trim()) {
+      customFieldsObj.tableNumber = editGuestTableNumber.trim();
+    }
+    if (editGuestFoodPreference.trim()) {
+      customFieldsObj.foodPreference = editGuestFoodPreference.trim();
+    }
 
     const updatedGuest: Guest = {
       ...editingGuest,
       name: editGuestName.trim(),
-      phone: editGuestPhone.trim(),
+      phone: standardisedPhone,
       cardType: finalType,
+      maxGuests: editGuestMaxGuests,
       rsvpGuestsCount: rsvpCount,
+      tags: parsedTags,
+      customFields: customFieldsObj
     };
 
     // Update guests list
@@ -621,11 +852,31 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
     }
   };
 
-  const filteredGuests = guests.filter(g => 
-    g.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    g.phone.includes(searchTerm) ||
-    g.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const allGuestTags = useMemo(() => {
+    const tagsSet = new Set<string>();
+    guests.forEach(g => {
+      if (g.tags) {
+        g.tags.forEach(t => {
+          if (t && t.trim()) tagsSet.add(t.trim());
+        });
+      }
+    });
+    return Array.from(tagsSet);
+  }, [guests]);
+
+  const filteredGuests = guests.filter(g => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = 
+      g.name.toLowerCase().includes(term) || 
+      g.phone.includes(term) ||
+      g.code.toLowerCase().includes(term) ||
+      (g.tags && g.tags.some(t => t.toLowerCase().includes(term))) ||
+      (g.customFields && Object.values(g.customFields).some(val => val.toLowerCase().includes(term)));
+
+    const matchesTag = selectedTagFilter === 'ALL' || (g.tags && g.tags.includes(selectedTagFilter));
+
+    return matchesSearch && matchesTag;
+  });
 
   const sortedGuests = [...filteredGuests].sort((a, b) => {
     if (sortBy === 'name') {
@@ -1065,18 +1316,36 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
       {/* Action panel & search bar */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between pt-2">
         
-        {/* Search */}
-        <div className="relative w-full sm:max-w-md">
-          <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-450">
-            <Search className="w-4 h-4" />
-          </span>
-          <input 
-            type="text"
-            placeholder={isEn ? "Search by Name, Phone, or Code..." : "Tafuta kwa Jina, Simu, au Code..."}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-sans placeholder-slate-400"
-          />
+        {/* Search & Tag Filter */}
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:max-w-2xl">
+          <div className="relative flex-1">
+            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-450">
+              <Search className="w-4 h-4" />
+            </span>
+            <input 
+              type="text"
+              placeholder={isEn ? "Search by Name, Phone, or Code..." : "Tafuta kwa Jina, Simu, au Code..."}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all font-sans placeholder-slate-400"
+            />
+          </div>
+
+          {/* Tag Filter Dropdown */}
+          {allGuestTags.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedTagFilter}
+                onChange={(e) => setSelectedTagFilter(e.target.value)}
+                className="bg-[#090f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 font-semibold cursor-pointer text-xs h-full w-full sm:w-auto"
+              >
+                <option value="ALL">{isEn ? "All Tags (Lebo Zote)" : "Lebo Zote"}</option>
+                {allGuestTags.map(tag => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Action Buttons to open modals */}
@@ -1203,13 +1472,32 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                       <div className="max-w-[160px] sm:max-w-[260px] truncate" title={guest.name}>{guest.name}</div>
                       <div className="flex items-center space-x-2 mt-1 text-[10px] font-mono text-slate-400 font-normal">
                         <span className="flex items-center gap-0.5">
-                          <span className="text-blue-400">SMS:</span> {guest.smsCount || (guest.smsStatus === 'Imetumia' ? 1 : 0)}
+                          <span className="text-blue-400">SMS:</span> {guest.smsCount || (isStatusSent(guest.smsStatus) ? 1 : 0)}
                         </span>
                         <span>•</span>
                         <span className="flex items-center gap-0.5">
-                          <span className="text-emerald-400">WA:</span> {guest.whatsappCount || (guest.whatsappStatus === 'Imetumia' ? 1 : 0)}
+                          <span className="text-emerald-400">WA:</span> {guest.whatsappCount || (isStatusSent(guest.whatsappStatus) ? 1 : 0)}
                         </span>
                       </div>
+                      {((guest.tags && guest.tags.length > 0) || (guest.customFields && Object.keys(guest.customFields).length > 0)) && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {guest.tags?.map((tag, tIdx) => (
+                            <span key={tIdx} className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 rounded border border-indigo-500/20 text-[9px] font-bold">
+                              {tag}
+                            </span>
+                          ))}
+                          {guest.customFields && guest.customFields.tableNumber && (
+                            <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-300 rounded border border-amber-500/20 text-[9px] font-bold">
+                              {isEn ? 'Table' : 'Meza'}: {guest.customFields.tableNumber}
+                            </span>
+                          )}
+                          {guest.customFields && guest.customFields.foodPreference && (
+                            <span className="px-1.5 py-0.5 bg-pink-500/10 text-pink-300 rounded border border-pink-500/20 text-[9px] font-bold">
+                              {isEn ? 'Food' : 'Chakula'}: {guest.customFields.foodPreference}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3 font-mono text-slate-300 max-w-[125px] sm:max-w-[180px] truncate" title={guest.phone}>
                       <div className="flex items-center space-x-1.5">
@@ -1331,7 +1619,6 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
                   />
                 </div>
-
                 <div className="space-y-1">
                   <label className="font-semibold text-slate-355 block" htmlFor="input-mgeni-single-phone">NAMBA YA SIMU (OPTIONAL)</label>
                   <input 
@@ -1342,20 +1629,80 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                     onChange={(e) => setGuestPhone(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   />
+                  {guestPhone.trim() && (
+                    <p className="text-[10px] text-emerald-400 font-mono mt-0.5">
+                      {isEn ? "System will format as:" : "Kihifadhiwa kama:"} {standardisePhoneNumber(guestPhone)}
+                    </p>
+                  )}
                 </div>
 
-                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-355 block" htmlFor="input-mgeni-single-type">KUNDI / AINA YA KADI * (CATEGORY)</label>
-                  <select
-                    id="input-mgeni-single-type"
-                    value={guestType}
-                    onChange={(e) => setGuestType(e.target.value)}
-                    className="w-full bg-[#050b18] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none font-bold cursor-pointer"
-                  >
-                    {availableCategories.map(cat => (
-                      <option key={cat} value={cat} className="bg-[#050b18] text-white">{cat}</option>
-                    ))}
-                  </select>
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-355 block" htmlFor="input-mgeni-single-tags">LEBO (TAGS) - Tenganisha kwa mkato (,)</label>
+                  <input 
+                    id="input-mgeni-single-tags"
+                    type="text" 
+                    placeholder="e.g. Ndugu wa Bwana Harusi, Wafanyakazi"
+                    value={guestTags}
+                    onChange={(e) => setGuestTags(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="input-mgeni-single-table">NAMBARI YA MEZA</label>
+                    <input 
+                      id="input-mgeni-single-table"
+                      type="text" 
+                      placeholder="e.g. Meza #5"
+                      value={guestTableNumber}
+                      onChange={(e) => setGuestTableNumber(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="input-mgeni-single-food">AINA YA CHAKULA</label>
+                    <input 
+                      id="input-mgeni-single-food"
+                      type="text" 
+                      placeholder="e.g. Kuku / Mboga"
+                      value={guestFoodPreference}
+                      onChange={(e) => setGuestFoodPreference(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="input-mgeni-single-type">KUNDI / AINA YA KADI *</label>
+                    <select
+                      id="input-mgeni-single-type"
+                      value={guestType}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setGuestType(val);
+                        setGuestMaxGuests(val === 'DOUBLE' ? 2 : 1);
+                      }}
+                      className="w-full bg-[#050b18] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none font-bold cursor-pointer"
+                    >
+                      {availableCategories.map(cat => (
+                        <option key={cat} value={cat} className="bg-[#050b18] text-white">{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="input-mgeni-single-max">UPEO WA WAGENI (MAX)</label>
+                    <input 
+                      id="input-mgeni-single-max"
+                      type="number" 
+                      min="1"
+                      max="100"
+                      value={guestMaxGuests}
+                      onChange={(e) => setGuestMaxGuests(parseInt(e.target.value) || 1)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
+                    />
+                  </div>
                 </div>
 
                 <button 
@@ -1791,7 +2138,7 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                                   g.cardType === 'SINGLE' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
                                   'bg-slate-500/10 text-slate-400 border-slate-500/20'
                                 }`}>
-                                  {g.cardType}
+                                  {g.cardType} {g.maxGuests && g.maxGuests > 1 ? `(Max: ${g.maxGuests})` : ''}
                                 </span>
                               </div>
                             </div>
@@ -1946,7 +2293,6 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
                   />
                 </div>
-
                 <div className="space-y-1">
                   <label className="font-semibold text-slate-355 block" htmlFor="edit-mgeni-phone">NAMBA YA SIMU (OPTIONAL)</label>
                   <input 
@@ -1957,20 +2303,80 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
                     onChange={(e) => setEditGuestPhone(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   />
+                  {editGuestPhone.trim() && (
+                    <p className="text-[10px] text-emerald-400 font-mono mt-0.5">
+                      {isEn ? "System will format as:" : "Kihifadhiwa kama:"} {standardisePhoneNumber(editGuestPhone)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-355 block" htmlFor="edit-mgeni-type">KUNDI / AINA YA KADI *</label>
-                  <select
-                    id="edit-mgeni-type"
-                    value={editGuestType}
-                    onChange={(e) => setEditGuestType(e.target.value)}
-                    className="w-full bg-[#050b18] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none font-bold cursor-pointer"
-                  >
-                    {availableCategories.map(cat => (
-                      <option key={cat} value={cat} className="bg-[#050b18] text-white">{cat}</option>
-                    ))}
-                  </select>
+                  <label className="font-semibold text-slate-355 block" htmlFor="edit-mgeni-tags">LEBO (TAGS) - Tenganisha kwa mkato (,)</label>
+                  <input 
+                    id="edit-mgeni-tags"
+                    type="text" 
+                    placeholder="e.g. Ndugu wa Bwana Harusi, Wafanyakazi"
+                    value={editGuestTags}
+                    onChange={(e) => setEditGuestTags(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="edit-mgeni-table">NAMBARI YA MEZA</label>
+                    <input 
+                      id="edit-mgeni-table"
+                      type="text" 
+                      placeholder="e.g. Meza #5"
+                      value={editGuestTableNumber}
+                      onChange={(e) => setEditGuestTableNumber(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="edit-mgeni-food">AINA YA CHAKULA</label>
+                    <input 
+                      id="edit-mgeni-food"
+                      type="text" 
+                      placeholder="e.g. Kuku / Mboga"
+                      value={editGuestFoodPreference}
+                      onChange={(e) => setEditGuestFoodPreference(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="edit-mgeni-type">KUNDI / AINA YA KADI *</label>
+                    <select
+                      id="edit-mgeni-type"
+                      value={editGuestType}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditGuestType(val);
+                        setEditGuestMaxGuests(val === 'DOUBLE' ? 2 : 1);
+                      }}
+                      className="w-full bg-[#050b18] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none font-bold cursor-pointer"
+                    >
+                      {availableCategories.map(cat => (
+                        <option key={cat} value={cat} className="bg-[#050b18] text-white">{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-355 block" htmlFor="edit-mgeni-max">UPEO WA WAGENI (MAX)</label>
+                    <input 
+                      id="edit-mgeni-max"
+                      type="number" 
+                      min="1"
+                      max="100"
+                      value={editGuestMaxGuests}
+                      onChange={(e) => setEditGuestMaxGuests(parseInt(e.target.value) || 1)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 font-bold"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex space-x-2 pt-2">
@@ -2087,6 +2493,193 @@ export default function UploadGuests({ event, settings, guests, onUpdateGuests, 
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* 4. Modal: Conflict Resolver */}
+      <AnimatePresence>
+        {conflictQueue.length > 0 && (() => {
+          const conflict = conflictQueue[0];
+          const newGuest = conflict.newGuest;
+          const existingGuest = conflict.existingGuest;
+
+          const isNameIdentical = newGuest.name.trim().toLowerCase() === existingGuest.name.trim().toLowerCase();
+          const isPhoneIdentical = newGuest.phone.replace(/\D/g, '') === existingGuest.phone.replace(/\D/g, '');
+
+          return (
+            <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md z-[9999]" id="conflict-resolver-modal">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                transition={{ duration: 0.25 }}
+                className="bg-[#090f1d] border border-white/15 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 font-sans text-xs text-white animate-fade-in"
+              >
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-white/10 pb-4">
+                  <div>
+                    <div className="flex items-center space-x-2 text-amber-400">
+                      <AlertTriangle className="w-5 h-5" />
+                      <h3 className="text-base font-bold text-white uppercase tracking-wider">
+                        {isEn ? "Duplicate Guest Detected" : "Mgeni Mwenye Taarifa Zinazofanana"}
+                      </h3>
+                    </div>
+                    <p className="text-slate-400 mt-1">
+                      {isEn 
+                        ? "The guest you are trying to add has duplicate details with an existing guest."
+                        : "Mgeni unayejaribu kumuweka ana taarifa zinazolingana na mgeni aliyepo tayari kwenye mfumo."}
+                    </p>
+                  </div>
+                  <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2.5 py-1 rounded-full font-mono font-bold text-[10px]">
+                    {isEn ? "Conflict" : "Mgongano"} 1 / {conflictQueue.length}
+                  </span>
+                </div>
+
+                {/* Side-by-side comparison */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  
+                  {/* Left: Existing Guest */}
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4.5 space-y-3 relative">
+                    <span className="absolute top-3 right-3 text-[9px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
+                      {isEn ? "IN SYSTEM" : "ALIYEPO KANZI-DATA"}
+                    </span>
+                    <h4 className="text-slate-400 font-mono text-[10px] uppercase tracking-wider">{isEn ? "Existing Guest" : "Mgeni wa Sasa"}</h4>
+                    
+                    <div className="space-y-2.5 pt-1">
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Name" : "Jina la Mgeni"}</p>
+                        <p className={`font-bold text-sm ${isNameIdentical ? 'text-amber-400' : 'text-white'}`}>{existingGuest.name}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Phone" : "Namba ya Simu"}</p>
+                        <p className={`font-mono text-xs font-bold ${isPhoneIdentical ? 'text-amber-400' : 'text-slate-300'}`}>{existingGuest.phone || (isEn ? "None" : "Haina")}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Card Type" : "Aina ya Kadi"}</p>
+                        <span className="inline-block mt-0.5 bg-slate-500/15 border border-slate-500/30 text-slate-300 px-2 py-0.5 rounded font-bold text-[10px]">{existingGuest.cardType}</span>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Tags & Custom Info" : "Lebo na Sehemu Nyingine"}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {existingGuest.tags && existingGuest.tags.length > 0 ? (
+                            existingGuest.tags.map(tag => (
+                              <span key={tag} className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded text-[9px] font-bold">{tag}</span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-slate-500 italic">{isEn ? "No tags" : "Hakuna lebo"}</span>
+                          )}
+                        </div>
+                        <div className="space-y-1 mt-1 text-[10px] font-mono">
+                          {existingGuest.customFields?.tableNumber && (
+                            <p className="text-amber-300"><span className="text-slate-500">{isEn ? "Table" : "Meza"}:</span> {existingGuest.customFields.tableNumber}</p>
+                          )}
+                          {existingGuest.customFields?.foodPreference && (
+                            <p className="text-pink-300"><span className="text-slate-500">{isEn ? "Food" : "Chakula"}:</span> {existingGuest.customFields.foodPreference}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: New Incoming Guest */}
+                  <div className="bg-[#1e152f]/30 border border-purple-500/15 rounded-2xl p-4.5 space-y-3 relative">
+                    <span className="absolute top-3 right-3 text-[9px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded">
+                      {isEn ? "INCOMING" : "MPYA ANAYEKUJA"}
+                    </span>
+                    <h4 className="text-purple-400 font-mono text-[10px] uppercase tracking-wider">{isEn ? "New Details" : "Maelezo Mapya"}</h4>
+                    
+                    <div className="space-y-2.5 pt-1">
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Name" : "Jina la Mgeni"}</p>
+                        <p className={`font-bold text-sm ${isNameIdentical ? 'text-amber-400' : 'text-white'}`}>{newGuest.name}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Phone" : "Namba ya Simu"}</p>
+                        <p className={`font-mono text-xs font-bold ${isPhoneIdentical ? 'text-amber-400' : 'text-slate-300'}`}>{newGuest.phone || (isEn ? "None" : "Haina")}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Card Type" : "Aina ya Kadi"}</p>
+                        <span className="inline-block mt-0.5 bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2 py-0.5 rounded font-bold text-[10px]">{newGuest.cardType}</span>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold font-mono">{isEn ? "Tags & Custom Info" : "Lebo na Sehemu Nyingine"}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {newGuest.tags && newGuest.tags.length > 0 ? (
+                            newGuest.tags.map(tag => (
+                              <span key={tag} className="px-1.5 py-0.5 bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 rounded text-[9px] font-bold">{tag}</span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-slate-500 italic">{isEn ? "No tags" : "Hakuna lebo"}</span>
+                          )}
+                        </div>
+                        <div className="space-y-1 mt-1 text-[10px] font-mono">
+                          {newGuest.customFields?.tableNumber && (
+                            <p className="text-amber-300"><span className="text-slate-500">{isEn ? "Table" : "Meza"}:</span> {newGuest.customFields.tableNumber}</p>
+                          )}
+                          {newGuest.customFields?.foodPreference && (
+                            <p className="text-pink-300"><span className="text-slate-500">{isEn ? "Food" : "Chakula"}:</span> {newGuest.customFields.foodPreference}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Conflict Solver Options */}
+                <div className="space-y-2 pt-2">
+                  <p className="font-bold text-[10px] uppercase text-slate-400 font-mono tracking-wider">
+                    {isEn ? "Select Action to Resolve" : "Chagua Hatua ya Kutatua Mgongano"}
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {/* Option 1: Merge */}
+                    <button
+                      type="button"
+                      onClick={() => handleResolveMerge(newGuest, existingGuest)}
+                      className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/40 text-amber-300 hover:text-amber-200 transition cursor-pointer text-center space-y-1.5 font-sans"
+                    >
+                      <span className="font-extrabold text-xs">{isEn ? "Smart Merge" : "Unganisha Taarifa"}</span>
+                      <span className="text-[9px] text-slate-400 font-normal leading-tight">
+                        {isEn ? "Update existing guest with new info, merging tags/fields" : "Hifadhi mapya juu ya yaliyopo, changanya lebo/meza"}
+                      </span>
+                    </button>
+
+                    {/* Option 2: Skip */}
+                    <button
+                      type="button"
+                      onClick={handleResolveSkip}
+                      className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white transition cursor-pointer text-center space-y-1.5 font-sans"
+                    >
+                      <span className="font-extrabold text-xs">{isEn ? "Skip / Discard" : "Kuruka (Skip)"}</span>
+                      <span className="text-[9px] text-slate-400 font-normal leading-tight">
+                        {isEn ? "Discard the incoming duplicate and keep existing guest" : "Kuruka na kuacha ya sasa ibaki vile vile bila mabadiliko"}
+                      </span>
+                    </button>
+
+                    {/* Option 3: Keep Both */}
+                    <button
+                      type="button"
+                      onClick={() => handleResolveKeepBoth(newGuest)}
+                      className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-indigo-500/40 text-indigo-300 hover:text-indigo-200 transition cursor-pointer text-center space-y-1.5 font-sans"
+                    >
+                      <span className="font-extrabold text-xs">{isEn ? "Keep Both" : "Hifadhi Wote Wawili"}</span>
+                      <span className="text-[9px] text-slate-400 font-normal leading-tight">
+                        {isEn ? "Register incoming as a completely separate guest" : "Sajili mpya pembeni kama mtu mwingine tofauti kabisa"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
     </div>

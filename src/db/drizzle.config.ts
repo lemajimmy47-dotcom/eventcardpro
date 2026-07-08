@@ -23,12 +23,14 @@ const getDbCredentials = () => {
     throw new Error("DATABASE_URL or (SQL_HOST, SQL_DB_NAME, SQL_ADMIN_USER, SQL_ADMIN_PASSWORD) must be set in environment variables.");
   }
 
+  const isUnixSocket = sqlHost && sqlHost.startsWith("/");
+
   return {
     host: sqlHost,
     user: user,
     password: password,
     database: sqlDbName,
-    ssl: false,
+    ssl: isUnixSocket ? false : { rejectUnauthorized: false },
   };
 };
 

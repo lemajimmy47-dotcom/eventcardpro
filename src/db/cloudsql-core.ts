@@ -156,6 +156,7 @@ export async function seedFromBackupFile(): Promise<boolean> {
           smsStatus: String(g.smsStatus || "Sijatuma"),
           whatsappStatus: String(g.whatsappStatus || "Sijatuma"),
           rsvpStatus: String(g.rsvpStatus || "Bado"),
+          maxGuests: typeof g.maxGuests === "number" ? g.maxGuests : 1,
           rsvpGuestsCount: typeof g.rsvpGuestsCount === "number" ? g.rsvpGuestsCount : 0,
           rsvpComment: g.rsvpComment ? String(g.rsvpComment) : null,
           checkedIn: g.checkedIn === true,
@@ -363,8 +364,11 @@ export async function fetchFullStateFromDB(): Promise<any> {
       contributionDeadline: e.contributionDeadline || "",
     }));
 
-    // Find active event details (last edited or event-starter, or the first event in list)
-    const eventDetailsObj = eventsList.find(e => e.id !== "event-starter") || eventsList[0] || {};
+    // Find active event details (based on userAccount's activeEventId, falling back to first non-starter event)
+    const activeEventId = sqlUserAcc[0]?.activeEventId;
+    const eventDetailsObj = (activeEventId ? eventsList.find(e => e.id === activeEventId) : null) ||
+                            eventsList.find(e => e.id !== "event-starter") ||
+                            eventsList[0] || {};
 
     const guests = sqlGuests.map(g => ({
       id: g.id,
@@ -376,6 +380,7 @@ export async function fetchFullStateFromDB(): Promise<any> {
       smsStatus: g.smsStatus || "Sijatuma",
       whatsappStatus: g.whatsappStatus || "Sijatuma",
       rsvpStatus: g.rsvpStatus || "Bado",
+      maxGuests: g.maxGuests || 1,
       rsvpGuestsCount: g.rsvpGuestsCount || 0,
       rsvpComment: g.rsvpComment || "",
       checkedIn: g.checkedIn || false,
@@ -391,6 +396,8 @@ export async function fetchFullStateFromDB(): Promise<any> {
       payments: g.payments || [],
       rsvpUpdatedAt: g.rsvpUpdatedAt || "",
       rsvpSeen: g.rsvpSeen !== false,
+      customFields: (g as any).customFields || {},
+      tags: (g as any).tags || [],
     }));
 
     const saveTheDates = sqlSaveTheDates.map(s => ({
@@ -614,6 +621,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             smsStatus: String(g.smsStatus || "Sijatuma"),
             whatsappStatus: String(g.whatsappStatus || "Sijatuma"),
             rsvpStatus: String(g.rsvpStatus || "Bado"),
+            maxGuests: typeof g.maxGuests === "number" ? g.maxGuests : 1,
             rsvpGuestsCount: typeof g.rsvpGuestsCount === "number" ? g.rsvpGuestsCount : 0,
             rsvpComment: g.rsvpComment ? String(g.rsvpComment) : null,
             checkedIn: g.checkedIn === true,
@@ -629,6 +637,8 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
             payments: g.payments || null,
             rsvpUpdatedAt: g.rsvpUpdatedAt ? String(g.rsvpUpdatedAt) : null,
             rsvpSeen: g.rsvpSeen !== false,
+            customFields: g.customFields || null,
+            tags: g.tags || null,
           }));
 
         if (values.length > 0) {
@@ -643,6 +653,7 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
               smsStatus: sql`EXCLUDED.sms_status`,
               whatsappStatus: sql`EXCLUDED.whatsapp_status`,
               rsvpStatus: sql`EXCLUDED.rsvp_status`,
+              maxGuests: sql`EXCLUDED.max_guests`,
               rsvpGuestsCount: sql`EXCLUDED.rsvp_guests_count`,
               rsvpComment: sql`EXCLUDED.rsvp_comment`,
               checkedIn: sql`EXCLUDED.checked_in`,
@@ -658,6 +669,8 @@ export async function syncStateToRelationalDB(data: any): Promise<void> {
               payments: sql`EXCLUDED.payments`,
               rsvpUpdatedAt: sql`EXCLUDED.rsvp_updated_at`,
               rsvpSeen: sql`EXCLUDED.rsvp_seen`,
+              customFields: sql`EXCLUDED.custom_fields`,
+              tags: sql`EXCLUDED.tags`,
             },
           });
         }

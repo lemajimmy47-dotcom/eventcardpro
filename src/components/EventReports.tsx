@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { EventDetails, Guest, ContributionPayment } from '../types';
+import { isStatusSent } from '../utils/statusHelper';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addPdfWatermarks } from '../utils/pdfWatermark';
@@ -101,8 +102,8 @@ export default function EventReports({
     return acc + count;
   }, 0);
 
-  const totalSmsSent = guests.reduce((sum, g) => sum + (g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)), 0);
-  const totalWhatsappSent = guests.reduce((sum, g) => sum + (g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)), 0);
+  const totalSmsSent = guests.reduce((sum, g) => sum + (g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)), 0);
+  const totalWhatsappSent = guests.reduce((sum, g) => sum + (g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)), 0);
 
   // Financial Metrics
   const fundraisingTarget = event.fundraisingGoal || 0;
@@ -445,8 +446,8 @@ export default function EventReports({
         g.rsvpStatus === 'Atahudhuria' ? (g.rsvpGuestsCount || 1) : 0,
         g.checkedIn ? 'NDIO (ARRIVED)' : 'BADO (ABSENT)',
         g.checkedInTime ? g.checkedInTime : '-',
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       autoTable(doc, {
@@ -493,8 +494,8 @@ export default function EventReports({
         g.phone || '-',
         g.cardType || 'SINGLE',
         'SUCCESS SCAN',
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-        g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+        g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
       ]);
 
       tableData.push([
@@ -538,7 +539,7 @@ export default function EventReports({
         g.rsvpStatus || 'Bado',
         g.cardType || 'SINGLE',
         g.checkedIn ? 'ARRIVED' : 'BADO',
-        g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)
+        g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)
       ]);
 
       autoTable(doc, {
@@ -566,8 +567,8 @@ export default function EventReports({
           (g.pledgeAmount || 0).toLocaleString(),
           (g.paidAmount || 0).toLocaleString(),
           b.toLocaleString(),
-          g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0),
-          g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)
+          g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0),
+          g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)
         ];
       });
 
@@ -1518,8 +1519,8 @@ export default function EventReports({
                         <td className="py-2.5 px-3 text-center text-slate-400 text-[10px]">
                           {g.checkedInTime ? g.checkedInTime : '-'}
                         </td>
-                        <td className="py-2.5 px-3 text-center text-blue-400 font-bold">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)}</td>
-                        <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (g.whatsappStatus === 'Imetumia' ? 1 : 0)}</td>
+                        <td className="py-2.5 px-3 text-center text-blue-400 font-bold">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}</td>
+                        <td className="py-2.5 px-3 text-center text-emerald-400 font-bold">{g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                       </tr>
                     ))
                   )}
@@ -1647,7 +1648,7 @@ export default function EventReports({
                             {g.cardType || 'SINGLE'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-center text-slate-400">{g.smsCount || (g.smsStatus === 'Imetumia' ? 1 : 0)} zilizotumwa</td>
+                        <td className="py-2.5 px-3 text-center text-slate-400">{g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)} zilizotumwa</td>
                       </tr>
                     ))
                   )}
@@ -1751,7 +1752,7 @@ export default function EventReports({
                           <td className="py-2.5 px-3 text-right">TZS {(g.pledgeAmount || 0).toLocaleString()}</td>
                           <td className="py-2.5 px-3 text-right text-emerald-400">TZS {(g.paidAmount || 0).toLocaleString()}</td>
                           <td className="py-2.5 px-3 text-right text-rose-400 font-extrabold">TZS {bal.toLocaleString()}</td>
-                          <td className="py-2.5 px-3 text-center text-[10.5px] text-slate-400">SMS: {g.smsCount || 0}  •  WA: {g.whatsappCount || 0}</td>
+                          <td className="py-2.5 px-3 text-center text-[10.5px] text-slate-400">SMS: {g.smsCount || (isStatusSent(g.smsStatus) ? 1 : 0)}  •  WA: {g.whatsappCount || (isStatusSent(g.whatsappStatus) ? 1 : 0)}</td>
                         </tr>
                       );
                     })
