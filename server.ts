@@ -1695,19 +1695,31 @@ async function startServer() {
   app.get("/api/location", async (req, res) => {
     try {
       const eventId = req.query.eventId as string;
+      const invite = req.query.invite as string;
       if (!eventId) {
-        return res.status(400).send("Event ID missing. Location cannot be resolved.");
+        return res.status(400).send("Event ID missing.");
       }
-      const db = await readDBLatest();
-      const event = db.eventsList?.find((e: any) => e.id === eventId);
-      if (event && event.mapsLink) {
-        let redirectUrl = event.mapsLink.trim();
-        if (!redirectUrl.startsWith('http://') && !redirectUrl.startsWith('https://')) {
-          redirectUrl = 'https://' + redirectUrl;
-        }
-        return res.redirect(redirectUrl);
+      
+      const inviteParam = invite ? `&invite=${encodeURIComponent(invite)}` : '';
+      return res.redirect(`/?eventId=${encodeURIComponent(eventId)}${inviteParam}&view=venue`);
+    } catch (error) {
+      res.status(500).send("Server error");
+    }
+  });
+
+  app.get("/api/seating", async (req, res) => {
+    try {
+      const eventId = req.query.eventId as string;
+      const invite = req.query.invite as string;
+      
+      if (!invite && !eventId) {
+        return res.status(400).send("Missing parameters. Invite code or Event ID required.");
       }
-      res.status(404).send("Location not configured for this event.");
+      
+      const inviteParam = invite ? `&invite=${encodeURIComponent(invite)}` : '';
+      const eventIdParam = eventId ? `&eventId=${encodeURIComponent(eventId)}` : '';
+      
+      return res.redirect(`/?view=seating${inviteParam}${eventIdParam}`);
     } catch (error) {
       res.status(500).send("Server error");
     }
@@ -2324,6 +2336,236 @@ async function startServer() {
       }];
       await writeDB(db);
       res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // BACKGROUND QUEUE JOBS MANAGER (Asynchronous Queue with Throttling & Rate-Limiting)
+  let isQueueProcessing = false;
+
+  async function processQueueJobs() {
+    if (isQueueProcessing) return;
+    isQueueProcessing = true;
+
+    try {
+      const db = await readDBLatest();
+      if (!db.queueJobs) db.queueJobs = [];
+
+      // Find first job that is pending or running (for resumption)
+      const activeJob = db.queueJobs.find((j: any) => j.status === 'running' || j.status === 'pending');
+      if (!activeJob) {
+        isQueueProcessing = false;
+        return;
+      }
+
+      if (activeJob.status === 'pending') {
+        activeJob.status = 'running';
+        activeJob.logs.push(`[${new Date().toLocaleTimeString()}] Kazi imeanza kutekelezwa background.`);
+        await writeDB(db);
+      }
+
+      const settings = db.smsGatewaySettings || { provider: "simulation" };
+      
+      // Throttling: 250ms for WhatsApp (Meta rate limit) and 1500ms for regular SMS providers
+      const delayMs = activeJob.channel === 'whatsapp' ? 250 : 1500;
+      console.log(`[QueueProcessor] Processing Job ${activeJob.id}. Channel: ${activeJob.channel}. Delay: ${delayMs}ms`);
+
+      for (let i = 0; i < activeJob.tasks.length; i++) {
+        const task = activeJob.tasks[i];
+
+        // Refresh database state inside loop to see if job status has changed (paused, cancelled, etc.)
+        const freshDb = await readDBLatest();
+        const currentJob = freshDb.queueJobs.find((j: any) => j.id === activeJob.id);
+
+        if (!currentJob) {
+          console.warn(`[QueueProcessor] Job ${activeJob.id} not found in database anymore.`);
+          break;
+        }
+
+        if (currentJob.status === 'paused') {
+          console.log(`[QueueProcessor] Job ${activeJob.id} is paused. Interrupting.`);
+          break;
+        }
+
+        if (currentJob.status === 'failed' || currentJob.status === 'completed') {
+          console.log(`[QueueProcessor] Job ${activeJob.id} has finished or failed. Interrupting.`);
+          break;
+        }
+
+        if (task.status === 'sent') {
+          continue;
+        }
+
+        try {
+          let result: string;
+          let usedChannel = activeJob.channel;
+          let failoverAttempted = false;
+          let failoverLog = '';
+
+          const protocol = 'https';
+          const host = 'eventcard.co.tz';
+          const origin = `${protocol}://${host}`;
+
+          try {
+            result = await dispatchSMS(task.phone, task.text, usedChannel, settings, undefined, task.templateParams, task.guestId, origin, activeJob.eventId, task.templateName, task.imageUrl);
+          } catch (e: any) {
+            console.warn(`[QueueProcessor Failover] Primary ${usedChannel} failed: ${e.message}`);
+            failoverAttempted = true;
+            failoverLog = `(Primary ${usedChannel} failed: ${e.message}) `;
+            usedChannel = usedChannel === 'whatsapp' ? 'sms' : 'whatsapp';
+            try {
+              result = await dispatchSMS(task.phone, task.text, usedChannel, settings, undefined, task.templateParams, task.guestId, origin, activeJob.eventId, task.templateName, task.imageUrl);
+            } catch (e2: any) {
+              throw new Error(`Primary & Secondary both failed. Prim: ${e.message} | Sec: ${e2.message}`);
+            }
+          }
+
+          task.status = 'sent';
+          task.usedChannel = usedChannel;
+          task.log = failoverLog + result;
+
+          // Update actual guest status in the database
+          if (task.guestId && freshDb.guests) {
+            freshDb.guests = freshDb.guests.map((g: any) => {
+              if (g.id === task.guestId) {
+                if (usedChannel === 'whatsapp') {
+                  const currentCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (g.whatsappStatus === 'Imetumia' ? 1 : 0);
+                  return { ...g, whatsappStatus: "Imetumia", whatsappCount: currentCount + 1 };
+                } else {
+                  const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === 'Imetumia' ? 1 : 0);
+                  return { ...g, smsStatus: "Imetumia", smsCount: currentCount + 1 };
+                }
+              }
+              return g;
+            });
+          }
+
+          currentJob.logs.push(`[${new Date().toLocaleTimeString()}] ✓ [${usedChannel.toUpperCase()}] Imetumwa kwa namba ${task.phone}.`);
+        } catch (err: any) {
+          task.status = 'failed';
+          task.error = err.message;
+          currentJob.logs.push(`[${new Date().toLocaleTimeString()}] ✗ Imeshindwa kwa namba ${task.phone}. Sababu: ${err.message}`);
+        }
+
+        currentJob.processed++;
+        currentJob.tasks[i] = task;
+
+        if (currentJob.processed === currentJob.total) {
+          currentJob.status = 'completed';
+          currentJob.completed_at = new Date().toISOString();
+          currentJob.logs.push(`[${new Date().toLocaleTimeString()}] ✓ Kazi yote ya kutuma imekamilika!`);
+        }
+
+        await writeDB(freshDb);
+
+        // Throttling: wait between dispatches
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+
+    } catch (err: any) {
+      console.error("[QueueProcessor] Error in loop:", err);
+    } finally {
+      isQueueProcessing = false;
+      // Trigger check for next pending job
+      setTimeout(() => processQueueJobs(), 1000);
+    }
+  }
+
+  // Queue Endpoints
+  app.post("/api/queue/create", async (req, res) => {
+    try {
+      const { eventId, channel, tasks } = req.body;
+      if (!channel || !tasks || !Array.isArray(tasks)) {
+        return res.status(400).json({ error: "Missing required parameters (channel, tasks)" });
+      }
+
+      const db = await readDBLatest();
+      db.queueJobs = db.queueJobs || [];
+
+      const job = {
+        id: 'job-' + Date.now() + Math.random().toString(36).substring(2, 7),
+        eventId: eventId || 'default',
+        channel,
+        status: 'pending',
+        total: tasks.length,
+        processed: 0,
+        created_at: new Date().toISOString(),
+        tasks: tasks.map(t => ({
+          guestId: t.guestId,
+          phone: t.phone,
+          text: t.text,
+          templateParams: t.templateParams,
+          templateName: t.templateName,
+          imageUrl: t.imageUrl,
+          status: 'pending'
+        })),
+        logs: [`[${new Date().toLocaleTimeString()}] Kazi imeongezwa kwenye foleni ya kutuma (Queue). Jumla ya ujumbe: ${tasks.length}`]
+      };
+
+      db.queueJobs.push(job);
+      await writeDB(db);
+
+      // Trigger processing asynchronously
+      processQueueJobs();
+
+      res.json({ success: true, job });
+    } catch (e: any) {
+      console.error("Queue creation error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/queue/jobs", async (req, res) => {
+    try {
+      const db = await readDBLatest();
+      res.json(db.queueJobs || []);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/queue/control", async (req, res) => {
+    try {
+      const { jobId, action } = req.body;
+      if (!jobId || !action) {
+        return res.status(400).json({ error: "Missing jobId or action" });
+      }
+
+      const db = await readDBLatest();
+      db.queueJobs = db.queueJobs || [];
+
+      if (action === 'clear') {
+        db.queueJobs = db.queueJobs.filter((j: any) => j.id !== jobId);
+        await writeDB(db);
+        return res.json({ success: true });
+      }
+
+      const job = db.queueJobs.find((j: any) => j.id === jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      if (action === 'pause') {
+        if (job.status === 'running' || job.status === 'pending') {
+          job.status = 'paused';
+          job.logs.push(`[${new Date().toLocaleTimeString()}] Kazi imesitishwa na mtumiaji.`);
+        }
+      } else if (action === 'resume') {
+        if (job.status === 'paused') {
+          job.status = 'pending';
+          job.logs.push(`[${new Date().toLocaleTimeString()}] Kazi imeanzishwa tena na mtumiaji.`);
+          processQueueJobs();
+        }
+      } else if (action === 'cancel') {
+        if (job.status === 'running' || job.status === 'pending' || job.status === 'paused') {
+          job.status = 'failed';
+          job.logs.push(`[${new Date().toLocaleTimeString()}] Kazi imefutwa na mtumiaji.`);
+        }
+      }
+
+      await writeDB(db);
+      res.json({ success: true, job });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -3089,6 +3331,8 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Express server running on http://localhost:${PORT}`);
+    // Start or resume background queue processing
+    processQueueJobs().catch(err => console.error("Error starting queue on boot:", err));
   });
 }
 
