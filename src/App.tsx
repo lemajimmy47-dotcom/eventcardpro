@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useLanguage } from './context/LanguageContext';
+import { useEventCard } from './context/EventCardContext';
 import LandingPage from './components/LandingPage';
 import Login from './components/Login';
 import CreateEventPage from './components/CreateEventPage';
@@ -110,41 +111,27 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showLanding, setShowLanding] = useState(!user);
 
-  // Core Data state
-  const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
-  const [eventsList, setEventsListState] = useState<EventDetails[]>([]);
-  const setEventsList = (newEvents: EventDetails[] | ((prev: EventDetails[]) => EventDetails[])) => {
-    setEventsListState(prev => {
-      const resolved = typeof newEvents === 'function' ? newEvents(prev) : newEvents;
-      const seen = new Set<string>();
-      return resolved.filter(ev => {
-        if (!ev || !ev.id) return false;
-        if (seen.has(ev.id)) return false;
-        seen.add(ev.id);
-        return true;
-      });
-    });
-  };
-  const [guests, setGuestsState] = useState<Guest[]>([]);
-  const setGuests = (newGuests: Guest[] | ((prev: Guest[]) => Guest[])) => {
-    setGuestsState(prev => {
-      const resolved = typeof newGuests === 'function' ? newGuests(prev) : newGuests;
-      const seen = new Set<string>();
-      return resolved.filter(g => {
-        if (!g || !g.id) return false;
-        if (seen.has(g.id)) return false;
-        seen.add(g.id);
-        return true;
-      });
-    });
-  };
-  const [templateSettings, setTemplateSettings] = useState<TemplateSettings | null>(null);
-  const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
-  const [committeeMembers, setCommitteeMembers] = useState<CommitteeMember[]>([]);
-
-  // UI States
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Core Data state from SWR-backed EventCardContext
+  const {
+    eventDetails,
+    setEventDetails,
+    eventsList,
+    setEventsList,
+    guests,
+    setGuests,
+    templateSettings,
+    setTemplateSettings,
+    userAccount,
+    setUserAccount,
+    committeeMembers,
+    isLoading,
+    error,
+    setError,
+    saveState,
+    updateGuests,
+    updateEventDetails,
+    refreshState
+  } = useEventCard();
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [draftEvent, setDraftEvent] = useState<EventDetails | null>(null);
   const [eventToDelete, setEventToDelete] = useState<EventDetails | null>(null);
@@ -242,84 +229,13 @@ export default function App() {
     }
   }, []);
 
-  // --- Data Fetching ---
-
-  const fetchData = async (isSilent = false) => {
-    if (!isSilent) setIsLoading(true);
-    try {
-      const response = await fetch('/api/state');
-      if (!response.ok) throw new Error('Failed to fetch state');
-      const data = await response.json();
-      
-      let currentEvents = data.eventsList || [];
-      let currentEventDetails = data.eventDetails || null;
-      let currentGuests = data.guests || [];
-      
-      if (currentEvents.length === 0 && !currentEventDetails) {
-        // Prevent default Wedding injection
-        // Let the system show CreateEventPage instead
-      }
-
-
-      setEventDetails((prev) => {
-        let targetEvent = currentEventDetails;
-        
-        // If we already have an active event in memory, and it still exists on the server, KEEP IT active!
-        if (prev) {
-          const foundPrev = currentEvents.find((e: any) => e.id === prev.id);
-          if (foundPrev) return foundPrev;
-        }
-
-        // Fallback to persisted event ID (prioritize a validated local storage selection, then DB selection)
-        const localSavedId = safeLocalStorage.getItem('kadi_active_event_id');
-        const dbSavedId = data.userAccount?.activeEventId;
-        
-        let found = currentEvents.find((e: any) => e.id === localSavedId);
-        if (!found && dbSavedId) {
-          found = currentEvents.find((e: any) => e.id === dbSavedId);
-        }
-
-        if (found) {
-          targetEvent = found;
-        }
-        return targetEvent;
-      });
-      setEventsList(currentEvents);
-      setGuests(prevGuests => {
-        return currentGuests.map((cg: any) => {
-          const localG = prevGuests?.find(g => g.id === cg.id);
-          if (localG && localG.cardImageUrl) {
-            return { ...cg, cardImageUrl: localG.cardImageUrl };
-          }
-          return cg;
-        });
-      });
-      setTemplateSettings(data.templateSettings || null);
-      setUserAccount(data.userAccount || null);
-      setCommitteeMembers(data.committee_members || []);
-      
-      // Auto-detect last tab from localStorage only on initial loaded view
-      if (!isSilent) {
-        const savedTab = localStorage.getItem('kadi_active_tab') as AppTab;
-        if (savedTab) setActiveTab(savedTab);
-      }
-      
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      if (!isSilent) setIsLoading(false);
-    }
-  };
+  // --- Data Fetching & Hydration ---
 
   useEffect(() => {
-    if (user || isCommitteePortal || isScanOnlyPortal) {
-      fetchData(false);
-      
-      // Poll for updates SILENTLY every 180 seconds (3 minutes) to avoid consuming Firestore free daily read quota limits
-      const interval = setInterval(() => fetchData(true), 180000);
-      return () => clearInterval(interval);
-    }
-  }, [user, isCommitteePortal, isScanOnlyPortal]);
+    // Restore last active tab on mount
+    const savedTab = localStorage.getItem('kadi_active_tab') as AppTab;
+    if (savedTab) setActiveTab(savedTab);
+  }, []);
 
   // Persist active tab
   useEffect(() => {
@@ -335,111 +251,7 @@ export default function App() {
     }
   }, [eventDetails, user]);
 
-  // Handle saving state
-  const saveState = async (updates: any, actionDesc?: string, detailsDesc?: string) => {
-    try {
-      // Strip out huge cardImageUrl base64 string from guest payload before sending to backend to stay way below Firestore limits 
-      let sanitizedUpdates = { ...updates };
-      
-      if (updates.eventDetails && updates.eventDetails.id) {
-        // Also update local storage fallback
-        safeLocalStorage.setItem('kadi_active_event_id', updates.eventDetails.id);
-        
-        // Update userAccount state and append to sanitizedUpdates
-        const updatedAccount = userAccount ? {
-          ...userAccount,
-          activeEventId: updates.eventDetails.id
-        } : {
-          id: "account",
-          username: 'Jimson',
-          activeEventId: updates.eventDetails.id,
-          walletBalance: 0,
-          transactions: []
-        };
-        setUserAccount(updatedAccount as any);
-        sanitizedUpdates.userAccount = updatedAccount;
-      }
-      
-      if (actionDesc) {
-        sanitizedUpdates.auditLog = {
-          id: 'log-' + Date.now(),
-          timestamp: new Date().toISOString(),
-          user: 'Jimson',
-          action: actionDesc,
-          details: detailsDesc || 'Mabadiliko yamefanyika kwenye mfumo.'
-        };
-      }
 
-      if (updates.eventsList && Array.isArray(updates.eventsList)) {
-        // Detect deleted events by comparing current 'eventsList' state with incoming updates
-        const incomingEventIds = new Set(updates.eventsList.map((e: any) => e.id));
-        const deletedEventIds = eventsList.filter(e => !incomingEventIds.has(e.id)).map(e => e.id);
-        
-        if (deletedEventIds.length > 0) {
-          sanitizedUpdates.deletedEventIds = deletedEventIds;
-        }
-      }
-
-      if (updates.guests && Array.isArray(updates.guests)) {
-        // Detect deleted guests by comparing current 'guests' state with the incoming updates
-        const incomingIds = new Set(updates.guests.map((g: any) => g.id));
-        const deletedGuestIds = guests.filter(g => !incomingIds.has(g.id)).map(g => g.id);
-        
-        if (deletedGuestIds.length > 0) {
-          sanitizedUpdates.deletedGuestIds = deletedGuestIds;
-        }
-
-        sanitizedUpdates.guests = updates.guests.map((g: any) => {
-          const { cardImageUrl, ...rest } = g;
-          return rest;
-        });
-      }
-
-      const response = await fetch('/api/state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sanitizedUpdates),
-      });
-      if (!response.ok) throw new Error('Failed to save state');
-    } catch (err: any) {
-      console.error('Error saving state:', err);
-    }
-  };
-
-  const updateGuests = (updatedActiveGuests: Guest[], actionDesc?: string, skipServerSave = false) => {
-    if (!eventDetails) return;
-    const otherGuests = guests.filter(g => g.eventId !== eventDetails.id && (g.eventId || eventDetails.id !== 'event-starter'));
-    const merged = [...otherGuests, ...updatedActiveGuests];
-    setGuests(merged);
-    if (!skipServerSave) {
-      saveState({ guests: merged }, actionDesc || 'Amesasisha orodha ya wageni (Guests Updated)', `Tukio: ${eventDetails.name}`);
-    }
-  };
-
-  const updateEventDetails = (details: EventDetails, oldId?: string) => {
-    const activeOldId = oldId || details.id;
-    setEventDetails(details);
-    
-    // Update events list mapping matching oldId
-    let updatedList = eventsList.map(ev => ev.id === activeOldId ? details : ev);
-    if (!updatedList.some(ev => ev.id === details.id)) {
-      updatedList.push(details);
-    }
-    setEventsList(updatedList);
-
-    // Update guests' eventId if the Event ID (slug) changed
-    let updatedGuests = guests;
-    if (activeOldId !== details.id) {
-      updatedGuests = guests.map(g => g.eventId === activeOldId ? { ...g, eventId: details.id } : g);
-      setGuests(updatedGuests);
-    }
-
-    saveState({ 
-      eventDetails: details, 
-      eventsList: updatedList,
-      guests: updatedGuests
-    }, 'Amesasisha mipangilio ya tukio (Event Settings Updated)', `Tukio: ${details.name}`);
-  };
 
   const requestDeleteEvent = (id: string) => {
     const ev = eventsList.find(e => e.id === id);
@@ -567,6 +379,18 @@ export default function App() {
     if (!activeEvId) return [];
     return guests.filter(g => g.eventId === activeEvId || (!g.eventId && activeEvId === 'event-starter'));
   }, [guests, eventDetails, isScanOnlyPortal, scanEventDetails]);
+
+  // Dynamically calculate the event lifecycle stage
+  const currentLifecycleStage = useMemo(() => {
+    if (!activeGuests || activeGuests.length === 0) {
+      return 'Planning';
+    }
+    const sentCount = activeGuests.filter(g => g.smsStatus === 'Imetumia' || g.whatsappStatus === 'Imetumia').length;
+    if (sentCount > 0) {
+      return 'Dispatched';
+    }
+    return 'Designing';
+  }, [activeGuests]);
 
   // --- Auth Handlers ---
 
@@ -1023,7 +847,7 @@ export default function App() {
                 guests={portalGuests}
                 onUpdateEvent={updateEventDetails}
                 onUpdateGuests={updateGuests}
-                onRefresh={() => fetchData(true)}
+                onRefresh={refreshState}
             />
         </div>
       </div>
@@ -1910,6 +1734,92 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Lifecycle Stage Progress Indicator */}
+                <div className="bg-[#0c142c]/90 border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4" id="event-lifecycle-progress-indicator">
+                  <div className="flex flex-col text-left">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      {language === 'sw' ? 'Hatua ya Sherehe' : 'Lifecycle Stage'}
+                    </span>
+                    <span className="text-white font-extrabold text-xs mt-0.5 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                      {currentLifecycleStage === 'Planning' && (language === 'sw' ? 'Kupanga & Kuandaa' : 'Planning & Setup')}
+                      {currentLifecycleStage === 'Designing' && (language === 'sw' ? 'Kusanifu Kadi' : 'Card Design & Templates')}
+                      {currentLifecycleStage === 'Dispatched' && (language === 'sw' ? 'Kutuma & Mialiko' : 'Dispatched & Outreaching')}
+                    </span>
+                  </div>
+
+                  {/* Horizontal Stepper */}
+                  <div className="flex items-center space-x-2 sm:space-x-4">
+                    {/* Step 1: Planning */}
+                    <div className="flex items-center space-x-1.5">
+                      <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border font-bold text-xs transition-all duration-500 ${
+                        currentLifecycleStage === 'Planning'
+                          ? 'bg-blue-500/20 border-blue-400 text-blue-300 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
+                          : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                      }`}>
+                        {currentLifecycleStage !== 'Planning' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <span className="font-mono">1</span>
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-bold ${
+                        currentLifecycleStage === 'Planning' ? 'text-blue-300' : 'text-slate-400'
+                      }`}>
+                        {language === 'sw' ? 'Kupanga' : 'Planning'}
+                      </span>
+                    </div>
+
+                    {/* Connector line 1 */}
+                    <div className={`h-[1px] w-3 sm:w-6 transition-colors duration-500 ${
+                      currentLifecycleStage !== 'Planning' ? 'bg-emerald-500/30' : 'bg-white/10'
+                    }`}></div>
+
+                    {/* Step 2: Designing */}
+                    <div className="flex items-center space-x-1.5">
+                      <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border font-bold text-xs transition-all duration-500 ${
+                        currentLifecycleStage === 'Designing'
+                          ? 'bg-blue-500/20 border-blue-400 text-blue-300 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
+                          : currentLifecycleStage === 'Dispatched'
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                          : 'bg-slate-950/40 border-white/10 text-slate-500'
+                      }`}>
+                        {currentLifecycleStage === 'Dispatched' ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <span className="font-mono">2</span>
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-bold ${
+                        currentLifecycleStage === 'Designing' ? 'text-blue-300' : currentLifecycleStage === 'Dispatched' ? 'text-emerald-400/85' : 'text-slate-500'
+                      }`}>
+                        {language === 'sw' ? 'Kusanifu' : 'Designing'}
+                      </span>
+                    </div>
+
+                    {/* Connector line 2 */}
+                    <div className={`h-[1px] w-3 sm:w-6 transition-colors duration-500 ${
+                      currentLifecycleStage === 'Dispatched' ? 'bg-emerald-500/30' : 'bg-white/10'
+                    }`}></div>
+
+                    {/* Step 3: Dispatched */}
+                    <div className="flex items-center space-x-1.5">
+                      <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border font-bold text-xs transition-all duration-500 ${
+                        currentLifecycleStage === 'Dispatched'
+                          ? 'bg-blue-500/20 border-blue-400 text-blue-300 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
+                          : 'bg-slate-950/40 border-white/10 text-slate-500'
+                      }`}>
+                        <span className="font-mono">3</span>
+                      </div>
+                      <span className={`text-[10px] font-bold ${
+                        currentLifecycleStage === 'Dispatched' ? 'text-blue-300' : 'text-slate-500'
+                      }`}>
+                        {language === 'sw' ? 'Kutuma' : 'Dispatched'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Grid layout containing the details */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 pt-4 pb-2 border-t border-white/5" id="details-fields-grid">
                   <div className="space-y-1">
@@ -2187,7 +2097,7 @@ export default function App() {
               guests={activeGuests}
               onUpdateGuests={updateGuests}
               onUpdateEvent={updateEventDetails}
-              onRefresh={() => fetchData(true)}
+              onRefresh={refreshState}
             />
           </React.Fragment>
         );

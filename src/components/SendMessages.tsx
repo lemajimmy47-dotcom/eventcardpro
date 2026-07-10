@@ -525,6 +525,69 @@ Thank you very much and God bless you!`;
       });
   }, []);
 
+  // BACKGROUND QUEUE JOBS STATE & ACTIONS
+  const [queueJobs, setQueueJobs] = useState<any[]>([]);
+  const [activeJob, setActiveJob] = useState<any>(null);
+
+  const fetchQueueJobs = async () => {
+    try {
+      const res = await fetch('/api/queue/jobs');
+      if (res.ok) {
+        const jobs = await res.json();
+        setQueueJobs(jobs);
+        
+        // Find if there is an active running/pending job
+        const active = jobs.find((j: any) => j.status === 'running' || j.status === 'pending');
+        if (active) {
+          setActiveJob(active);
+          // Sync log viewer with the background logs
+          if (active.logs && active.logs.length > 0) {
+            setSendLogs(active.logs.slice().reverse()); // Reverse to match the log viewer layout order
+          }
+        } else {
+          const wasActive = activeJob;
+          setActiveJob(null);
+          // If a job just completed, fetch fresh guest list to show new statuses
+          const lastActive = jobs[0];
+          if (lastActive && lastActive.status === 'completed' && wasActive && wasActive.status !== 'completed') {
+            if (onUpdateGuests) {
+              fetch('/api/guests')
+                .then(r => r.json())
+                .then(data => onUpdateGuests(data, "Queue finished", false))
+                .catch(err => console.error("Error refreshing guests:", err));
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching queue jobs:", err);
+    }
+  };
+
+  const handleControlQueue = async (jobId: string, action: 'pause' | 'resume' | 'cancel' | 'clear') => {
+    try {
+      const res = await fetch('/api/queue/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId, action })
+      });
+      if (res.ok) {
+        fetchQueueJobs();
+      }
+    } catch (err) {
+      console.error("Error controlling queue job:", err);
+    }
+  };
+
+  // Poll queue jobs if there is an active job running or periodically
+  useEffect(() => {
+    fetchQueueJobs();
+    const interval = setInterval(() => {
+      fetchQueueJobs();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [activeJob?.id]);
+
   const insertPlaceholder = (tag: string) => {
     const textarea = document.getElementById('message-template-textarea') as HTMLTextAreaElement;
     if (textarea) {
@@ -1050,7 +1113,7 @@ Karibu sana!`);
 
   const handleSendAll = async () => {
     if (isSendingAll || isBatchSending) return;
-    const channel: string = 'sms';
+    const channel: string = gatewaySettings.provider === 'whatsapp' ? 'whatsapp' : 'sms';
     
     // Only send to guests that are currently visible/filtered
     if (filteredGuests.length === 0) {
@@ -1058,16 +1121,22 @@ Karibu sana!`);
       return;
     }
 
-    const pendingGuests = filteredGuests.filter(g => g.smsStatus !== 'Imetumia');
+    const pendingGuests = filteredGuests.filter(g => {
+      if (channel === 'whatsapp') {
+        return g.whatsappStatus !== 'Imetumia';
+      } else {
+        return g.smsStatus !== 'Imetumia';
+      }
+    });
     
     if (pendingGuests.length === 0) {
-      alert("Hakuna wageni katika orodha hii ambao hawajapata SMS bado!");
+      alert(`Hakuna wageni katika orodha hii ambao hawajapata ujumbe wa ${channel.toUpperCase()} bado!`);
       return;
     }
 
     const formattedScheduleTime = isScheduling && scheduleTime ? scheduleTime.replace('T', ' ') + ':00' : undefined;
 
-    const confirmMsg = `Je, una uhakika unataka kutuma mialiko kwa wageni ${pendingGuests.length} ambao bado hawajapata SMS${formattedScheduleTime ? ' kwa muda ' + formattedScheduleTime : ''}?`;
+    const confirmMsg = `Je, una uhakika unataka kutuma mialiko kwa wageni ${pendingGuests.length} ambao bado hawajapata ujumbe wa ${channel.toUpperCase()}${formattedScheduleTime ? ' kwa muda ' + formattedScheduleTime : ''}?`;
 
     if (!confirm(confirmMsg)) {
       return;
@@ -1136,217 +1205,171 @@ Karibu sana!`);
       return;
     }
 
-    // FALLBACK: SEQUENTIAL SEND (FOR OTHER PROVIDERS OR SIMULATION)
+    // BACKGROUND QUEUE SYSTEM FOR ALL OTHER DISPATCHES (No more slow/risky client side loops)
     setIsSendingAll(true);
     setSendingProgress(0);
-    setSendLogs(prev => [`[INFO] Imeanza kuwasilisha ujumbe (${messageType.toUpperCase()}) kwa wageni ${pendingGuests.length} kwa njia ya SMS (Mlolongo)...`, ...prev]);
+    setSendLogs(prev => [`[INFO] Inatayarisha picha za kadi na mialiko kwa ajili ya Foleni ya Server...`, ...prev]);
 
-    let sentCount = 0;
-    // Use a local copy for processing to avoid closure issues with 'guests' prop updates
-    let processingGuests = [...guests];
+    const tasks = [];
+    let preparedCount = 0;
 
-    for (let i = 0; i < pendingGuests.length; i++) {
-      const guest = pendingGuests[i];
-      setCurrentSendingIndex(i);
+    for (const guest of pendingGuests) {
+      const mainText = getGuestMessageText(guest, channel === 'sms');
+      const currentOrigin = typeof window !== 'undefined' && !window.location.hostname.includes('europe-west2.run.app') && !window.location.hostname.includes('localhost') 
+        ? window.location.origin 
+        : 'https://eventcard.co.tz';
+      const appUrl = `${currentOrigin}/?invite=${guest.code || guest.id}&eventId=${event.id}&lang=${language}`;
 
-      setSendLogs(prev => [`[WAIT] Inatuma kwa ${guest.name} (${guest.phone})...`, ...prev]);
-
+      // 1. Send Main Message
+      let compatibleImageUrl = "";
       try {
-        const mainText = getGuestMessageText(guest, channel === 'sms');
-        const formattedScheduleTime = isScheduling && scheduleTime ? scheduleTime.replace('T', ' ') + ':00' : undefined;
-        const currentOrigin = typeof window !== 'undefined' && !window.location.hostname.includes('europe-west2.run.app') && !window.location.hostname.includes('localhost') 
-          ? window.location.origin 
-          : 'https://eventcard.co.tz';
-        const appUrl = `${currentOrigin}/?invite=${guest.code || guest.id}&eventId=${event.id}&lang=${language}`;
-        
-        // Extract template params dynamically for official Meta WhatsApp template matching
-        let templateParams: string[] | undefined = undefined;
-        if (channel === 'whatsapp') {
-          const rawTemplate = messageType === 'thank-you' 
-            ? (language === 'en' ? thankYouTemplateEn : thankYouTemplateSw)
-            : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
-          const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
-
-          const replacements: { [key: string]: string } = {
-            '{mgeni}': guest.name,
-            '{name}': guest.name,
-            '{{1}}': guest.name,
-            '{1}': guest.name,
-            '{{name}}': guest.name,
-            '{guestName}': guest.name,
-            '{jina_la_mgeni}': guest.name,
-            '(jina_la_mgeni)': guest.name,
-            '{mwenyeji}': event.hostName || "[Mwenyeji]",
-            '{hostName}': event.hostName || "[Mwenyeji]",
-            '{host_name}': event.hostName || "[Mwenyeji]",
-            '{{2}}': event.hostName || "[Mwenyeji]",
-            '{2}': event.hostName || "[Mwenyeji]",
-            '{{host_name}}': event.hostName || "[Mwenyeji]",
-            '{sherehe}': event.name || "[Sherehe]",
-            '{event_name}': event.name || "[Sherehe]",
-            '{eventName}': event.name || "[Sherehe]",
-            '{{3}}': event.name || "[Sherehe]",
-            '{3}': event.name || "[Sherehe]",
-            '{{event_name}}': event.name || "[Sherehe]",
-            '{tarehe}': event.date || "26/11/2026",
-            '{date}': event.date || "26/11/2026",
-            '{eventDate}': event.date || "26/11/2026",
-            '{{4}}': event.date || "26/11/2026",
-            '{4}': event.date || "26/11/2026",
-            '{{date}}': event.date || "26/11/2026",
-            '{muda}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-            '{time}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-            '{eventTime}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-            '{{5}}': event.eventHallName || "[Ukumbi]",
-            '{5}': event.eventHallName || "[Ukumbi]",
-            '{{venue}}': event.eventHallName || "[Ukumbi]",
-            '{ukumbi}': event.eventHallName || "[Ukumbi]",
-            '{venue}': event.eventHallName || "[Ukumbi]",
-            '{eventHall}': event.eventHallName || "[Ukumbi]",
-            '{{6}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-            '{6}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-            '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-            '{vazi}': event.dressCode || "[Vazi]",
-            '{dressCode}': event.dressCode || "[Dress Code]",
-            '{Link}': "",
-            '{kiungo}': "",
-            '{inviteUrl}': "",
-            '{namba_mwaliko}': guest.code || "[Code]",
-            '{card_number}': guest.code || "[Code]",
-            '{inviteCode}': guest.code || "[Code]",
-            '{{7}}': guest.code || "[Code]",
-            '{7}': guest.code || "[Code]",
-            '{{card_number}}': guest.code || "[Code]",
-            '{aina}': guest.cardType || "DOUBLE",
-            '{card_type}': guest.cardType || "DOUBLE",
-            '{{8}}': guest.cardType || "DOUBLE",
-            '{8}': guest.cardType || "DOUBLE",
-            '{{card_type}}': guest.cardType || "DOUBLE",
-            '{mwasiliano}': contacts,
-            '{{contacts}}': contacts,
-            '{{9}}': event.contact1Name || "",
-            '{9}': event.contact1Name || "",
-            '{{10}}': event.contact1 || "",
-            '{10}': event.contact1 || "",
-            '{{11}}': event.contact2Name || "",
-            '{11}': event.contact2Name || "",
-            '{{12}}': event.contact2 || "",
-            '{12}': event.contact2 || "",
-            '{contact_1_name}': event.contact1Name || "",
-            '{contact_1_phone}': event.contact1 || "",
-            '{contact_2_name}': event.contact2Name || "",
-            '{contact_2_phone}': event.contact2 || ""
-          };
-
-          const regex = /\{\{[0-9]+\}\}|\{\{[a-zA-Z0-9_\-Hh]+\}\}|\{[a-zA-Z0-9_\-Hh]+\}/g;
-          const matches = (rawTemplate.match(regex) || []).filter(match => {
-            const lower = match.toLowerCase();
-            return !lower.includes('link') && !lower.includes('kiungo') && !lower.includes('url');
-          });
-          templateParams = matches.map(match => {
-            const val = replacements[match];
-            return val !== undefined ? val : match;
-          });
-        }
-        
-        // 1. Send Main Message
-        let compatibleImageUrl = "";
-        try {
-          const qrCodeText = guest.code || guest.id;
-          compatibleImageUrl = await generateGuestCardImage(
-            event,
-            settings,
-            guest.name,
-            guest.cardType || "DOUBLE",
-            qrCodeText
-          );
-        } catch (err) {
-          console.error("Failed to generate dynamic guest card image:", err);
-          compatibleImageUrl = await convertWebPToJpeg(settings.imageUrl);
-        }
-        const res = await fetch('/api/send-sms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            guestId: guest.id,
-            eventId: event.id,
-            phone: guest.phone,
-            text: mainText,
-            channel: channel,
-            scheduleTime: formattedScheduleTime,
-            templateParams: templateParams,
-            templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
-            imageUrl: compatibleImageUrl
-          })
-        });
-        
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Mwituko batili");
-        
-        const dispChannel = data.usedChannel || channel;
-        const failoverText = data.failoverAttempted ? ` (Failover to ${dispChannel.toUpperCase()})` : '';
-
-        // Update local processing state and fire onUpdateGuests to parent
-        processingGuests = processingGuests.map(g => {
-          if (g.id === guest.id) {
-            const currentSmsCount = typeof g.smsCount === 'number' ? g.smsCount : (isStatusSent(g.smsStatus) ? 1 : 0);
-            const currentWhatsappCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (isStatusSent(g.whatsappStatus) ? 1 : 0);
-            return {
-              ...g,
-              smsStatus: dispChannel === 'sms' ? 'Imetumia' as const : g.smsStatus,
-              whatsappStatus: dispChannel === 'whatsapp' ? 'Imetumia' as const : g.whatsappStatus,
-              smsCount: dispChannel === 'sms' ? currentSmsCount + 1 : currentSmsCount,
-              whatsappCount: dispChannel === 'whatsapp' ? currentWhatsappCount + 1 : currentWhatsappCount
-            };
-          }
-          return g;
-        });
-        onUpdateGuests(processingGuests, "Sending in progress...", true);
-
-        setSendLogs(prev => [
-          `[${new Date().toLocaleTimeString()}] ✓ [${dispChannel.toUpperCase()}]${failoverText} Imetumwa kwa: ${guest.name}. Gateway: ${data.log || 'Sawa'}`,
-          ...prev
-        ]);
-
-        // Secondary link sending for Batch Dispatch if explicitly requested
-        if (dispChannel === 'sms' && sendSmsLink) {
-          // Short delay between messages
-          await new Promise(resolve => setTimeout(resolve, 800));
-          await fetch('/api/send-sms', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              phone: guest.phone,
-              text: language === 'sw' ? `Pata kadi yako hapa: ${appUrl}` : `Get your card here: ${appUrl}`,
-              channel: 'sms',
-              scheduleTime: formattedScheduleTime
-            })
-          });
-        }
-      } catch (err: any) {
-        setSendLogs(prev => [
-          `[${new Date().toLocaleTimeString()}] ✗ Imeshindwa kwa: ${guest.name}. Sababu: ${err.message}`,
-          ...prev
-        ]);
-        addSystemNotification(
-          'error',
-          isEn ? 'Message Delivery Failed' : 'Ujumbe Umeshindwa Kutumwa',
-          isEn ? `Failed to dispatch invitation to ${guest.name}. Reason: ${err.message}` : `Ujumbe wa mwaliko kwenda kwa ${guest.name} umeshindwa. Sababu: ${err.message}`
+        const qrCodeText = guest.code || guest.id;
+        compatibleImageUrl = await generateGuestCardImage(
+          event,
+          settings,
+          guest.name,
+          guest.cardType || "DOUBLE",
+          qrCodeText
         );
+      } catch (err) {
+        console.error("Failed to generate dynamic guest card image:", err);
+        compatibleImageUrl = await convertWebPToJpeg(settings.imageUrl);
       }
 
-      sentCount++;
-      setSendingProgress(Math.round((sentCount / pendingGuests.length) * 100));
+      // Extract template params dynamically for official Meta WhatsApp template matching
+      let templateParams: string[] | undefined = undefined;
+      const rawTemplate = messageType === 'thank-you' 
+        ? (language === 'en' ? thankYouTemplateEn : thankYouTemplateSw)
+        : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
+      const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
 
-      // 1.5 seconds cooldown standard to give gateways breathing space
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const replacements: { [key: string]: string } = {
+        '{mgeni}': guest.name,
+        '{name}': guest.name,
+        '{{1}}': guest.name,
+        '{1}': guest.name,
+        '{{name}}': guest.name,
+        '{guestName}': guest.name,
+        '{jina_la_mgeni}': guest.name,
+        '(jina_la_mgeni)': guest.name,
+        '{mwenyeji}': event.hostName || "[Mwenyeji]",
+        '{hostName}': event.hostName || "[Mwenyeji]",
+        '{host_name}': event.hostName || "[Mwenyeji]",
+        '{{2}}': event.hostName || "[Mwenyeji]",
+        '{2}': event.hostName || "[Mwenyeji]",
+        '{{host_name}}': event.hostName || "[Mwenyeji]",
+        '{sherehe}': event.name || "[Sherehe]",
+        '{event_name}': event.name || "[Sherehe]",
+        '{eventName}': event.name || "[Sherehe]",
+        '{{3}}': event.name || "[Sherehe]",
+        '{3}': event.name || "[Sherehe]",
+        '{{event_name}}': event.name || "[Sherehe]",
+        '{tarehe}': event.date || "26/11/2026",
+        '{date}': event.date || "26/11/2026",
+        '{eventDate}': event.date || "26/11/2026",
+        '{{4}}': event.date || "26/11/2026",
+        '{4}': event.date || "26/11/2026",
+        '{{date}}': event.date || "26/11/2026",
+        '{muda}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+        '{time}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+        '{eventTime}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+        '{{5}}': event.eventHallName || "[Ukumbi]",
+        '{5}': event.eventHallName || "[Ukumbi]",
+        '{{venue}}': event.eventHallName || "[Ukumbi]",
+        '{ukumbi}': event.eventHallName || "[Ukumbi]",
+        '{venue}': event.eventHallName || "[Ukumbi]",
+        '{eventHall}': event.eventHallName || "[Ukumbi]",
+        '{{6}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+        '{6}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+        '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
+        '{vazi}': event.dressCode || "[Vazi]",
+        '{dressCode}': event.dressCode || "[Dress Code]",
+        '{Link}': "",
+        '{kiungo}': "",
+        '{inviteUrl}': "",
+        '{namba_mwaliko}': guest.code || "[Code]",
+        '{card_number}': guest.code || "[Code]",
+        '{inviteCode}': guest.code || "[Code]",
+        '{{7}}': guest.code || "[Code]",
+        '{7}': guest.code || "[Code]",
+        '{{card_number}}': guest.code || "[Code]",
+        '{aina}': guest.cardType || "DOUBLE",
+        '{card_type}': guest.cardType || "DOUBLE",
+        '{{8}}': guest.cardType || "DOUBLE",
+        '{8}': guest.cardType || "DOUBLE",
+        '{{card_type}}': guest.cardType || "DOUBLE",
+        '{mwasiliano}': contacts,
+        '{{contacts}}': contacts,
+        '{{9}}': event.contact1Name || "",
+        '{9}': event.contact1Name || "",
+        '{{10}}': event.contact1 || "",
+        '{10}': event.contact1 || "",
+        '{{11}}': event.contact2Name || "",
+        '{11}': event.contact2Name || "",
+        '{{12}}': event.contact2 || "",
+        '{12}': event.contact2 || "",
+        '{contact_1_name}': event.contact1Name || "",
+        '{contact_1_phone}': event.contact1 || "",
+        '{contact_2_name}': event.contact2Name || "",
+        '{contact_2_phone}': event.contact2 || ""
+      };
+
+      const regex = /\{\{[0-9]+\}\}|\{\{[a-zA-Z0-9_\-Hh]+\}\}|\{[a-zA-Z0-9_\-Hh]+\}/g;
+      const matches = (rawTemplate.match(regex) || []).filter(match => {
+        const lower = match.toLowerCase();
+        return !lower.includes('link') && !lower.includes('kiungo') && !lower.includes('url');
+      });
+      templateParams = matches.map(match => {
+        const val = replacements[match];
+        return val !== undefined ? val : match;
+      });
+
+      tasks.push({
+        guestId: guest.id,
+        phone: guest.phone,
+        text: mainText,
+        templateParams: templateParams,
+        templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
+        imageUrl: compatibleImageUrl
+      });
+
+      preparedCount++;
+      setSendingProgress(Math.round((preparedCount / pendingGuests.length) * 100));
     }
 
-    onUpdateGuests(processingGuests, "Finished sending messages", false);
-    setIsSendingAll(false);
-    setCurrentSendingIndex(-1);
-    setSendingProgress(100);
-    setSendLogs(prev => [`[SUCCESS] ✓ Zoezi la kutuma kwa wingi limekamilishwa!`, ...prev]);
+    setSendLogs(prev => [`[INFO] Inatuma mialiko ${tasks.length} kwenye Foleni ya Server...`, ...prev]);
+
+    try {
+      const queueRes = await fetch('/api/queue/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.id,
+          channel: channel,
+          tasks: tasks
+        })
+      });
+
+      if (!queueRes.ok) {
+        const errorData = await queueRes.json();
+        throw new Error(errorData.error || "Queue setup failed.");
+      }
+
+      const queueData = await queueRes.json();
+      setSendLogs(prev => [
+        `[SUCCESS] ✓ Kazi imeanza kutekelezwa background! ID ya kazi: ${queueData.job?.id}`,
+        `[INFO] Unaweza kuendelea kutumia mfumo au kufunga kivinjari na utumaji utaendelea background.`,
+        ...prev
+      ]);
+      fetchQueueJobs();
+    } catch (err: any) {
+      console.error("Queue Submission Failed:", err);
+      alert("Imeshindwa kutuma kazi ya foleni: " + err.message);
+      setSendLogs(prev => [`[ERROR] Hitilafu: ${err.message}`, ...prev]);
+    } finally {
+      setIsSendingAll(false);
+      setSendingProgress(100);
+    }
   };
 
   const handleReset = () => {
@@ -1508,6 +1531,138 @@ Karibu sana!`);
         </div>
 
       </div>
+
+      {/* Background Queue Jobs Monitor */}
+      {queueJobs.length > 0 && (
+        <div className="backdrop-blur-md bg-slate-900/60 border border-white/10 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+            <div className="flex items-center gap-2">
+              <RefreshCw className={`w-4 h-4 text-blue-400 ${activeJob ? 'animate-spin' : ''}`} />
+              <h3 className="text-sm font-bold text-white">Mchakato wa Kutuma Background (Queue)</h3>
+            </div>
+            <span className="text-[10px] bg-blue-500/20 text-blue-300 font-bold px-2 py-0.5 rounded font-mono">
+              Foleni: {queueJobs.filter(j => j.status === 'pending' || j.status === 'running').length} Active
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {queueJobs.slice(0, 3).map((job) => {
+              const pct = job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
+              const isJobRunning = job.status === 'running';
+              const isJobPending = job.status === 'pending';
+              const isJobPaused = job.status === 'paused';
+              const isJobFailed = job.status === 'failed';
+              const isJobCompleted = job.status === 'completed';
+
+              let statusColor = 'text-slate-400';
+              let statusBg = 'bg-slate-500/10 border-slate-500/20';
+              let statusText = job.status;
+
+              if (isJobRunning) {
+                statusColor = 'text-blue-400';
+                statusBg = 'bg-blue-500/10 border-blue-500/20';
+                statusText = 'Inatuma...';
+              } else if (isJobPending) {
+                statusColor = 'text-amber-400';
+                statusBg = 'bg-amber-500/10 border-amber-500/20';
+                statusText = 'Inasubiri...';
+              } else if (isJobPaused) {
+                statusColor = 'text-zinc-400 animate-pulse';
+                statusBg = 'bg-zinc-500/15 border-zinc-500/20';
+                statusText = 'Imesitishwa';
+              } else if (isJobFailed) {
+                statusColor = 'text-rose-400';
+                statusBg = 'bg-rose-500/10 border-rose-500/20';
+                statusText = 'Iliyoshindikana';
+              } else if (isJobCompleted) {
+                statusColor = 'text-emerald-400';
+                statusBg = 'bg-emerald-500/10 border-emerald-500/20';
+                statusText = 'Imekamilika';
+              }
+
+              return (
+                <div key={job.id} className="p-3.5 rounded-xl border border-white/5 bg-slate-950/40 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] text-slate-500 select-all font-bold">#{job.id.substring(0, 8)}</span>
+                      <span className="text-slate-400 capitalize font-medium">{job.channel.toUpperCase()} Dispatch</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusBg} ${statusColor} font-bold font-mono`}>
+                        {statusText}
+                      </span>
+                      <span className="font-mono text-slate-300 font-bold">{job.processed}/{job.total} ({pct}%)</span>
+                    </div>
+                  </div>
+
+                  <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden relative border border-white/5">
+                    <div 
+                      className={`h-full transition-all duration-500 ${
+                        isJobCompleted ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' :
+                        isJobFailed ? 'bg-rose-500' :
+                        isJobPaused ? 'bg-zinc-400' : 'bg-gradient-to-r from-blue-500 to-purple-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]'
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+
+                  {/* Job Logs Preview if Running */}
+                  {isJobRunning && job.logs && job.logs.length > 0 && (
+                    <div className="bg-black/40 rounded-lg p-2.5 font-mono text-[9.5px] text-slate-300 h-16 overflow-y-auto space-y-0.5 border border-white/5 scrollbar-thin">
+                      {job.logs.slice(-3).reverse().map((log: string, lIdx: number) => (
+                        <div key={lIdx} className={log.includes('✓') ? 'text-emerald-400' : log.includes('✗') ? 'text-rose-400 animate-pulse' : 'text-slate-300'}>
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Actions Bar */}
+                  <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-2 text-[10.5px]">
+                    <div className="text-slate-500 font-mono text-[9px]">
+                      {new Date(job.created_at).toLocaleTimeString()}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {(isJobRunning || isJobPending) && (
+                        <button
+                          onClick={() => handleControlQueue(job.id, 'pause')}
+                          className="px-2.5 py-1 bg-zinc-500/10 hover:bg-zinc-500/20 text-zinc-300 border border-zinc-500/20 rounded-md transition font-medium cursor-pointer text-[10px]"
+                        >
+                          Sitisha
+                        </button>
+                      )}
+                      {isJobPaused && (
+                        <button
+                          onClick={() => handleControlQueue(job.id, 'resume')}
+                          className="px-2.5 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/20 rounded-md transition font-medium cursor-pointer text-[10px]"
+                        >
+                          Endeleza
+                        </button>
+                      )}
+                      {(isJobRunning || isJobPending || isJobPaused) && (
+                        <button
+                          onClick={() => handleControlQueue(job.id, 'cancel')}
+                          className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 rounded-md transition font-medium cursor-pointer text-[10px]"
+                        >
+                          Futa/Sitisha
+                        </button>
+                      )}
+                      {(isJobCompleted || isJobFailed) && (
+                        <button
+                          onClick={() => handleControlQueue(job.id, 'clear')}
+                          className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-md transition font-medium cursor-pointer text-[10px]"
+                        >
+                          Safi
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Progress tracker inside sending state */}
       {(isSendingAll || isBatchSending) && (

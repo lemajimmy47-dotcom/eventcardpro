@@ -1449,6 +1449,55 @@ export default function CommitteeDashboard({
       });
     }
 
+    // SIGNATURE SIGN-OFF AND APPROVAL SECTION FOR OFFICIAL COMMITTEE AUDITING
+    let finalY = (doc as any).lastAutoTable.finalY + 15;
+    if (finalY > doc.internal.pageSize.getHeight() - 40) {
+      doc.addPage();
+      finalY = 20;
+    }
+
+    // Signatures Header rule
+    doc.setDrawColor(226, 232, 240); // Slate 200
+    doc.line(10, finalY, pageWidth - 10, finalY);
+    finalY += 6;
+
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59); // Slate 800
+    doc.text(isEn ? "OFFICIAL COMMITTEE SIGN-OFF & AUDIT APPROVAL" : "IDHINI NA SAHIHI ZA ULINZI WA KAMATI YA FEDHA", 10, finalY);
+    
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(isEn ? "This report is verified, audited and officially signed off by the executive leadership committee." : "Ripoti hii imekaguliwa, imethibitishwa na kuidhinishwa rasmi na viongozi wakuu wa kamati ya fedha.", 10, finalY + 4);
+    
+    finalY += 16;
+
+    // Dynamic side-by-side signature lines
+    const colWidth = (pageWidth - 30) / 3;
+    
+    // 1. Chairperson / Mwenyekiti
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(51, 65, 85);
+    doc.line(10, finalY, 10 + colWidth, finalY);
+    doc.text(isEn ? "Chairperson / Mwenyekiti" : "Mwenyekiti / Chairperson", 10, finalY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.text("Date: ____ / ____ / ________", 10, finalY + 8);
+
+    // 2. Treasurer / Mweka Hazina
+    doc.setFont("helvetica", "bold");
+    doc.line(15 + colWidth, finalY, 15 + colWidth * 2, finalY);
+    doc.text(isEn ? "Treasurer / Mweka Hazina" : "Mweka Hazina / Treasurer", 15 + colWidth, finalY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.text("Date: ____ / ____ / ________", 15 + colWidth, finalY + 8);
+
+    // 3. Secretary / Katibu
+    doc.setFont("helvetica", "bold");
+    doc.line(20 + colWidth * 2, finalY, pageWidth - 10, finalY);
+    doc.text(isEn ? "Secretary / Katibu" : "Katibu / Secretary", 20 + colWidth * 2, finalY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.text("Date: ____ / ____ / ________", 20 + colWidth * 2, finalY + 8);
+
     await addPdfWatermarks(doc);
     doc.save(`Official_${selectedReport}_Report_${event.name.replace(/\s+/g, '_')}.pdf`);
   };

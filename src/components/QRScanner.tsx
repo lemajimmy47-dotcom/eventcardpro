@@ -10,7 +10,7 @@ import { safeLocalStorage } from '../utils/storage';
 interface QRScannerProps {
   event: EventDetails;
   guests: Guest[];
-  onUpdateGuests: (guests: Guest[], actionDesc?: string) => void;
+  onUpdateGuests: (guests: Guest[], actionDesc?: string, skipServerSave?: boolean) => void;
   isStandaloneOnly?: boolean;
 }
 
@@ -20,6 +20,29 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const isReadOnlyScanner = typeof window !== 'undefined' && safeLocalStorage.getItem('eventcard_scanner_mode') === 'true';
+
+  // Connection/Sync states
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    return typeof navigator !== 'undefined' ? navigator.onLine : true;
+  });
+  const [forceOffline, setForceOffline] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return safeLocalStorage.getItem(`eventcard_force_offline_${event.id}`) === 'true';
+    }
+    return false;
+  });
+  const [pendingSyncQueue, setPendingSyncQueue] = useState<{ guestId: string; checkedInTime: string }[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = safeLocalStorage.getItem(`eventcard_pending_sync_${event.id}`);
+        return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+        console.warn('Failed to parse pending sync queue', e);
+      }
+    }
+    return [];
+  });
+  const [syncingNow, setSyncingNow] = useState<boolean>(false);
 
   const [selectedGuestSimId, setSelectedGuestSimId] = useState('');
   const [manualCode, setManualCode] = useState('');
@@ -31,6 +54,7 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
     cardType?: string;
     companions?: number;
     time?: string;
+    isOfflineSaved?: boolean;
   } | null>(null);
 
   const [activeTab, setActiveTab ] = useState<'scanner' | 'list' | 'logs'>('scanner');
@@ -38,6 +62,78 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
   const [listFilter, setListFilter] = useState<'all' | 'checked-in' | 'pending' | 'confirmed'>('confirmed');
   const [recentScans, setRecentScans] = useState<{ id: string; name: string; time: string; cardType: string }[]>([]);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Monitor network status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Save manual force offline option when changed
+  useEffect(() => {
+    safeLocalStorage.setItem(`eventcard_force_offline_${event.id}`, forceOffline ? 'true' : 'false');
+  }, [forceOffline, event.id]);
+
+  // Persist pending sync queue
+  useEffect(() => {
+    safeLocalStorage.setItem(`eventcard_pending_sync_${event.id}`, JSON.stringify(pendingSyncQueue));
+  }, [pendingSyncQueue, event.id]);
+
+  // Sync handler for offline updates
+  const handleSyncOfflineChanges = async () => {
+    if (pendingSyncQueue.length === 0 || syncingNow) return;
+    setSyncingNow(true);
+    try {
+      let updatedGuests = [...guestsRef.current];
+      pendingSyncQueue.forEach(item => {
+        updatedGuests = updatedGuests.map(g => {
+          if (g.id === item.guestId && !g.checkedIn) {
+            return {
+              ...g,
+              checkedIn: true,
+              checkedInTime: item.checkedInTime
+            };
+          }
+          return g;
+        });
+      });
+
+      const syncDesc = isEn 
+        ? `Synced ${pendingSyncQueue.length} offline gate check-ins to server` 
+        : `Amesawazisha wageni ${pendingSyncQueue.length} walioingia nje ya mtandao kwenda kwenye server kuu`;
+      
+      await onUpdateGuests(updatedGuests, syncDesc, false);
+      
+      setPendingSyncQueue([]);
+      
+      setScanResult({
+        status: 'success',
+        guestName: isEn ? 'Synchronization Complete!' : 'Marekebisho Yamesawazishwa!',
+        cardType: isEn ? `${pendingSyncQueue.length} guests synced` : `Wageni ${pendingSyncQueue.length} wamesawazishwa`
+      });
+      playFeedbackSound('success');
+    } catch (e) {
+      console.error('Failed to sync offline changes:', e);
+      setManualError(isEn ? 'Failed to synchronize with server. Please check your network.' : 'Haikuweza kusawazisha na server. Tafadhali kagua mtandao.');
+    } finally {
+      setSyncingNow(false);
+    }
+  };
+
+  // Auto-sync when online
+  useEffect(() => {
+    if (isOnline && !forceOffline && pendingSyncQueue.length > 0) {
+      handleSyncOfflineChanges();
+    }
+  }, [isOnline, forceOffline, pendingSyncQueue.length]);
   
   // Real Camera capture state
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -339,7 +435,12 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
   };
 
   const triggerScanResult = (target: Guest | null, isError: boolean = false, errorMsg: string = '') => {
-    if (isProcessingRef.current) return;
+    // If it is a direct check-in (e.g. from table list), bypass throttling. Otherwise enforce scanner throttle.
+    if (isProcessingRef.current && !isError && target) {
+      // Allow proceeding if triggered directly via guest list action
+    } else if (isProcessingRef.current) {
+      return;
+    }
     isProcessingRef.current = true;
 
     if (scanTimeoutRef.current) {
@@ -353,6 +454,9 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         setManualError(errorMsg);
       }
       playFeedbackSound('error');
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
       return;
     }
 
@@ -368,6 +472,9 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         companions: target.rsvpGuestsCount,
         time: target.checkedInTime || checkInTime
       });
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
     } else {
       // Mark as checked in
       const updated = guestsRef.current.map(g => {
@@ -380,7 +487,23 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         }
         return g;
       });
-      onUpdateGuests(updated, `Amethibitisha ushiriki mlangoni (Checked-in Guest): ${target.name}`);
+
+      const isCurrentlyOffline = !isOnline || forceOffline;
+
+      if (isCurrentlyOffline) {
+        // Queue it for later sync
+        setPendingSyncQueue(prev => {
+          const exists = prev.some(item => item.guestId === target.id);
+          if (exists) return prev;
+          return [...prev, { guestId: target.id, checkedInTime: checkInTime }];
+        });
+
+        // Update local React state, skip saving on server
+        onUpdateGuests(updated, `Amethibitisha ushiriki mlangoni nje ya mtandao (Offline Checked-in Guest): ${target.name}`, true);
+      } else {
+        // Save to Firestore server immediately
+        onUpdateGuests(updated, `Amethibitisha ushiriki mlangoni (Checked-in Guest): ${target.name}`, false);
+      }
 
       // Add to recent scans list (keep unique, limit to 5, newest first)
       setRecentScans(prev => {
@@ -398,8 +521,13 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         guestName: target.name,
         cardType: target.cardType,
         companions: target.rsvpGuestsCount,
-        time: checkInTime
+        time: checkInTime,
+        isOfflineSaved: isCurrentlyOffline
       });
+
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
     }
   };
 
@@ -1075,6 +1203,75 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
         )}
       </div>
 
+      {/* Offline Verification & Connection Sync Bar */}
+      <div className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <span className="flex h-3 w-3 relative">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                forceOffline ? 'bg-amber-400' : isOnline ? 'bg-emerald-400' : 'bg-red-500'
+              }`}></span>
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${
+                forceOffline ? 'bg-amber-500' : isOnline ? 'bg-emerald-500' : 'bg-red-500'
+              }`}></span>
+            </span>
+          </div>
+          <div className="text-left">
+            <p className="font-extrabold text-white text-[11px] sm:text-xs flex items-center gap-1.5 leading-none">
+              <span>
+                {forceOffline 
+                  ? (isEn ? 'OFFLINE MODE (FORCED)' : 'NJIA YA NJE YA MTANDAO (KULAZIMISHA)') 
+                  : isOnline 
+                    ? (isEn ? 'ONLINE STATUS' : 'HALI YA MTANDAO: IPO VIZURI') 
+                    : (isEn ? 'DISCONNECTED (OFFLINE)' : 'HAUNA MTANDAO (OFFLINE)')}
+              </span>
+              {pendingSyncQueue.length > 0 && (
+                <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[9px] font-black px-1.5 py-0.5 rounded-md animate-pulse">
+                  {isEn ? `${pendingSyncQueue.length} Pending Sync` : `Wageni ${pendingSyncQueue.length} Kusawazishwa`}
+                </span>
+              )}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-1">
+              {forceOffline 
+                ? (isEn ? 'Forcing offline operations. Check-ins are stored locally.' : 'Umelazimisha kufanya kazi nje ya mtandao. Uhakiki unahifadhiwa kwenye kifaa hiki.')
+                : isOnline 
+                  ? (isEn ? 'Direct sync with Firestore is active. Real-time logging.' : 'Uhakiki unaunganishwa moja kwa moja na database kuu ya server.')
+                  : (isEn ? 'Gate operations are safe! Updates will sync once connected.' : 'Usijali! Unaweza kuendelea kuskani wageni, zitasawazishwa mtandao ukirudi.')}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+          {/* Manual Force Offline toggle */}
+          <button
+            type="button"
+            onClick={() => setForceOffline(!forceOffline)}
+            className={`px-3 py-1.5 rounded-lg border text-[10px] font-mono font-bold uppercase transition flex items-center gap-1.5 cursor-pointer ${
+              forceOffline 
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30' 
+                : 'bg-white/[0.02] border-white/10 text-slate-400 hover:bg-white/5 hover:border-white/20'
+            }`}
+            title={isEn ? 'Toggle manual offline mode' : 'Washa/zima njia ya nje ya mtandao'}
+          >
+            <Globe className={`w-3.5 h-3.5 ${forceOffline ? 'text-amber-400' : 'text-slate-400'}`} />
+            <span>{forceOffline ? (isEn ? 'Go Online' : 'Rudi Mtandaoni') : (isEn ? 'Force Offline' : 'Lazimisha Offline')}</span>
+          </button>
+
+          {/* Sync Button */}
+          {pendingSyncQueue.length > 0 && (
+            <button
+              type="button"
+              disabled={syncingNow || (!isOnline && !forceOffline)}
+              onClick={handleSyncOfflineChanges}
+              className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-lg font-black transition flex items-center gap-1.5 cursor-pointer text-[10px] disabled:opacity-50 disabled:cursor-not-allowed select-none uppercase tracking-wider"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncingNow ? 'animate-spin' : ''}`} />
+              <span>{syncingNow ? (isEn ? 'Syncing...' : 'Inasawazisha...') : (isEn ? 'Sync Now' : 'Sawazisha Sasa')}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Tabs & Export Row */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex bg-[#050b18]/60 p-1 rounded-xl border border-white/10 w-full sm:max-w-md text-xs font-semibold">
@@ -1440,6 +1637,16 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                           <p>{isEn ? 'Card Type:' : 'Aina ya Kadi:'} <strong>{scanResult.cardType}</strong></p>
                           <p>{isEn ? 'Allowed to enter:' : 'Wanaoruhusiwa Kuingia:'} <strong>{scanResult.companions || (scanResult.cardType === 'DOUBLE' ? 2 : 1)}</strong></p>
                           <p className="italic text-[10px] text-emerald-100 font-mono mt-1">{isEn ? 'Time:' : 'Saa:'} {scanResult.time}</p>
+
+                          {scanResult.isOfflineSaved && (
+                            <div className="bg-amber-500/20 text-amber-200 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold inline-flex items-center gap-1.5 text-[10px] mt-2 select-none justify-center animate-pulse">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                              </span>
+                              <span>{isEn ? 'Saved Offline (Will Sync Later)' : 'Imehifadhiwa Nje ya Mtandao (Itasawazishwa)'}</span>
+                            </div>
+                          )}
                           
                           <div className="flex flex-wrap gap-2 justify-center py-2 mt-2 border-t border-white/20 text-[10px] bg-black/10 rounded-lg w-full">
                             <span className="w-full font-bold mb-1">{isEn ? 'Total Checked-in:' : 'Jumla ya Waliokwisha Ingia:'}</span>
@@ -1983,7 +2190,14 @@ export default function QRScanner({ event, guests, onUpdateGuests, isStandaloneO
                           {g.checkedIn ? (
                             <span className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-tight">Checked In</span>
                           ) : (
-                            <span className="bg-amber-500/10 text-amber-500 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-tight">Pending</span>
+                            <button
+                              type="button"
+                              onClick={() => triggerScanResult(g)}
+                              className="bg-blue-600 hover:bg-blue-500 hover:border-blue-400 border border-transparent text-white px-3 py-1 rounded-xl text-[9px] font-bold uppercase tracking-tight transition cursor-pointer select-none active:scale-95 shadow-md shadow-blue-900/30 font-sans"
+                              title={isEn ? "Verify and check in guest" : "Hakiki na ruhusu mgeni kuingia"}
+                            >
+                              {isEn ? 'Verify Entry' : 'Ruhusu Kuingia'}
+                            </button>
                           )}
                         </td>
                       </tr>

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
 import { 
   FileText, Clipboard, CheckCircle, AlertTriangle, TrendingUp, 
@@ -264,6 +265,40 @@ export default function EventReports({
     };
   }, [guests, isEn, metrics]);
 
+  // Compute category attendance expected vs arrived
+  const categoryAttendanceData = useMemo(() => {
+    const catsMap = new Map<string, { expected: number; arrived: number }>();
+    guests.forEach(g => {
+      const rawCat = g.cardType || 'SINGLE';
+      const cat = rawCat.toUpperCase().trim();
+      if (!catsMap.has(cat)) {
+        catsMap.set(cat, { expected: 0, arrived: 0 });
+      }
+      const data = catsMap.get(cat)!;
+      if (g.rsvpStatus === 'Atahudhuria') {
+        data.expected += (g.rsvpGuestsCount || 1);
+      }
+      if (g.checkedIn) {
+        data.arrived += 1;
+      }
+    });
+    
+    const result = Array.from(catsMap.entries()).map(([name, data]) => ({
+      name,
+      Expected: data.expected,
+      Arrived: data.arrived
+    }));
+
+    if (result.length === 0) {
+      return [
+        { name: 'SINGLE', Expected: 12, Arrived: 8 },
+        { name: 'DOUBLE', Expected: 8, Arrived: 5 },
+        { name: 'VIP', Expected: 5, Arrived: 4 }
+      ];
+    }
+    return result;
+  }, [guests]);
+
   // PDF Report Engine
   const downloadReportPDF = async () => {
     const doc = new jsPDF();
@@ -401,19 +436,69 @@ export default function EventReports({
     doc.setLineWidth(0.5);
     doc.line(10, 39, pageWidth - 10, 39);
 
+    // DYNAMIC METRIC SUMMARY CARDS FOR ALL REPORT TYPES
+    const cardY = 44;
+    const cardWidth = (pageWidth - 28) / 3;
+    const cardHeight = 16;
+    let tableStartY = 64;
+
+    let cardsData: { label: string; value: string; color: number[] }[] = [];
+
     if (selectedReport === 'Overall') {
-      // Overall stats cards inside pdf
-      const cardY = 44;
-      const cardWidth = (pageWidth - 28) / 3;
-      const cardHeight = 16;
-
-      const cards = [
-        { label: "WALIOALIKWA (LOADED)", value: `${totalGuestsCount} Kadi`, color: [15, 23, 42] },
-        { label: "WATAKAOFIKA (RSVP YES)", value: `${attendingCount} Kadi (${totalRsvpPax} Watu)`, color: [22, 163, 74] },
-        { label: "MAHUDHURIO (CHECK-IN)", value: `${checkedInCount} Kadi scans (${arivedPercent()}% Ratio)`, color: [59, 130, 246] }
+      cardsData = [
+        { label: isEn ? "TOTAL LOADED" : "WALIOALIKWA (LOADED)", value: `${totalGuestsCount} Kadi`, color: [15, 23, 42] },
+        { label: isEn ? "EXPECTED (RSVP YES)" : "WATAKAOFIKA (RSVP YES)", value: `${attendingCount} Kadi (${totalRsvpPax} Watu)`, color: [22, 163, 74] },
+        { label: isEn ? "ADMISSION (CHECK-IN)" : "MAHUDHURIO (CHECK-IN)", value: `${checkedInCount} Kadi (${arivedPercent()}% Ratio)`, color: [59, 130, 246] }
       ];
+    } else if (selectedReport === 'Attendance_Only') {
+      cardsData = [
+        { label: isEn ? "RSVP ATTENDING" : "WALIOTHIBITISHA", value: `${attendingCount} Kadi`, color: [15, 23, 42] },
+        { label: isEn ? "ARRIVED GUESTS" : "WALIOFIKA (ARRIVED)", value: `${checkedInCount} Kadi scans`, color: [22, 163, 74] },
+        { label: isEn ? "ADMISSION RATIO" : "ASILIMIA YA MAHUDHURIO", value: `${arivedPercent()}% Imeskaniwa`, color: [59, 130, 246] }
+      ];
+    } else if (selectedReport === 'RSVP_Only') {
+      cardsData = [
+        { label: isEn ? "ATTENDING (YES)" : "WANAOKUJA (YES)", value: `${attendingCount} Kadi`, color: [22, 163, 74] },
+        { label: isEn ? "DECLINED (NO)" : "WASIOKUJA (NO)", value: `${declinedCount} Kadi`, color: [225, 29, 72] },
+        { label: isEn ? "UNDECIDED (MAYBE)" : "WASIOUHASIKA (MAYBE)", value: `${maybeCount} Kadi`, color: [245, 158, 11] }
+      ];
+    } else if (selectedReport === 'RSVP_Pending') {
+      const pendingRatio = totalGuestsCount > 0 ? Math.round((pendingCount / totalGuestsCount) * 100) : 0;
+      cardsData = [
+        { label: isEn ? "TOTAL CARDS" : "JUMLA KADI", value: `${totalGuestsCount} Kadi`, color: [15, 23, 42] },
+        { label: isEn ? "PENDING RSVP REPLIES" : "BADO HAWAJAJIBU", value: `${pendingCount} Wageni`, color: [245, 158, 11] },
+        { label: isEn ? "UNRESPONDED RATIO" : "UWIANO WA WASIOJIBU", value: `${pendingRatio}% ya wageni`, color: [225, 29, 72] }
+      ];
+    } else if (selectedReport === 'Outstanding') {
+      cardsData = [
+        { label: isEn ? "TOTAL PLEDGED" : "JUMLA YA AHADI", value: `${metrics.totalPledgedAmount.toLocaleString()} TZS`, color: [245, 158, 11] },
+        { label: isEn ? "CASH COLLECTED" : "FEDHA TASLIMU", value: `${metrics.totalPaidAmount.toLocaleString()} TZS`, color: [22, 163, 74] },
+        { label: isEn ? "OUTSTANDING DUE" : "SALIO LINOLODAIWA", value: `${metrics.outstandingBalance.toLocaleString()} TZS`, color: [225, 29, 72] }
+      ];
+    } else if (selectedReport === 'FullyPaid') {
+      const fullyPaidRatio = pledgeStatusData.totals.totalWithPledges > 0 ? Math.round((pledgeStatusData.totals.fullyPaidCount / pledgeStatusData.totals.totalWithPledges) * 100) : 0;
+      cardsData = [
+        { label: isEn ? "TOTAL COLLECTED" : "FEDHA TASLIMU", value: `${metrics.totalPaidAmount.toLocaleString()} TZS`, color: [22, 163, 74] },
+        { label: isEn ? "FULLY PAID GUESTS" : "WALIOLIPA YOTE", value: `${pledgeStatusData.totals.fullyPaidCount} Kadi`, color: [59, 130, 246] },
+        { label: isEn ? "CLEARANCE RATIO" : "ASILIMIA YA ULIPAJI KAMILI", value: `${fullyPaidRatio}% ya wachangiaji`, color: [15, 23, 42] }
+      ];
+    } else if (selectedReport === 'Pledges') {
+      cardsData = [
+        { label: isEn ? "BUDGET TARGET" : "MALENGO YA BAJETI", value: `${fundraisingTarget.toLocaleString()} TZS`, color: [59, 130, 246] },
+        { label: isEn ? "TOTAL PLEDGES" : "JUMLA AHADI", value: `${metrics.totalPledgedAmount.toLocaleString()} TZS`, color: [245, 158, 11] },
+        { label: isEn ? "PLEDGE TO TARGET COVER" : "UWIANO WA AHADI", value: `${fundraisingTarget > 0 ? Math.round((metrics.totalPledgedAmount / fundraisingTarget) * 100) : 0}% ya Bajeti`, color: [15, 23, 42] }
+      ];
+    } else if (selectedReport === 'NoPledge') {
+      const noPledgeRatio = totalGuestsCount > 0 ? Math.round((pledgeStatusData.totals.noPledgeCount / totalGuestsCount) * 100) : 0;
+      cardsData = [
+        { label: isEn ? "TOTAL CARDS" : "JUMLA KADI ALIKWA", value: `${totalGuestsCount} Kadi`, color: [15, 23, 42] },
+        { label: isEn ? "NO RECORDED PLEDGE" : "WASIOAHIDI BADO", value: `${pledgeStatusData.totals.noPledgeCount} Wageni`, color: [225, 29, 72] },
+        { label: isEn ? "UNCOMMITTED RATIO" : "UWIANO WA WASIOAHIDI", value: `${noPledgeRatio}% ya Kadi`, color: [245, 158, 11] }
+      ];
+    }
 
-      cards.forEach((card, i) => {
+    if (cardsData.length > 0) {
+      cardsData.forEach((card, i) => {
         const x = 10 + i * (cardWidth + 4);
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(218, 223, 230);
@@ -426,16 +511,19 @@ export default function EventReports({
         doc.setTextColor(card.color[0], card.color[1], card.color[2]);
         doc.text(card.value, x + cardWidth / 2, cardY + 11, { align: 'center' });
       });
+      tableStartY = 66;
+    }
 
-      // Quick breakdown text inside PDF
-      const commY = 64;
+    if (selectedReport === 'Overall') {
+      // Quick message stats bar
       doc.setFillColor(241, 245, 249);
-      doc.rect(10, commY, pageWidth - 20, 6, 'F');
+      doc.rect(10, tableStartY, pageWidth - 20, 6, 'F');
       doc.setFontSize(7.5);
       doc.setTextColor(51, 65, 85);
       doc.setFont("helvetica", "bold");
       const dispatchSummaryStr = `UJUMBE ULIOFIKISHWA: SMS Zilizoshughulikiwa: ${totalSmsSent}  •  WhatsApp Zilizotumwa: ${totalWhatsappSent}  •  Ujio Bado Kufika: ${expectedButNotArrived}`;
-      doc.text(dispatchSummaryStr, 13, commY + 4.2);
+      doc.text(dispatchSummaryStr, 13, tableStartY + 4.2);
+      tableStartY += 10;
 
       const tableData = filteredGuests.map((g, idx) => [
         idx + 1,
@@ -451,11 +539,11 @@ export default function EventReports({
       ]);
 
       autoTable(doc, {
-        startY: commY + 10,
+        startY: tableStartY,
         head: [['S/N', 'Full Name', 'Mobile No.', 'Card Type', 'RSVP Answer', 'Pax', 'Check-In', 'Time Arrived', 'SMS', 'WA']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [243, 244, 246], textColor: [15, 23, 42], fontSize: 7, fontStyle: 'bold' },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 7, fontStyle: 'bold' },
         styles: { fontSize: 6.5, cellPadding: 2.5 },
         columnStyles: {
           0: { halign: 'center' },
@@ -510,11 +598,11 @@ export default function EventReports({
       ]);
 
       autoTable(doc, {
-        startY: 44,
+        startY: tableStartY,
         head: [['S/N', isEn ? 'Time Arrived' : 'Muda (Time Arrived)', isEn ? 'Guest Full Name' : 'Mgeni (Guest Full Name)', isEn ? 'Mobile' : 'Simu / Mobile', isEn ? 'Card Type' : 'Aina ya Kadi', 'Scan Status', 'SMS', 'WA']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [243, 244, 246], textColor: [15, 23, 42], fontSize: 7, fontStyle: 'bold' },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 7, fontStyle: 'bold' },
         styles: { fontSize: 7, cellPadding: 3 },
         columnStyles: {
           0: { halign: 'center' },
@@ -543,16 +631,54 @@ export default function EventReports({
       ]);
 
       autoTable(doc, {
-        startY: 44,
+        startY: tableStartY,
         head: [['S/N', 'Guest Name', 'Mobile No', 'RSVP Status', 'Double/Single', 'Check-In Status', 'SMS Sent']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [243, 244, 246], textColor: [15, 23, 42], fontSize: 7 },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 7 },
         styles: { fontSize: 7, cellPadding: 3 },
         columnStyles: {
           0: { halign: 'center' },
           3: { halign: 'center' },
           4: { halign: 'center' },
+          5: { halign: 'center' },
+          6: { halign: 'center' }
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 3) {
+            const val = data.cell.text[0];
+            if (val === 'Atahudhuria') {
+              data.cell.styles.textColor = [22, 163, 74];
+              data.cell.styles.fontStyle = 'bold';
+            } else if (val === 'Hatahudhuria') {
+              data.cell.styles.textColor = [225, 29, 72];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        }
+      });
+    } else if (selectedReport === 'RSVP_Pending') {
+      const tableData = filteredGuests.map((g, idx) => [
+        idx + 1,
+        g.name.toUpperCase(),
+        g.phone || '-',
+        g.cardType || 'SINGLE',
+        `https://eventcard.co.tz/pledge/${g.code}`,
+        g.smsCount || 0,
+        g.whatsappCount || 0
+      ]);
+
+      autoTable(doc, {
+        startY: tableStartY,
+        head: [['S/N', 'Guest Name', 'Mobile No', 'Card Type', 'RSVP Link', 'SMS Dispatches', 'WA Dispatches']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 7.5 },
+        styles: { fontSize: 7, cellPadding: 3 },
+        columnStyles: {
+          0: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { textColor: [37, 99, 235], fontStyle: 'italic' },
           5: { halign: 'center' },
           6: { halign: 'center' }
         }
@@ -588,11 +714,11 @@ export default function EventReports({
       ]);
 
       autoTable(doc, {
-        startY: 44,
+        startY: tableStartY,
         head: [['S/N', 'Guest Name', 'Mobile Phone', 'Pledge (TZS)', 'Paid (TZS)', 'Balance Due (TZS)', 'SMS', 'WA']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [243, 244, 246], textColor: [15, 23, 42], fontSize: 7.5 },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 7.5 },
         styles: { fontSize: 7, cellPadding: 3 },
         columnStyles: {
           0: { halign: 'center' },
@@ -608,7 +734,7 @@ export default function EventReports({
         }
       });
     } else {
-      // General handler for fallback listing
+      // General handler for fallback listing (Pledges, NoPledge, FullyPaid, etc.)
       const tableData = filteredGuests.map((g, idx) => [
         idx + 1,
         g.name.toUpperCase(),
@@ -616,19 +742,87 @@ export default function EventReports({
         g.cardType || 'SINGLE',
         (g.pledgeAmount || 0).toLocaleString(),
         (g.paidAmount || 0).toLocaleString(),
+        ((g.pledgeAmount || 0) - (g.paidAmount || 0)).toLocaleString(),
         g.rsvpStatus || 'Bado',
         g.checkedIn ? 'ARRIVED' : 'BADO'
       ]);
 
       autoTable(doc, {
-        startY: 44,
-        head: [['S/N', 'Full Name', 'Mobile Phone', 'Ticket Type', 'Pledge Amt', 'Paid Amt', 'RSVP Answer', 'Admission Status']],
+        startY: tableStartY,
+        head: [['S/N', 'Full Name', 'Mobile Phone', 'Ticket Type', 'Pledge Amt', 'Paid Amt', 'Balance Due', 'RSVP Answer', 'Admission']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [243, 244, 246], textColor: [15, 23, 42], fontSize: 7.5 },
-        styles: { fontSize: 7, cellPadding: 3 }
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontSize: 7.5 },
+        styles: { fontSize: 7, cellPadding: 3 },
+        columnStyles: {
+          0: { halign: 'center' },
+          4: { halign: 'right' },
+          5: { halign: 'right' },
+          6: { halign: 'right', fontStyle: 'bold' },
+          7: { halign: 'center' },
+          8: { halign: 'center' }
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 6) {
+            const val = parseFloat(data.cell.text[0].replace(/,/g, ''));
+            if (val > 0) {
+              data.cell.styles.textColor = [225, 29, 72];
+            } else if (val === 0) {
+              data.cell.styles.textColor = [22, 163, 74];
+            }
+          }
+        }
       });
     }
+
+    // SIGNATURE SIGN-OFF AND APPROVAL SECTION
+    let finalY = (doc as any).lastAutoTable.finalY + 15;
+    if (finalY > doc.internal.pageSize.getHeight() - 40) {
+      doc.addPage();
+      finalY = 20;
+    }
+
+    // Signatures Header
+    doc.setDrawColor(226, 232, 240); // Slate 200
+    doc.line(10, finalY, pageWidth - 10, finalY);
+    finalY += 6;
+
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 41, 59); // Slate 800
+    doc.text(isEn ? "OFFICIAL COMMITTEE SIGN-OFF & APPROVAL" : "IDHINI NA SAHIHI ZA VIONGOZI WA KAMATI", 10, finalY);
+    
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(isEn ? "This document is verified and officially approved by the event executive committee." : "Hati hii imethibitishwa na kupitishwa rasmi na viongozi wakuu wa kamati ya maandalizi.", 10, finalY + 4);
+    
+    finalY += 16;
+
+    // Side-by-side signature lines
+    const colWidth = (pageWidth - 30) / 3;
+    
+    // 1. Chairman
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(51, 65, 85);
+    doc.line(10, finalY, 10 + colWidth, finalY);
+    doc.text(isEn ? "Chairperson / Mwenyekiti" : "Mwenyekiti / Chairperson", 10, finalY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.text("Date: ____ / ____ / ________", 10, finalY + 8);
+
+    // 2. Treasurer
+    doc.setFont("helvetica", "bold");
+    doc.line(15 + colWidth, finalY, 15 + colWidth * 2, finalY);
+    doc.text(isEn ? "Treasurer / Mweka Hazina" : "Mweka Hazina / Treasurer", 15 + colWidth, finalY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.text("Date: ____ / ____ / ________", 15 + colWidth, finalY + 8);
+
+    // 3. Secretary
+    doc.setFont("helvetica", "bold");
+    doc.line(20 + colWidth * 2, finalY, pageWidth - 10, finalY);
+    doc.text(isEn ? "Secretary / Katibu" : "Katibu / Secretary", 20 + colWidth * 2, finalY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.text("Date: ____ / ____ / ________", 20 + colWidth * 2, finalY + 8);
 
     await addPdfWatermarks(doc);
     doc.save(`EventReport_${selectedReport}_${event.name.replace(/\s+/g, '_')}.pdf`);
@@ -1233,6 +1427,115 @@ export default function EventReports({
                   ? `Kati ya wageni wote walioaahidi mchango, waliokamilisha mchango thabiti ni ${Math.round((pledgeStatusData.totals.fullyPaidCount / (pledgeStatusData.totals.totalWithPledges || 1)) * 100)}% huku wenye salio (deni) wakiwa ${Math.round(((pledgeStatusData.totals.unpaidPledgeCount + pledgeStatusData.totals.partiallyPaidCount) / (pledgeStatusData.totals.totalWithPledges || 1)) * 100)}%. Fikiria kuwatumia kumbusho la WhatsApp kwa urahisi.`
                   : `Out of all pledge commitments, ${Math.round((pledgeStatusData.totals.fullyPaidCount / (pledgeStatusData.totals.totalWithPledges || 1)) * 100)}% have completed fully and ${Math.round(((pledgeStatusData.totals.unpaidPledgeCount + pledgeStatusData.totals.partiallyPaidCount) / (pledgeStatusData.totals.totalWithPledges || 1)) * 100)}% still hold active arrears. Consider dispatching friendly reminders.`}
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* NEW COMPREHENSIVE VISUAL CHARTS SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6" id="attendance-rsvp-comms-visualizers-section">
+        {/* Card 1: Expected RSVP vs Real Checked-In per Ticket Type */}
+        <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="border-b border-white/5 pb-3">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-[9px] font-black uppercase text-blue-300 tracking-wider">
+              <Activity className="w-3 h-3 text-blue-400" />
+              {language === 'sw' ? 'Uchambuzi wa Tiketi' : 'Ticket Admission Analytics'}
+            </span>
+            <h3 className="text-sm font-black text-white uppercase font-mono tracking-tight mt-1.5">
+              {language === 'sw' ? 'Kuhudhuria (RSVP) vs Kuingia (Check-In)' : 'Expected RSVP vs Checked-In per Type'}
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-1">
+              {language === 'sw' 
+                ? 'Ulinganifu wa idadi ya wageni waliothibitisha kuja dhidi ya wale walioskaniwa mlangoni kulingana na aina ya kadi yao.'
+                : 'Compare confirmation responses against real physical check-in arrivals at the venue.'}
+            </p>
+          </div>
+          <div className="h-[210px] w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={categoryAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={9} fontStyle="bold" />
+                <YAxis stroke="#64748b" fontSize={9} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }}
+                  itemStyle={{ color: '#fff' }}
+                />
+                <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                <Bar 
+                  dataKey="Expected" 
+                  fill="#3b82f6" 
+                  name={language === 'sw' ? 'Waliothibitisha kuja' : 'Expected RSVP Yes'} 
+                  radius={[4, 4, 0, 0]} 
+                />
+                <Bar 
+                  dataKey="Arrived" 
+                  fill="#10b981" 
+                  name={language === 'sw' ? 'Waliofika mlangoni' : 'Scanned Arrivals'} 
+                  radius={[4, 4, 0, 0]} 
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Card 2: Outreach Campaign Progress & Messaging Metrics */}
+        <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="border-b border-white/5 pb-3">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-[9px] font-black uppercase text-purple-300 tracking-wider">
+              <Smartphone className="w-3 h-3 text-purple-400" />
+              {language === 'sw' ? 'Mwasiliano ya Kampeni' : 'Communication Outreach'}
+            </span>
+            <h3 className="text-sm font-black text-white uppercase font-mono tracking-tight mt-1.5">
+              {language === 'sw' ? 'Hali ya Kampeni ya Ujumbe (SMS & WhatsApp)' : 'Delivered Notification Progress'}
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-1">
+              {language === 'sw' 
+                ? 'Muhtasari wa kadi za mialiko zilizopelekwa kwa wageni kwa njia ya SMS na WhatsApp rasmi.'
+                : 'Summary of digital invitations dispatched with system reference metrics.'}
+            </p>
+          </div>
+          
+          <div className="space-y-4 pt-1">
+            {/* SMS Progress */}
+            <div className="bg-slate-950/45 p-4 rounded-2xl space-y-2.5 border border-white/5">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></div>
+                  <span className="text-[11px] font-black text-white uppercase font-mono tracking-tight">SMS CAMPAIGN COVERS</span>
+                </div>
+                <span className="text-xs font-black text-sky-400 font-mono">{totalSmsSent} zilizotumwa</span>
+              </div>
+              <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="h-full rounded-full bg-gradient-to-r from-sky-600 to-blue-500 transition-all duration-500"
+                  style={{ width: `${totalGuestsCount > 0 ? Math.min(100, Math.round((totalSmsSent / totalGuestsCount) * 100)) : 0}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-500 font-mono">
+                <span>{language === 'sw' ? 'Ujumbe wa Kawaida wa SMS' : 'Standard SMS dispatches'}</span>
+                <span>{totalGuestsCount > 0 ? Math.round((totalSmsSent / totalGuestsCount) * 100) : 0}% {language === 'sw' ? 'ya wageni wote' : 'coverage ratio'}</span>
+              </div>
+            </div>
+
+            {/* WhatsApp Progress */}
+            <div className="bg-slate-950/45 p-4 rounded-2xl space-y-2.5 border border-white/5">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="text-[11px] font-black text-white uppercase font-mono tracking-tight">WHATSAPP DIGITAL INVITES</span>
+                </div>
+                <span className="text-xs font-black text-emerald-400 font-mono">{totalWhatsappSent} zilizotumwa</span>
+              </div>
+              <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 transition-all duration-500"
+                  style={{ width: `${totalGuestsCount > 0 ? Math.min(100, Math.round((totalWhatsappSent / totalGuestsCount) * 100)) : 0}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-500 font-mono">
+                <span>{language === 'sw' ? 'Ujumbe wa Kadi za WhatsApp' : 'WhatsApp card dispatches'}</span>
+                <span>{totalGuestsCount > 0 ? Math.round((totalWhatsappSent / totalGuestsCount) * 100) : 0}% {language === 'sw' ? 'ya wageni wote' : 'coverage ratio'}</span>
+              </div>
             </div>
           </div>
         </div>

@@ -272,6 +272,17 @@ export default function GuestInvitePage({ guest, event, settings, onRsvpSubmit }
              </p>
           </div>
         )}
+        
+        {seatingOnly && (
+          <div className="text-center space-y-2 pb-1 animate-fade-in">
+             <h1 className="text-2xl font-extrabold tracking-tight text-amber-400 uppercase">
+               {isEn ? "YOUR TABLE SELECTION" : "MEZA YAKO NA UCHAGUZI"}
+             </h1>
+             <p className="text-sm text-neutral-400">
+               {isEn ? "Hello" : "Habari"} <span className="font-bold text-white uppercase">{guest.name}</span>, {isEn ? "find your seat below:" : "angalia meza yako hapa chini:"}
+             </p>
+          </div>
+        )}
 
         {activeTab === 'seating' && (
           <div className="space-y-6">
