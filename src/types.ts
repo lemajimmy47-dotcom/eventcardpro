@@ -172,6 +172,8 @@ export interface Guest {
   category?: string;
   tags?: string[];
   customFields?: Record<string, string>;
+  lastSentChannel?: string;
+  lastSentLang?: string;
 
   // Contribution Module Fields
   pledgeAmount?: number;
@@ -180,6 +182,20 @@ export interface Guest {
   payments?: ContributionPayment[];
   rsvpUpdatedAt?: string;
   rsvpSeen?: boolean;
+
+  // Track module-specific delivery statuses to avoid badge cross-contamination
+  stdSent?: boolean;
+  stdSentChannel?: string;
+  stdSentLang?: string;
+  pledgeSent?: boolean;
+  pledgeSentChannel?: string;
+  pledgeSentLang?: string;
+  reminderSent?: boolean;
+  reminderSentChannel?: string;
+  reminderSentLang?: string;
+  thanksSent?: boolean;
+  thanksSentChannel?: string;
+  thanksSentLang?: string;
 }
 
 export interface SaveTheDate {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Sliders, Type, CheckCircle, Upload, Check, Trash2, ArrowRight, QrCode } from 'lucide-react';
+import { Layout, Sliders, Type, CheckCircle, Upload, Check, ArrowRight, QrCode } from 'lucide-react';
 import { EventDetails, TemplateSettings } from '../types';
 import { CARD_PRESETS, CardPreset } from '../data/presets';
 import { drawCardToCanvas } from '../utils/canvasHelper';
@@ -280,8 +280,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                     </div>
                     <input 
                       type="range" 
-                      min="5" 
-                      max="95" 
+                      min="0" 
+                      max="100" 
                       value={localSettings.guestNameX}
                       onChange={(e) => setLocalSettings({ ...localSettings, guestNameX: parseInt(e.target.value) })}
                       className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -296,8 +296,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                     </div>
                     <input 
                       type="range" 
-                      min="10" 
-                      max="90" 
+                      min="0" 
+                      max="100" 
                       value={localSettings.guestNameY}
                       onChange={(e) => setLocalSettings({ ...localSettings, guestNameY: parseInt(e.target.value) })}
                       className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -356,8 +356,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                     </div>
                     <input 
                       type="range" 
-                      min="5" 
-                      max="95" 
+                      min="0" 
+                      max="100" 
                       value={localSettings.qrCodeX}
                       onChange={(e) => setLocalSettings({ ...localSettings, qrCodeX: parseInt(e.target.value) })}
                       className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -372,8 +372,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                     </div>
                     <input 
                       type="range" 
-                      min="10" 
-                      max="90" 
+                      min="0" 
+                      max="100" 
                       value={localSettings.qrCodeY}
                       onChange={(e) => setLocalSettings({ ...localSettings, qrCodeY: parseInt(e.target.value) })}
                       className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -420,8 +420,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                     </div>
                     <input 
                       type="range" 
-                      min="5" 
-                      max="95" 
+                      min="0" 
+                      max="100" 
                       value={localSettings.cardTypeX}
                       onChange={(e) => setLocalSettings({ ...localSettings, cardTypeX: parseInt(e.target.value) })}
                       className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -436,8 +436,8 @@ export default function TemplatesSelector({ event, settings, onSave, onNext }: T
                     </div>
                     <input 
                       type="range" 
-                      min="10" 
-                      max="90" 
+                      min="0" 
+                      max="100" 
                       value={localSettings.cardTypeY}
                       onChange={(e) => setLocalSettings({ ...localSettings, cardTypeY: parseInt(e.target.value) })}
                       className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-blue-500"

@@ -77,6 +77,109 @@ export default function ContributionManager({
 }: ContributionManagerProps) {
   const { language } = useLanguage();
   const isEn = language === 'en';
+
+  const renderDeliveryIndicator = (g: Guest) => {
+    // Collect what has been successfully delivered specifically for contributions
+    const deliveries: { type: string; channel: 'whatsapp' | 'sms'; lang: string }[] = [];
+
+    const addDeliveriesForType = (
+      typeEn: string,
+      typeSw: string,
+      customFieldPrefix: string,
+      fallbackSentField: boolean | undefined,
+      fallbackChan: string | undefined,
+      fallbackLang: string | undefined,
+      isLegacyFallback: boolean = false
+    ) => {
+      const lang = g.customFields?.[`${customFieldPrefix}_sent_lang`] || fallbackLang || language || 'sw';
+      const typeStr = isEn ? typeEn : typeSw;
+
+      const hasSms = g.customFields?.[`${customFieldPrefix}_sent_sms`] === 'true' ||
+                     (g.customFields?.[`${customFieldPrefix}_sent_channel`] === 'sms' && g.customFields?.[`${customFieldPrefix}_sent_whatsapp`] !== 'true') ||
+                     (fallbackChan === 'sms' && g.customFields?.[`${customFieldPrefix}_sent_whatsapp`] !== 'true');
+
+      const hasWa = g.customFields?.[`${customFieldPrefix}_sent_whatsapp`] === 'true' ||
+                    (g.customFields?.[`${customFieldPrefix}_sent_channel`] === 'whatsapp' && g.customFields?.[`${customFieldPrefix}_sent_sms`] !== 'true') ||
+                    (fallbackChan === 'whatsapp' && g.customFields?.[`${customFieldPrefix}_sent_sms`] !== 'true');
+
+      let added = false;
+      if (hasSms) {
+        deliveries.push({ type: typeStr, channel: 'sms', lang });
+        added = true;
+      }
+      if (hasWa) {
+        deliveries.push({ type: typeStr, channel: 'whatsapp', lang });
+        added = true;
+      }
+
+      if (!added && !isLegacyFallback) {
+        if (g.customFields?.[`${customFieldPrefix}_sent_channel`]) {
+          deliveries.push({ type: typeStr, channel: g.customFields[`${customFieldPrefix}_sent_channel`] as 'whatsapp' | 'sms', lang });
+          added = true;
+        } else if (fallbackChan) {
+          deliveries.push({ type: typeStr, channel: fallbackChan as 'whatsapp' | 'sms', lang });
+          added = true;
+        } else if (fallbackSentField) {
+          deliveries.push({ type: typeStr, channel: (g.lastSentChannel || 'sms') as 'whatsapp' | 'sms', lang });
+          added = true;
+        }
+      }
+      return added;
+    };
+
+    addDeliveriesForType('Save Date', 'Tarehe', 'std', false, g.stdSentChannel, g.stdSentLang);
+    const pledgeAdded = addDeliveriesForType('Pledge', 'Ahadi', 'pledge', g.pledgeSent, g.pledgeSentChannel, g.pledgeSentLang);
+    addDeliveriesForType('Reminder', 'Kumbusho', 'reminder', false, g.reminderSentChannel, g.reminderSentLang);
+    addDeliveriesForType('Thanks', 'Shukrani', 'thanks', false, g.thanksSentChannel, g.thanksSentLang);
+
+    // Fallback for older database records
+    if (!pledgeAdded) {
+      if (g.whatsappStatus === 'Imetumia') {
+        deliveries.push({ type: isEn ? 'Pledge' : 'Ahadi', channel: 'whatsapp', lang: language || 'sw' });
+      }
+      if (g.smsStatus === 'Imetumia') {
+        deliveries.push({ type: isEn ? 'Pledge' : 'Ahadi', channel: 'sms', lang: language || 'sw' });
+      }
+    }
+
+    if (deliveries.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {deliveries.map((del, i) => {
+          const isWa = del.channel === 'whatsapp';
+          const langDisplay = String(del.lang).toUpperCase() === 'EN' ? 'EN' : 'SW';
+          return (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-extrabold border ${
+                isWa 
+                  ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' 
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              }`}
+              title={`${del.type}: ${isWa ? `Iliyofanikiwa kupitia WhatsApp (${langDisplay})` : `Iliyofanikiwa kupitia SMS (${langDisplay})`}`}
+            >
+              {isWa ? (
+                // WhatsApp Icon SVG (compact and matching lucide stroke size)
+                <svg className="w-2 h-2 fill-current" viewBox="0 0 24 24">
+                  <path d="M12.003 2c-5.522 0-9.997 4.477-9.997 9.997 0 1.764.459 3.483 1.332 5.017L2 22l5.127-1.345a9.96 9.96 0 0 0 4.877 1.28c5.522 0 9.997-4.477 9.997-9.997 0-5.52-4.475-9.938-9.998-9.938zm5.952 14.175c-.26.732-1.517 1.345-2.094 1.41-.577.065-1.127.276-3.615-.756-3.136-1.301-5.127-4.477-5.29-4.688-.163-.211-1.301-1.731-1.301-3.308 0-1.577.829-2.35 1.122-2.659.293-.309.65-.39.862-.39s.423.016.602.024c.187.008.439-.073.691.537.26.634.894 2.18.976 2.342.081.163.138.35.024.577-.114.228-.171.366-.341.569-.171.203-.358.455-.512.61-.171.171-.35.358-.154.699.195.341.87 1.431 1.862 2.31 1.277 1.127 2.35 1.477 2.684 1.639.333.163.529.138.724-.089.195-.228.837-.976 1.065-1.309.228-.333.455-.276.764-.163.309.114 1.959.927 2.293 1.097s.561.26.642.407c.082.146.082.846-.178 1.578z" />
+                </svg>
+              ) : (
+                // SMS Mail/Message Icon SVG
+                <svg className="w-2 h-2 stroke-current fill-none" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+              )}
+              <span className="capitalize">{del.channel === 'whatsapp' ? 'Whatsapp' : 'Sms'}</span>
+              <span className="text-slate-500 font-normal">|</span>
+              <span className="text-[7.5px] font-bold tracking-wider">{langDisplay}</span>
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
   const [subTab, setSubTab] = useState<'dashboard' | 'contributors' | 'card-design' | 'payment-methods' | 'pledge-requests' | 'reminders' | 'thank-you' | 'message-center' | 'reports'>('dashboard');
   
   // Local states for forms
@@ -541,21 +644,24 @@ export default function ContributionManager({
                 const bal = p - pd;
 
                 // Status Badge Logic
-                const isSmsSent = isStatusSent(g.smsStatus);
+                const mType = actionType === 'Pledge' ? 'pledge' : (actionType === 'Reminder' ? 'reminder' : 'thanks');
+                const isSmsSent = (g.customFields?.[`${mType}_sent_channel`] || g[`${mType}SentChannel` as any]) === 'sms' || 
+                                  (mType === 'pledge' && g.pledgeSent && (g.pledgeSentChannel || g.lastSentChannel || 'sms') === 'sms') ||
+                                  (mType === 'pledge' && g.smsStatus === 'Imetumia');
                 let smsBadge = isEn ? "Pending" : "Bado";
                 let smsColor = "text-slate-500 bg-white/5 border-white/10";
                 if (isSmsSent) {
-                  const statusStr = g.smsStatus as string;
-                  smsBadge = isEn ? (statusStr === 'Imesomwa' ? 'Read' : statusStr === 'Imefika' ? 'Delivered' : 'Sent') : statusStr || "Imetumia";
+                  smsBadge = isEn ? "Sent" : "Imetumia";
                   smsColor = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
                 }
 
-                const isWaSent = isStatusSent(g.whatsappStatus);
+                const isWaSent = (g.customFields?.[`${mType}_sent_channel`] || g[`${mType}SentChannel` as any]) === 'whatsapp' || 
+                                 (mType === 'pledge' && g.pledgeSent && (g.pledgeSentChannel || g.lastSentChannel) === 'whatsapp') ||
+                                 (mType === 'pledge' && g.whatsappStatus === 'Imetumia');
                 let waBadge = isEn ? "Pending" : "Bado";
                 let waColor = "text-slate-500 bg-white/5 border-white/10";
                 if (isWaSent) {
-                  const statusStr = g.whatsappStatus as string;
-                  waBadge = isEn ? (statusStr === 'Imesomwa' ? 'Read' : statusStr === 'Imefika' ? 'Delivered' : 'Sent') : statusStr || "Imetumia";
+                  waBadge = isEn ? "Sent" : "Imetumia";
                   waColor = "text-emerald-400 bg-blue-500/10 border-blue-500/20";
                 }
 
@@ -574,8 +680,16 @@ export default function ContributionManager({
                       />
                     </td>
                     <td className="py-3 px-4">
-                      <span className="font-extrabold text-white text-[11px] block tracking-wide uppercase">{g.name}</span>
-                      <span className="text-[9px] font-mono text-slate-400 mt-0.5 block">{g.phone || 'NO PHONE'}</span>
+                      <div className="font-extrabold text-white text-[11px] block tracking-wide uppercase">{g.name}</div>
+                      <div className="text-[9px] font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-slate-400">{g.phone || 'NO PHONE'}</span>
+                        {renderDeliveryIndicator(g) && (
+                          <>
+                            <span className="w-1 h-1 rounded-full bg-white/20"></span>
+                            {renderDeliveryIndicator(g)}
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-center">
                       {actionType === 'Pledge' && (
@@ -630,10 +744,39 @@ export default function ContributionManager({
                         {(isSmsSent || isWaSent) && (
                           <button
                             onClick={() => {
-                              const updated = guests.map(item => 
-                                item.id === g.id ? { ...item, smsStatus: 'Sijatuma' as const, whatsappStatus: 'Sijatuma' as const, smsCount: 0, whatsappCount: 0 } : item
-                              );
-                              onUpdateGuests(updated);
+                              const updated = guests.map(item => {
+                                if (item.id === g.id) {
+                                  const customFields = { ...(item.customFields || {}) };
+                                  delete customFields[`${mType}_sent_channel`];
+                                  delete customFields[`${mType}_sent_lang`];
+                                  return {
+                                    ...item,
+                                    customFields,
+                                    [`${mType}Sent`]: false,
+                                    [`${mType}SentChannel`]: undefined,
+                                    [`${mType}SentLang`]: undefined,
+                                    ...(mType === 'pledge' ? {
+                                      smsStatus: 'Sijatuma' as const,
+                                      whatsappStatus: 'Sijatuma' as const,
+                                      pledgeSent: false,
+                                      pledgeSentChannel: undefined,
+                                      pledgeSentLang: undefined
+                                    } : {}),
+                                    ...(mType === 'reminder' ? {
+                                      reminderSent: false,
+                                      reminderSentChannel: undefined,
+                                      reminderSentLang: undefined
+                                    } : {}),
+                                    ...(mType === 'thanks' ? {
+                                      thanksSent: false,
+                                      thanksSentChannel: undefined,
+                                      thanksSentLang: undefined
+                                    } : {})
+                                  };
+                                }
+                                return item;
+                              });
+                              onUpdateGuests(updated, `Amefuta hali ya kutuma ${actionType} kwa ${g.name}`);
                             }}
                             className="p-1 px-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-lg transition cursor-pointer text-[10px]"
                             title="Futa Hali ya Kutuma"
@@ -1284,9 +1427,9 @@ export default function ContributionManager({
           pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
         } else if (type === 'Reminder') {
           const bal = (g.pledgeAmount || 0) - (g.paidAmount || 0);
-          pledgeText = `SALIO: TZS ${bal.toLocaleString()}`;
+          pledgeText = isEn ? `BALANCE: TZS ${bal.toLocaleString()}` : `SALIO: TZS ${bal.toLocaleString()}`;
         } else {
-          pledgeText = `KIASI: TZS ${(g.pledgeAmount || 0).toLocaleString()}`;
+          pledgeText = isEn ? `AMOUNT: TZS ${(g.pledgeAmount || 0).toLocaleString()}` : `KIASI: TZS ${(g.pledgeAmount || 0).toLocaleString()}`;
         }
         const compatibleImageUrl = await generateContributionCardImage(event, cardTemplate, g, pledgeText, isEn);
         const res = await fetch('/api/send-sms', {
@@ -1298,6 +1441,7 @@ export default function ContributionManager({
             phone: g.phone,
             text: text,
             channel: sendingChannel.toLowerCase(), // 'sms' or 'whatsapp'
+            lang: isEn ? 'en' : 'sw',
             templateName: type === 'Pledge' ? (metaTemplateName || 'kadi_mchango') : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
             templateParams: (() => {
               let paymentString = '';
@@ -1392,11 +1536,20 @@ export default function ContributionManager({
                 return [g.name, event.name || 'Sherehe'];
               }
             })(),
-            imageUrl: compatibleImageUrl
+            imageUrl: compatibleImageUrl,
+            msgType: 'pledge'
           })
         });
 
-        const data = await res.json();
+        const responseText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonErr) {
+          throw new Error(isEn 
+            ? `Server returned an invalid non-JSON response. It might be starting up or under maintenance.`
+            : `Mtoa huduma amerejesha jibu ambalo si JSON. Server inaweza kuwa inaanza au kufanyiwa matengenezo.`);
+        }
         
         if (!res.ok) {
           throw new Error(data.error || 'Utumaji ulikataliwa na gateway.');
@@ -1416,21 +1569,17 @@ export default function ContributionManager({
         // Update local and parent state guest details
         processingGuests = processingGuests.map(item => {
           if (item.id === g.id) {
-            if (sendingChannel === 'WhatsApp') {
-              const currentCount = typeof item.whatsappCount === 'number' ? item.whatsappCount : (isStatusSent(item.whatsappStatus) ? 1 : 0);
-              return { 
-                ...item, 
-                whatsappStatus: 'Imetumia' as const,
-                whatsappCount: currentCount + 1
-              };
-            } else {
-              const currentCount = typeof item.smsCount === 'number' ? item.smsCount : (isStatusSent(item.smsStatus) ? 1 : 0);
-              return { 
-                ...item, 
-                smsStatus: 'Imetumia' as const,
-                smsCount: currentCount + 1
-              };
-            }
+            const customFields = item.customFields || {};
+            const chan = sendingChannel.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'sms';
+            customFields.pledge_sent_channel = chan;
+            customFields.pledge_sent_lang = isEn ? 'en' : 'sw';
+            return {
+              ...item,
+              customFields,
+              pledgeSent: true,
+              pledgeSentChannel: chan,
+              pledgeSentLang: isEn ? 'en' : 'sw'
+            };
           }
           return item;
         });
@@ -1695,6 +1844,16 @@ export default function ContributionManager({
 
     const updated = guests.map(g => {
       if (g.id === guestId) {
+        const newCustomFields = { ...(g.customFields || {}) };
+        delete newCustomFields.pledge_sent_channel;
+        delete newCustomFields.pledge_sent_lang;
+        delete newCustomFields.reminder_sent_channel;
+        delete newCustomFields.reminder_sent_lang;
+        delete newCustomFields.thanks_sent_channel;
+        delete newCustomFields.thanks_sent_lang;
+        delete newCustomFields.std_sent_channel;
+        delete newCustomFields.std_sent_lang;
+
         return {
           ...g,
           pledgeAmount: 0,
@@ -1708,6 +1867,18 @@ export default function ContributionManager({
           checkedInTime: undefined,
           smsStatus: 'Sijatuma' as const,
           whatsappStatus: 'Sijatuma' as const,
+          pledgeSent: false,
+          pledgeSentChannel: undefined,
+          pledgeSentLang: undefined,
+          reminderSent: false,
+          reminderSentChannel: undefined,
+          reminderSentLang: undefined,
+          thanksSent: false,
+          thanksSentChannel: undefined,
+          thanksSentLang: undefined,
+          stdSentChannel: undefined,
+          stdSentLang: undefined,
+          customFields: newCustomFields,
         };
       }
       return g;
@@ -1736,20 +1907,44 @@ export default function ContributionManager({
     );
     if (!isConfirmed) return;
 
-    const updated = guests.map(g => ({
-      ...g,
-      pledgeAmount: 0,
-      paidAmount: 0,
-      pledgeStatus: 'No Pledge' as const,
-      payments: [],
-      rsvpStatus: 'Bado' as const,
-      rsvpGuestsCount: 1,
-      rsvpComment: '',
-      checkedIn: false,
-      checkedInTime: undefined,
-      smsStatus: 'Sijatuma' as const,
-      whatsappStatus: 'Sijatuma' as const,
-    }));
+    const updated = guests.map(g => {
+      const newCustomFields = { ...(g.customFields || {}) };
+      delete newCustomFields.pledge_sent_channel;
+      delete newCustomFields.pledge_sent_lang;
+      delete newCustomFields.reminder_sent_channel;
+      delete newCustomFields.reminder_sent_lang;
+      delete newCustomFields.thanks_sent_channel;
+      delete newCustomFields.thanks_sent_lang;
+      delete newCustomFields.std_sent_channel;
+      delete newCustomFields.std_sent_lang;
+
+      return {
+        ...g,
+        pledgeAmount: 0,
+        paidAmount: 0,
+        pledgeStatus: 'No Pledge' as const,
+        payments: [],
+        rsvpStatus: 'Bado' as const,
+        rsvpGuestsCount: 1,
+        rsvpComment: '',
+        checkedIn: false,
+        checkedInTime: undefined,
+        smsStatus: 'Sijatuma' as const,
+        whatsappStatus: 'Sijatuma' as const,
+        pledgeSent: false,
+        pledgeSentChannel: undefined,
+        pledgeSentLang: undefined,
+        reminderSent: false,
+        reminderSentChannel: undefined,
+        reminderSentLang: undefined,
+        thanksSent: false,
+        thanksSentChannel: undefined,
+        thanksSentLang: undefined,
+        stdSentChannel: undefined,
+        stdSentLang: undefined,
+        customFields: newCustomFields,
+      };
+    });
 
     onUpdateGuests(updated, `Amefuta na kurudisha kwenye hali ya awali (Reset) taarifa za wageni WOTE kwenye hili tukio`);
     setSendLogs([]);
@@ -2019,9 +2214,9 @@ export default function ContributionManager({
           pledgeText = isEn ? 'NOT PLEDGED YET' : 'BADO HAJAAHIDI';
         } else if (type === 'Reminder') {
           const bal = (g.pledgeAmount || 0) - (g.paidAmount || 0);
-          pledgeText = `SALIO: TZS ${bal.toLocaleString()}`;
+          pledgeText = isEn ? `BALANCE: TZS ${bal.toLocaleString()}` : `SALIO: TZS ${bal.toLocaleString()}`;
         } else {
-          pledgeText = `KIASI: TZS ${(g.pledgeAmount || 0).toLocaleString()}`;
+          pledgeText = isEn ? `AMOUNT: TZS ${(g.pledgeAmount || 0).toLocaleString()}` : `KIASI: TZS ${(g.pledgeAmount || 0).toLocaleString()}`;
         }
         const compatibleImageUrl = await generateContributionCardImage(event, cardTemplate, g, pledgeText, isEn);
         const res = await fetch('/api/send-sms', {
@@ -2033,6 +2228,7 @@ export default function ContributionManager({
             phone: g.phone,
             text: mainText,
             channel: channel, // Passes 'sms' or 'whatsapp' appropriately to server
+            lang: isEn ? 'en' : 'sw',
             templateName: type === 'Pledge' ? (metaTemplateName || 'kadi_mchango') : (type === 'Reminder' ? 'ukumbusho' : 'shukrani'),
             templateParams: (() => {
               let paymentString = '';
@@ -2127,11 +2323,20 @@ export default function ContributionManager({
                 return [g.name, event.name || 'Sherehe'];
               }
             })(),
-            imageUrl: compatibleImageUrl
+            imageUrl: compatibleImageUrl,
+            msgType: type === 'Pledge' ? 'pledge' : (type === 'Reminder' ? 'reminder' : 'thanks')
           })
         });
 
-        const data = await res.json();
+        const responseText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonErr) {
+          throw new Error(isEn 
+            ? `Server returned an invalid non-JSON response. It might be starting up or under maintenance.`
+            : `Mtoa huduma amerejesha jibu ambalo si JSON. Server inaweza kuwa inaanza au kufanyiwa matengenezo.`);
+        }
         if (!res.ok) {
           throw new Error(data.error || 'Utumaji ulishindikana kwenye gateway.');
         }
@@ -2153,21 +2358,24 @@ export default function ContributionManager({
 
         const updatedGuests = guests.map(item => {
           if (item.id === g.id) {
-            if (channel === 'whatsapp') {
-              const currentCount = typeof item.whatsappCount === 'number' ? item.whatsappCount : (isStatusSent(item.whatsappStatus) ? 1 : 0);
-              return {
-                ...item,
-                whatsappStatus: 'Imetumia' as const,
-                whatsappCount: currentCount + 1
-              };
-            } else {
-              const currentCount = typeof item.smsCount === 'number' ? item.smsCount : (isStatusSent(item.smsStatus) ? 1 : 0);
-              return {
-                ...item,
-                smsStatus: 'Imetumia' as const,
-                smsCount: currentCount + 1
-              };
+            const customFields = { ...(item.customFields || {}) };
+            const mType = type === 'Pledge' ? 'pledge' : (type === 'Reminder' ? 'reminder' : 'thanks');
+            
+            if (channel === 'sms') {
+              customFields[`${mType}_sent_sms`] = 'true';
+            } else if (channel === 'whatsapp') {
+              customFields[`${mType}_sent_whatsapp`] = 'true';
             }
+            
+            customFields[`${mType}_sent_channel`] = channel;
+            customFields[`${mType}_sent_lang`] = isEn ? 'en' : 'sw';
+            return {
+              ...item,
+              customFields,
+              [`${mType}Sent`]: true,
+              [`${mType}SentChannel`]: channel,
+              [`${mType}SentLang`]: isEn ? 'en' : 'sw'
+            };
           }
           return item;
         });
@@ -2211,13 +2419,34 @@ export default function ContributionManager({
       setMessageLogs(prev => [startLog, ...prev]);
       setSendLogs(prev => [`[✓ WhatsApp] Ujumbe umetumwa kwa ${g.name} (Manual)`, ...prev]);
 
+      // Fire off simulation/lightweight backend update call in background for manual WhatsApp
+      fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guestId: g.id,
+          phone: g.phone,
+          text: 'manual_whatsapp',
+          channel: 'whatsapp',
+          msgType: type === 'Pledge' ? 'pledge' : (type === 'Reminder' ? 'reminder' : 'thanks'),
+          lang: isEn ? 'en' : 'sw',
+          isSimulationOnly: true
+        })
+      }).catch(err => console.error("Manual pledge status backend sync error:", err));
+
       const updatedGuests = guests.map(item => {
         if (item.id === g.id) {
-          const currentCount = typeof item.whatsappCount === 'number' ? item.whatsappCount : (isStatusSent(item.whatsappStatus) ? 1 : 0);
+          const customFields = { ...(item.customFields || {}) };
+          const mType = type === 'Pledge' ? 'pledge' : (type === 'Reminder' ? 'reminder' : 'thanks');
+          customFields[`${mType}_sent_whatsapp`] = 'true';
+          customFields[`${mType}_sent_channel`] = 'whatsapp';
+          customFields[`${mType}_sent_lang`] = isEn ? 'en' : 'sw';
           return {
             ...item,
-            whatsappStatus: 'Imetumia' as const,
-            whatsappCount: currentCount + 1
+            customFields,
+            [`${mType}Sent`]: true,
+            [`${mType}SentChannel`]: 'whatsapp',
+            [`${mType}SentLang`]: isEn ? 'en' : 'sw'
           };
         }
         return item;
@@ -2856,7 +3085,7 @@ export default function ContributionManager({
               );
             }
           }}
-          className="px-2.5 py-1.5 rounded-lg border border-amber-550 bg-amber-500/10 hover:border-amber-500 hover:bg-amber-500/20 text-amber-400 font-mono text-[9.5px] uppercase font-black transition flex items-center gap-1.5 cursor-pointer"
+          className="px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:border-amber-500 hover:bg-amber-500/20 text-amber-400 font-mono text-[9.5px] uppercase font-black transition flex items-center gap-1.5 cursor-pointer"
           title={isEn ? "Sync / Edit SMS credits" : "Sawazisha / Hariri mikopo ya SMS"}
         >
           <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
@@ -3011,7 +3240,7 @@ export default function ContributionManager({
                   <span className="font-bold text-white">{metrics.pledgedCount}</span>
                 </div>
                 <div className="flex items-center justify-between text-slate-400">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-550"></span> {isEn ? 'Partially Paid' : 'Lipa Nusu'}</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> {isEn ? 'Partially Paid' : 'Lipa Nusu'}</span>
                   <span className="font-bold text-white">{metrics.partiallyPaidCount}</span>
                 </div>
                 <div className="flex items-center justify-between text-slate-400">
@@ -3377,8 +3606,14 @@ export default function ContributionManager({
                         <tr key={g.id} className="hover:bg-white/5 transition-all">
                           <td className="py-3.5 px-4">
                             <div className="font-extrabold text-white uppercase">{g.name}</div>
-                            <div className="text-[10px] text-amber-500 font-mono mt-0.5 font-bold">
-                              P-{g.id.substring(0, 6).toUpperCase()}
+                            <div className="text-[10px] text-amber-500 font-mono mt-0.5 font-bold flex items-center gap-1.5 flex-wrap">
+                              <span>P-{g.id.substring(0, 6).toUpperCase()}</span>
+                              {renderDeliveryIndicator(g) && (
+                                <>
+                                  <span className="w-1 h-1 rounded-full bg-white/20"></span>
+                                  {renderDeliveryIndicator(g)}
+                                </>
+                              )}
                             </div>
                           </td>
                           <td className="py-3.5 px-4 font-mono text-slate-400">{g.phone || (isEn ? 'None' : 'Hakuna')}</td>
@@ -3880,7 +4115,7 @@ export default function ContributionManager({
                     <button
                       type="button"
                       onClick={handleResetTemplateText}
-                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
+                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-2 py-1 rounded-lg transition"
                       title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
                     >
                       Reset
@@ -4112,7 +4347,7 @@ export default function ContributionManager({
                     <button
                       type="button"
                       onClick={handleResetTemplateText}
-                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
+                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-2 py-1 rounded-lg transition"
                       title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
                     >
                       Reset
@@ -4336,7 +4571,7 @@ export default function ContributionManager({
                     <button
                       type="button"
                       onClick={handleResetTemplateText}
-                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-550/10 hover:bg-red-550/20 border border-red-550/20 px-2 py-1 rounded-lg transition"
+                      className="text-[9.5px] font-mono font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-2 py-1 rounded-lg transition"
                       title={isEn ? "Reset this template text to original" : "Rudisha kiolezo kwenye asili (Reset)"}
                     >
                       Reset

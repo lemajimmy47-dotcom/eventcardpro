@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, RefreshCw } from 'lucide-react';
+import { Settings, Save, RefreshCw, Search } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function SMSGatewayConfig() {
@@ -32,6 +32,44 @@ export default function SMSGatewayConfig() {
   const [isTesting, setIsTesting] = useState(false);
   const [isTriggeringMeta, setIsTriggeringMeta] = useState(false);
   const [metaTriggerLogs, setMetaTriggerLogs] = useState<string[]>([]);
+  const [isFetchingIds, setIsFetchingIds] = useState(false);
+  const [hasFetchedIds, setHasFetchedIds] = useState(false);
+  const [availableIds, setAvailableIds] = useState<{ id: string, sender_id: string, status: string }[]>([]);
+
+  useEffect(() => {
+    setAvailableIds([]);
+    setHasFetchedIds(false);
+  }, [gatewaySettings.provider]);
+
+  const fetchEhubIds = async () => {
+    if (!gatewaySettings.apiKey || !gatewaySettings.apiSecret) {
+      alert(isEn ? "Please enter API Key and Secret first" : "Tafadhali weka API Key na Secret kwanza");
+      return;
+    }
+    setIsFetchingIds(true);
+    setHasFetchedIds(true);
+    try {
+      const res = await fetch('/api/fetch-ehub-sender-ids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: gatewaySettings })
+      });
+      const data = await res.json();
+      
+      if (data.success && (Array.isArray(data.data) || (data.data && Array.isArray(data.data.items)))) {
+        const ids = Array.isArray(data.data) ? data.data : data.data.items;
+        setAvailableIds(ids);
+      } else {
+        const errorMsg = data.message || data.error || (isEn ? "Unknown error" : "Hitilafu isiyojulikana");
+        alert(isEn ? "Imeshindwa: " + errorMsg : "Imeshindwa: " + errorMsg);
+        setAvailableIds([]);
+      }
+    } catch (err) {
+      alert(isEn ? "Connection error" : "Hitilafu ya mtandao");
+    } finally {
+      setIsFetchingIds(false);
+    }
+  };
 
   const fetchBalance = () => {
     fetch('/api/sms-balance')
@@ -282,6 +320,8 @@ export default function SMSGatewayConfig() {
               let defaultUrl = '';
               if (val === 'meseji') {
                 defaultUrl = 'https://meseji.co.tz/api/v1/sms/send';
+              } else if (val === 'ehub') {
+                defaultUrl = 'https://sms.ehub.co.tz/api/v1/sms/send';
               } else if (val === 'beem') {
                 defaultUrl = 'https://api.beem.africa/v1/send';
               } else if (val === 'nextsms') {
@@ -296,6 +336,7 @@ export default function SMSGatewayConfig() {
             className="w-full bg-[#050b18] border border-white/10 rounded-xl px-4 py-2 text-white focus:ring-2 focus:ring-emerald-500/50 transition-all font-semibold text-xs cursor-pointer"
           >
             <option value="simulation">Simulated Gateway (Simulation)</option>
+            <option value="ehub">eHub SMS API (Secure)</option>
             <option value="meseji">Meseji API (Tanzania)</option>
             <option value="beem">Beem Africa (Tanzania)</option>
             <option value="notifyAfrica">Notify Africa</option>
@@ -312,12 +353,72 @@ export default function SMSGatewayConfig() {
               </label>
               <input 
                 type="text" 
-                maxLength={11}
-                placeholder="Ex. HARUSI"
+                maxLength={gatewaySettings.provider === 'ehub' ? 40 : 11}
+                placeholder={gatewaySettings.provider === 'ehub' ? "UUID ya eHub (e.g. 0042...)" : "Ex. HARUSI"}
                 value={gatewaySettings.senderId}
-                onChange={(e) => setGatewaySettings({ ...gatewaySettings, senderId: e.target.value.toUpperCase().trim() })}
-                className="w-full bg-[#050b18] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 uppercase font-mono tracking-wider transition-all"
+                onChange={(e) => {
+                  const val = gatewaySettings.provider === 'ehub' ? e.target.value.trim() : e.target.value.toUpperCase().trim();
+                  setGatewaySettings({ ...gatewaySettings, senderId: val });
+                }}
+                className={`w-full bg-[#050b18] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${gatewaySettings.provider === 'ehub' ? '' : 'uppercase font-mono tracking-wider'} transition-all`}
               />
+              {gatewaySettings.provider === 'ehub' && (
+                <p className="text-[10px] text-emerald-400 mt-1 font-medium leading-relaxed">
+                  {isEn 
+                    ? "⚠️ eHub requires the SENDER ID UUID (e.g. 00420892-...), NOT the name. Click 'Fetch' below to find yours." 
+                    : "⚠️ eHub inahitaji 'UUID' ya Sender ID (mfano: 00420892-...), SIO jina la maneno. Bonyeza 'Tafuta' hapo chini ili kuzipata kiurahisi."}
+                </p>
+              )}
+              {gatewaySettings.provider === 'ehub' && (
+                <div className="mt-2 space-y-2">
+                  <button
+                    onClick={fetchEhubIds}
+                    disabled={isFetchingIds || !gatewaySettings.apiKey || !gatewaySettings.apiSecret}
+                    className="text-[10px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isFetchingIds ? (
+                      <span className="animate-spin text-lg">↻</span>
+                    ) : (
+                      <Search size={12} />
+                    )}
+                    {isEn ? "Fetch Sender IDs (Find UUIDs)" : "Tafuta Sender IDs (Pata UUIDs)"}
+                  </button>
+
+                  {availableIds.length > 0 ? (
+                    <div className="bg-black/40 border border-white/5 rounded-lg p-2 space-y-2 max-h-40 overflow-y-auto">
+                      {availableIds.map((item) => (
+                          <div 
+                            className="flex flex-col border-b border-white/5 pb-2 last:border-0 last:pb-0 cursor-pointer hover:bg-white/5 p-1 rounded transition-colors"
+                            onClick={() => {
+                              setGatewaySettings({ ...gatewaySettings, senderId: item.id });
+                              setAvailableIds([]);
+                              setHasFetchedIds(false);
+                            }}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-bold text-white">{item.sender_id}</span>
+                              <span className={`text-[8px] px-1.5 py-0.5 rounded ${item.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                                {item.status}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <code className="text-[9px] text-slate-400 break-all bg-white/5 px-1 rounded flex-1">{item.id}</code>
+                              <span className="text-[9px] text-emerald-500 font-medium">
+                                {isEn ? "Select" : "Chagua"}
+                              </span>
+                            </div>
+                          </div>
+                      ))}
+                    </div>
+                  ) : (
+                    isFetchingIds === false && hasFetchedIds && availableIds.length === 0 && (
+                      <p className="text-[9px] text-slate-500 italic">
+                        {isEn ? "No IDs found. Check your API keys." : "Hakuna ID zilizopatikana. Angalia API Keys zako."}
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1 mt-3">
@@ -343,7 +444,7 @@ export default function SMSGatewayConfig() {
               )}
             </div>
 
-            {(gatewaySettings.provider === 'beem' || gatewaySettings.provider === 'nextsms') && (
+            {(gatewaySettings.provider === 'beem' || gatewaySettings.provider === 'nextsms' || gatewaySettings.provider === 'ehub') && (
               <div className="space-y-1 mt-3">
                 <label className="font-bold text-slate-300 block text-xs">
                   {isEn ? "API Secret Key" : "Ufunguo wa Siri wa API (API Secret)"}

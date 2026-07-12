@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Eye, RefreshCw, CheckCircle, MessageCircle, AlertCircle, PlayCircle, ArrowRight, X, Clipboard, Check, ExternalLink, Settings, Key, HelpCircle } from 'lucide-react';
+import { Send, RefreshCw, CheckCircle, MessageCircle, AlertCircle, PlayCircle, ArrowRight, X, Clipboard, Check, ExternalLink } from 'lucide-react';
 import { EventDetails, Guest, TemplateSettings } from '../types';
 import { drawCardToCanvas, generateGuestCardImage } from '../utils/canvasHelper';
 import { safeLocalStorage } from '../utils/storage';
@@ -533,7 +533,13 @@ Thank you very much and God bless you!`;
     try {
       const res = await fetch('/api/queue/jobs');
       if (res.ok) {
-        const jobs = await res.json();
+        let jobs;
+        try {
+          jobs = await res.json();
+        } catch (parseErr) {
+          console.warn("Queue jobs endpoint returned non-JSON:", parseErr);
+          return; // Ignore if not JSON (e.g. 502 Bad Gateway)
+        }
         setQueueJobs(jobs);
         
         // Find if there is an active running/pending job
@@ -769,6 +775,19 @@ Karibu sana!`);
       : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
     const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
 
+    const translatePeriod = (p: string | null | undefined, lang: string) => {
+      if (!p) return lang === 'en' ? "Afternoon" : "Mchana";
+      if (lang === 'en') {
+        if (p === 'Asubuhi') return 'Morning';
+        if (p === 'Mchana') return 'Afternoon';
+        if (p === 'Jioni') return 'Evening';
+        if (p === 'Usiku') return 'Night';
+      }
+      return p;
+    };
+    const formattedPeriod = translatePeriod(event.period, language);
+    const isEn = language === 'en';
+
     const replacements: { [key: string]: string } = {
       '{mgeni}': g.name,
       '{name}': g.name,
@@ -778,38 +797,38 @@ Karibu sana!`);
       '{guestName}': g.name,
       '{jina_la_mgeni}': g.name,
       '(jina_la_mgeni)': g.name,
-      '{mwenyeji}': event.hostName || "[Mwenyeji]",
-      '{hostName}': event.hostName || "[Mwenyeji]",
-      '{host_name}': event.hostName || "[Mwenyeji]",
-      '{{2}}': event.hostName || "[Mwenyeji]",
-      '{2}': event.hostName || "[Mwenyeji]",
-      '{{host_name}}': event.hostName || "[Mwenyeji]",
-      '{sherehe}': event.name || "[Sherehe]",
-      '{event_name}': event.name || "[Sherehe]",
-      '{eventName}': event.name || "[Sherehe]",
-      '{{3}}': event.name || "[Sherehe]",
-      '{3}': event.name || "[Sherehe]",
-      '{{event_name}}': event.name || "[Sherehe]",
+      '{mwenyeji}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+      '{hostName}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+      '{host_name}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+      '{{2}}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+      '{2}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+      '{{host_name}}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+      '{sherehe}': event.name || (isEn ? "Our Event" : "Sherehe"),
+      '{event_name}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+      '{eventName}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+      '{{3}}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+      '{3}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+      '{{event_name}}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
       '{tarehe}': event.date || "26/11/2026",
       '{date}': event.date || "26/11/2026",
       '{eventDate}': event.date || "26/11/2026",
       '{{4}}': event.date || "26/11/2026",
       '{4}': event.date || "26/11/2026",
       '{{date}}': event.date || "26/11/2026",
-      '{muda}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-      '{time}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-      '{eventTime}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-      '{{5}}': event.eventHallName || "[Ukumbi]",
-      '{5}': event.eventHallName || "[Ukumbi]",
-      '{{venue}}': event.eventHallName || "[Ukumbi]",
-      '{ukumbi}': event.eventHallName || "[Ukumbi]",
-      '{venue}': event.eventHallName || "[Ukumbi]",
-      '{eventHall}': event.eventHallName || "[Ukumbi]",
-      '{{6}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-      '{6}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-      '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-      '{vazi}': event.dressCode || "[Vazi]",
-      '{dressCode}': event.dressCode || "[Dress Code]",
+      '{muda}': `${event.time || "12:00"} ${formattedPeriod}`,
+      '{time}': `${event.time || "12:00"} ${formattedPeriod}`,
+      '{eventTime}': `${event.time || "12:00"} ${formattedPeriod}`,
+      '{{5}}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+      '{5}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+      '{{venue}}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+      '{ukumbi}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+      '{venue}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+      '{eventHall}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+      '{{6}}': `${event.time || "12:00"} ${formattedPeriod}`,
+      '{6}': `${event.time || "12:00"} ${formattedPeriod}`,
+      '{{time}}': `${event.time || "12:00"} ${formattedPeriod}`,
+      '{vazi}': event.dressCode || (isEn ? "Smart Casual" : "Vazi la Sherehe"),
+      '{dressCode}': event.dressCode || (isEn ? "Smart Casual" : "Vazi la Sherehe"),
       '{Link}': (messageType === 'thank-you' || (isSms && !forceAppendLink)) ? "" : appUrl,
       '{kiungo}': (messageType === 'thank-you' || (isSms && !forceAppendLink)) ? "" : appUrl,
       '{inviteUrl}': (messageType === 'thank-you' || (isSms && !forceAppendLink)) ? "" : appUrl,
@@ -938,6 +957,19 @@ Karibu sana!`);
         const appUrl = `${currentOrigin}/?invite=${target.code || target.id}&eventId=${event.id}&lang=${language}`;
         const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
 
+        const translatePeriod = (p: string | null | undefined, lang: string) => {
+          if (!p) return lang === 'en' ? "Afternoon" : "Mchana";
+          if (lang === 'en') {
+            if (p === 'Asubuhi') return 'Morning';
+            if (p === 'Mchana') return 'Afternoon';
+            if (p === 'Jioni') return 'Evening';
+            if (p === 'Usiku') return 'Night';
+          }
+          return p;
+        };
+        const formattedPeriod = translatePeriod(event.period, language);
+        const isEn = language === 'en';
+
         const replacements: { [key: string]: string } = {
           '{mgeni}': target.name,
           '{name}': target.name,
@@ -947,38 +979,38 @@ Karibu sana!`);
           '{guestName}': target.name,
           '{jina_la_mgeni}': target.name,
           '(jina_la_mgeni)': target.name,
-          '{mwenyeji}': event.hostName || "[Mwenyeji]",
-          '{hostName}': event.hostName || "[Mwenyeji]",
-          '{host_name}': event.hostName || "[Mwenyeji]",
-          '{{2}}': event.hostName || "[Mwenyeji]",
-          '{2}': event.hostName || "[Mwenyeji]",
-          '{{host_name}}': event.hostName || "[Mwenyeji]",
-          '{sherehe}': event.name || "[Sherehe]",
-          '{event_name}': event.name || "[Sherehe]",
-          '{eventName}': event.name || "[Sherehe]",
-          '{{3}}': event.name || "[Sherehe]",
-          '{3}': event.name || "[Sherehe]",
-          '{{event_name}}': event.name || "[Sherehe]",
+          '{mwenyeji}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+          '{hostName}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+          '{host_name}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+          '{{2}}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+          '{2}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+          '{{host_name}}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+          '{sherehe}': event.name || (isEn ? "Our Event" : "Sherehe"),
+          '{event_name}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+          '{eventName}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+          '{{3}}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+          '{3}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+          '{{event_name}}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
           '{tarehe}': event.date || "26/11/2026",
           '{date}': event.date || "26/11/2026",
           '{eventDate}': event.date || "26/11/2026",
           '{{4}}': event.date || "26/11/2026",
           '{4}': event.date || "26/11/2026",
           '{{date}}': event.date || "26/11/2026",
-          '{muda}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-          '{time}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-          '{eventTime}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-          '{{5}}': event.eventHallName || "[Ukumbi]",
-          '{5}': event.eventHallName || "[Ukumbi]",
-          '{{venue}}': event.eventHallName || "[Ukumbi]",
-          '{ukumbi}': event.eventHallName || "[Ukumbi]",
-          '{venue}': event.eventHallName || "[Ukumbi]",
-          '{eventHall}': event.eventHallName || "[Ukumbi]",
-          '{{6}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-          '{6}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-          '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-          '{vazi}': event.dressCode || "[Vazi]",
-          '{dressCode}': event.dressCode || "[Dress Code]",
+          '{muda}': `${event.time || "12:00"} ${formattedPeriod}`,
+          '{time}': `${event.time || "12:00"} ${formattedPeriod}`,
+          '{eventTime}': `${event.time || "12:00"} ${formattedPeriod}`,
+          '{{5}}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+          '{5}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+          '{{venue}}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+          '{ukumbi}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+          '{venue}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+          '{eventHall}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+          '{{6}}': `${event.time || "12:00"} ${formattedPeriod}`,
+          '{6}': `${event.time || "12:00"} ${formattedPeriod}`,
+          '{{time}}': `${event.time || "12:00"} ${formattedPeriod}`,
+          '{vazi}': event.dressCode || (isEn ? "Smart Casual" : "Vazi la Sherehe"),
+          '{dressCode}': event.dressCode || (isEn ? "Smart Casual" : "Vazi la Sherehe"),
           '{Link}': "",
           '{kiungo}': "",
           '{inviteUrl}': "",
@@ -1047,7 +1079,8 @@ Karibu sana!`);
           scheduleTime: formattedScheduleTime,
           templateParams,
           templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
-          imageUrl: compatibleImageUrl
+          imageUrl: compatibleImageUrl,
+          lang: language
         })
       });
       
@@ -1085,7 +1118,9 @@ Karibu sana!`);
             smsStatus: actualChannel === 'sms' ? 'Imetumia' as const : g.smsStatus,
             whatsappStatus: actualChannel === 'whatsapp' ? 'Imetumia' as const : g.whatsappStatus,
             smsCount: actualChannel === 'sms' ? currentSmsCount + 1 : currentSmsCount,
-            whatsappCount: actualChannel === 'whatsapp' ? currentWhatsappCount + 1 : currentWhatsappCount
+            whatsappCount: actualChannel === 'whatsapp' ? currentWhatsappCount + 1 : currentWhatsappCount,
+            lastSentChannel: actualChannel,
+            lastSentLang: language
           };
         }
         return g;
@@ -1243,6 +1278,19 @@ Karibu sana!`);
         : (language === 'en' ? invitationTemplateEn : invitationTemplateSw);
       const contacts = [event.contact1, event.contact2, event.contact3].filter(Boolean).join('\n');
 
+      const translatePeriod = (p: string | null | undefined, lang: string) => {
+        if (!p) return lang === 'en' ? "Afternoon" : "Mchana";
+        if (lang === 'en') {
+          if (p === 'Asubuhi') return 'Morning';
+          if (p === 'Mchana') return 'Afternoon';
+          if (p === 'Jioni') return 'Evening';
+          if (p === 'Usiku') return 'Night';
+        }
+        return p;
+      };
+      const formattedPeriod = translatePeriod(event.period, language);
+      const isEn = language === 'en';
+
       const replacements: { [key: string]: string } = {
         '{mgeni}': guest.name,
         '{name}': guest.name,
@@ -1252,38 +1300,38 @@ Karibu sana!`);
         '{guestName}': guest.name,
         '{jina_la_mgeni}': guest.name,
         '(jina_la_mgeni)': guest.name,
-        '{mwenyeji}': event.hostName || "[Mwenyeji]",
-        '{hostName}': event.hostName || "[Mwenyeji]",
-        '{host_name}': event.hostName || "[Mwenyeji]",
-        '{{2}}': event.hostName || "[Mwenyeji]",
-        '{2}': event.hostName || "[Mwenyeji]",
-        '{{host_name}}': event.hostName || "[Mwenyeji]",
-        '{sherehe}': event.name || "[Sherehe]",
-        '{event_name}': event.name || "[Sherehe]",
-        '{eventName}': event.name || "[Sherehe]",
-        '{{3}}': event.name || "[Sherehe]",
-        '{3}': event.name || "[Sherehe]",
-        '{{event_name}}': event.name || "[Sherehe]",
+        '{mwenyeji}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+        '{hostName}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+        '{host_name}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+        '{{2}}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+        '{2}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+        '{{host_name}}': event.hostName || (isEn ? "Our Family" : "Familia yetu"),
+        '{sherehe}': event.name || (isEn ? "Our Event" : "Sherehe"),
+        '{event_name}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+        '{eventName}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+        '{{3}}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+        '{3}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
+        '{{event_name}}': event.name || (isEn ? "Our Event" : "Sherehe yetu"),
         '{tarehe}': event.date || "26/11/2026",
         '{date}': event.date || "26/11/2026",
         '{eventDate}': event.date || "26/11/2026",
         '{{4}}': event.date || "26/11/2026",
         '{4}': event.date || "26/11/2026",
         '{{date}}': event.date || "26/11/2026",
-        '{muda}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-        '{time}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-        '{eventTime}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-        '{{5}}': event.eventHallName || "[Ukumbi]",
-        '{5}': event.eventHallName || "[Ukumbi]",
-        '{{venue}}': event.eventHallName || "[Ukumbi]",
-        '{ukumbi}': event.eventHallName || "[Ukumbi]",
-        '{venue}': event.eventHallName || "[Ukumbi]",
-        '{eventHall}': event.eventHallName || "[Ukumbi]",
-        '{{6}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-        '{6}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-        '{{time}}': `${event.time || "12:00"} ${event.period || "Mchana"}`,
-        '{vazi}': event.dressCode || "[Vazi]",
-        '{dressCode}': event.dressCode || "[Dress Code]",
+        '{muda}': `${event.time || "12:00"} ${formattedPeriod}`,
+        '{time}': `${event.time || "12:00"} ${formattedPeriod}`,
+        '{eventTime}': `${event.time || "12:00"} ${formattedPeriod}`,
+        '{{5}}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+        '{5}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+        '{{venue}}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+        '{ukumbi}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+        '{venue}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+        '{eventHall}': event.eventHallName || (isEn ? "Event Hall" : "Ukumbi wa Sherehe"),
+        '{{6}}': `${event.time || "12:00"} ${formattedPeriod}`,
+        '{6}': `${event.time || "12:00"} ${formattedPeriod}`,
+        '{{time}}': `${event.time || "12:00"} ${formattedPeriod}`,
+        '{vazi}': event.dressCode || (isEn ? "Smart Casual" : "Vazi la Sherehe"),
+        '{dressCode}': event.dressCode || (isEn ? "Smart Casual" : "Vazi la Sherehe"),
         '{Link}': "",
         '{kiungo}': "",
         '{inviteUrl}': "",
@@ -1330,7 +1378,8 @@ Karibu sana!`);
         text: mainText,
         templateParams: templateParams,
         templateName: metaTemplateName || (messageType === 'thank-you' ? 'asante_kushiriki' : (messageType === 'reminder' ? 'ukumbusho' : 'mwaliko_wa_sherehe')),
-        imageUrl: compatibleImageUrl
+        imageUrl: compatibleImageUrl,
+        lang: language
       });
 
       preparedCount++;
@@ -1383,6 +1432,65 @@ Karibu sana!`);
     onUpdateGuests(reset);
     setSendLogs([]);
     setSendingProgress(0);
+  };
+
+  const renderDeliveryIndicator = (g: Guest) => {
+    // Collect what has been successfully delivered
+    const deliveries: { channel: 'whatsapp' | 'sms'; lang: string }[] = [];
+
+    // If we have direct records of lastSentChannel, use them
+    if (g.lastSentChannel) {
+      deliveries.push({
+        channel: g.lastSentChannel as 'whatsapp' | 'sms',
+        lang: g.lastSentLang || language || 'sw'
+      });
+    } else {
+      // Fallback detection for existing data
+      if (g.whatsappStatus === 'Imetumia') {
+        deliveries.push({ channel: 'whatsapp', lang: language || 'sw' });
+      }
+      if (g.smsStatus === 'Imetumia') {
+        deliveries.push({ channel: 'sms', lang: language || 'sw' });
+      }
+    }
+
+    if (deliveries.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-1.5 mt-1.5">
+        {deliveries.map((del, i) => {
+          const isWa = del.channel === 'whatsapp';
+          const langDisplay = String(del.lang).toUpperCase() === 'EN' ? 'EN' : 'SW';
+          return (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold border ${
+                isWa 
+                  ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' 
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              }`}
+              title={isWa ? `Iliyofanikiwa kupitia WhatsApp (${langDisplay})` : `Iliyofanikiwa kupitia SMS (${langDisplay})`}
+            >
+              {isWa ? (
+                // WhatsApp Icon SVG (compact and matching lucide stroke size)
+                <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+                  <path d="M12.003 2c-5.522 0-9.997 4.477-9.997 9.997 0 1.764.459 3.483 1.332 5.017L2 22l5.127-1.345a9.96 9.96 0 0 0 4.877 1.28c5.522 0 9.997-4.477 9.997-9.997 0-5.52-4.475-9.938-9.998-9.938zm5.952 14.175c-.26.732-1.517 1.345-2.094 1.41-.577.065-1.127.276-3.615-.756-3.136-1.301-5.127-4.477-5.29-4.688-.163-.211-1.301-1.731-1.301-3.308 0-1.577.829-2.35 1.122-2.659.293-.309.65-.39.862-.39s.423.016.602.024c.187.008.439-.073.691.537.26.634.894 2.18.976 2.342.081.163.138.35.024.577-.114.228-.171.366-.341.569-.171.203-.358.455-.512.61-.171.171-.35.358-.154.699.195.341.87 1.431 1.862 2.31 1.277 1.127 2.35 1.477 2.684 1.639.333.163.529.138.724-.089.195-.228.837-.976 1.065-1.309.228-.333.455-.276.764-.163.309.114 1.959.927 2.293 1.097s.561.26.642.407c.082.146.082.846-.178 1.578z" />
+                </svg>
+              ) : (
+                // SMS Mail/Message Icon SVG
+                <svg className="w-2.5 h-2.5 stroke-current fill-none" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+              )}
+              <span className="capitalize">{del.channel}</span>
+              <span className="text-slate-500 font-normal">|</span>
+              <span className="text-[8px] font-bold tracking-wider">{langDisplay}</span>
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -1915,6 +2023,7 @@ Karibu sana!`);
                     <tr key={guest.id} className="hover:bg-white/5 transition border-b border-white/5">
                       <td className="px-5 py-4 font-bold text-white">
                         <div>{guest.name}</div>
+                        {renderDeliveryIndicator(guest)}
                       </td>
                       <td className="px-5 py-4 font-mono text-slate-300">{guest.phone}</td>
                       
@@ -2393,7 +2502,7 @@ Karibu sana!`);
                       onClick={() => handleConfirmSent(activeSendTarget.guest.id, 'sms')}
                       className={`flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-[0_0_15px_rgba(59,130,246,0.30)] text-xs font-extrabold text-white transition cursor-pointer text-center ${isDispatching ? 'opacity-70 grayscale' : ''}`}
                     >
-                      <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Mark Sent ✓' : 'Kamilisha (Mark Sent) ✓')}</span>
+                      <span>{isDispatching ? (isEn ? 'Sending...' : 'Inatuma...') : (isEn ? 'Send via SMS' : 'Tuma kwa SMS')}</span>
                     </button>
                   )}
                 </div>

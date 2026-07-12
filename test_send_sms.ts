@@ -17,7 +17,7 @@ async function run() {
       eventId: guest.eventId,
       phone: guest.phone,
       text: "Test msg",
-      channel: 'whatsapp'
+      channel: 'sms'
     })
   });
   

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Upload, Paperclip, MessageSquare, Check, Settings, AlertCircle, Users, CheckCircle2, Sparkles, Globe, ArrowRight, Heart, Eye, X, Download } from 'lucide-react';
+import { Send, Upload, Paperclip, MessageSquare, Check, AlertCircle, Users, CheckCircle2, Sparkles, Globe, Heart, Eye, X } from 'lucide-react';
 import { SaveTheDate, Guest, EventDetails } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { safeLocalStorage } from '../utils/storage';
@@ -12,9 +12,10 @@ interface Props {
   onSelectEvent: (eventId: string) => void;
   guests: Guest[];
   onUpdateEvent: (updated: EventDetails) => void;
+  onUpdateGuests?: (updatedGuests: Guest[], actionDesc?: string, skipServerSave?: boolean) => void;
 }
 
-export default function SaveTheDateManager({ eventDetails, eventsList, onSelectEvent, guests, onUpdateEvent }: Props) {
+export default function SaveTheDateManager({ eventDetails, eventsList, onSelectEvent, guests, onUpdateEvent, onUpdateGuests }: Props) {
   const [stds, setStds] = useState<SaveTheDate[]>([]);
   const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState<'sms' | 'whatsapp'>('sms');
@@ -141,13 +142,132 @@ Karibu sana!`);
     }
   }, [eventDetails?.id]);
 
-  const markGuestAsSent = (guestId: string) => {
+  const markGuestAsSent = (guestId: string, sentChannel: 'sms' | 'whatsapp' = 'sms') => {
     setSentGuestsMap(prev => {
       const next = { ...prev, [guestId]: true };
       const key = eventDetails?.id ? `kadi_std_sent_map_${eventDetails.id}` : 'kadi_std_sent_map';
       safeLocalStorage.setItem(key, JSON.stringify(next));
       return next;
     });
+
+    // Fire off simulation/lightweight backend update call in background
+    const targetGuest = guests.find(item => item.id === guestId);
+    if (targetGuest) {
+      fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guestId: guestId,
+          phone: targetGuest.phone,
+          text: 'manual_whatsapp',
+          channel: sentChannel,
+          msgType: 'save_the_date',
+          lang: language,
+          isSimulationOnly: true
+        })
+      }).catch(err => console.error("Manual STD status backend sync error:", err));
+    }
+
+    if (onUpdateGuests) {
+      const updated = guests.map(item => {
+        if (item.id === guestId) {
+          const customFields = item.customFields || {};
+          
+          if (sentChannel === 'sms') {
+            customFields.std_sent_sms = 'true';
+          } else if (sentChannel === 'whatsapp') {
+            customFields.std_sent_whatsapp = 'true';
+          }
+
+          customFields.std_sent_channel = sentChannel;
+          customFields.std_sent_lang = language || 'sw';
+          
+          return {
+            ...item,
+            customFields,
+            stdSent: true,
+            stdSentChannel: sentChannel,
+            stdSentLang: language || 'sw'
+          };
+        }
+        return item;
+      });
+      onUpdateGuests(updated, `Ametuma Save The Date kwa ${guestId}`);
+    }
+  };
+
+  const renderDeliveryIndicator = (g: Guest) => {
+    // Collect what has been successfully delivered specifically for Save the Date
+    const deliveries: { channel: 'whatsapp' | 'sms'; lang: string }[] = [];
+
+    const lang = g.customFields?.std_sent_lang || g.stdSentLang || language || 'sw';
+
+    const hasSms = g.customFields?.std_sent_sms === 'true' || 
+                   (g.customFields?.std_sent_channel === 'sms' && g.customFields?.std_sent_whatsapp !== 'true') ||
+                   (g.stdSentChannel === 'sms' && g.customFields?.std_sent_whatsapp !== 'true') ||
+                   (sentGuestsMap[g.id] && g.customFields?.std_sent_whatsapp !== 'true' && g.stdSentChannel !== 'whatsapp' && g.lastSentChannel !== 'whatsapp');
+                   
+    const hasWa = g.customFields?.std_sent_whatsapp === 'true' || 
+                  (g.customFields?.std_sent_channel === 'whatsapp' && g.customFields?.std_sent_sms !== 'true') ||
+                  (g.stdSentChannel === 'whatsapp' && g.customFields?.std_sent_sms !== 'true');
+
+    if (hasSms) {
+      deliveries.push({ channel: 'sms', lang });
+    }
+    if (hasWa) {
+      deliveries.push({ channel: 'whatsapp', lang });
+    }
+
+    // Fallback if neither explicitly true but there's legacy state
+    if (deliveries.length === 0) {
+      if (g.customFields?.std_sent_channel) {
+        deliveries.push({ channel: g.customFields.std_sent_channel as 'whatsapp' | 'sms', lang });
+      } else if (g.stdSentChannel) {
+        deliveries.push({ channel: g.stdSentChannel as 'whatsapp' | 'sms', lang });
+      } else if (g.stdSent) {
+        deliveries.push({ channel: (g.lastSentChannel || 'sms') as 'whatsapp' | 'sms', lang });
+      } else if (sentGuestsMap[g.id]) {
+        deliveries.push({ channel: 'sms', lang });
+      }
+    }
+
+    if (deliveries.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-1 items-center">
+        {deliveries.map((del, i) => {
+          const isWa = del.channel === 'whatsapp';
+          const langDisplay = String(del.lang).toUpperCase() === 'EN' ? 'EN' : 'SW';
+          return (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-extrabold border ${
+                isWa 
+                  ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' 
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              }`}
+              title={isWa ? `Iliyofanikiwa kupitia WhatsApp (${langDisplay})` : `Iliyofanikiwa kupitia SMS (${langDisplay})`}
+            >
+              {isWa ? (
+                // WhatsApp Icon SVG (compact and matching lucide stroke size)
+                <svg className="w-2 h-2 fill-current" viewBox="0 0 24 24">
+                  <path d="M12.003 2c-5.522 0-9.997 4.477-9.997 9.997 0 1.764.459 3.483 1.332 5.017L2 22l5.127-1.345a9.96 9.96 0 0 0 4.877 1.28c5.522 0 9.997-4.477 9.997-9.997 0-5.52-4.475-9.938-9.998-9.938zm5.952 14.175c-.26.732-1.517 1.345-2.094 1.41-.577.065-1.127.276-3.615-.756-3.136-1.301-5.127-4.477-5.29-4.688-.163-.211-1.301-1.731-1.301-3.308 0-1.577.829-2.35 1.122-2.659.293-.309.65-.39.862-.39s.423.016.602.024c.187.008.439-.073.691.537.26.634.894 2.18.976 2.342.081.163.138.35.024.577-.114.228-.171.366-.341.569-.171.203-.358.455-.512.61-.171.171-.35.358-.154.699.195.341.87 1.431 1.862 2.31 1.277 1.127 2.35 1.477 2.684 1.639.333.163.529.138.724-.089.195-.228.837-.976 1.065-1.309.228-.333.455-.276.764-.163.309.114 1.959.927 2.293 1.097s.561.26.642.407c.082.146.082.846-.178 1.578z" />
+                </svg>
+              ) : (
+                // SMS Mail/Message Icon SVG
+                <svg className="w-2 h-2 stroke-current fill-none" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+              )}
+              <span className="capitalize">{del.channel}</span>
+              <span className="text-slate-500 font-normal">|</span>
+              <span className="text-[7.5px] font-bold tracking-wider">{langDisplay}</span>
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   // Load Save The Dates & SMS settings
@@ -304,14 +424,28 @@ Karibu sana!`);
       const template = stdTemplate || '';
       const contacts = [eventDetails.contact1, eventDetails.contact2, eventDetails.contact3].filter(Boolean).join('\n');
       
+      const translatePeriod = (p: string | null | undefined) => {
+        const pVal = p || "Mchana";
+        if (isEn) {
+          if (pVal === 'Asubuhi') return 'Morning';
+          if (pVal === 'Mchana') return 'Afternoon';
+          if (pVal === 'Jioni') return 'Evening';
+          if (pVal === 'Usiku') return 'Night';
+          return pVal;
+        }
+        return pVal;
+      };
+      const periodTranslated = translatePeriod(eventDetails.period);
+      const timeVal = `${eventDetails.time || ""} ${periodTranslated}`.trim();
+
       let compiled = template
         .replace(/{name}/g, guestCleanName)
-        .replace(/{host}/g, eventDetails.hostName || 'Familia yetu')
-        .replace(/{event_name}/g, eventDetails.name || 'Sherehe yetu')
+        .replace(/{host}/g, eventDetails.hostName || (isEn ? 'Our Family' : 'Familia yetu'))
+        .replace(/{event_name}/g, eventDetails.name || (isEn ? 'Our Event' : 'Sherehe yetu'))
         .replace(/{date}/g, eventDetails.date || '')
         .replace(/{link}/g, stripLink ? "" : guestLink)
         .replace(/{ukumbi}/g, eventDetails.eventHallName || "")
-        .replace(/{muda}/g, `${eventDetails.time || ""} ${eventDetails.period || ""}`)
+        .replace(/{muda}/g, timeVal)
         .replace(/{card_no}/g, guestObj?.code || "[Code]")
         .replace(/{aina}/g, guestObj?.cardType || "DOUBLE")
         .replace(/{mwasiliano}/g, contacts)
@@ -320,7 +454,7 @@ Karibu sana!`);
         .replace(/{contact_2_name}/g, eventDetails.contact2Name || "")
         .replace(/{contact_2_phone}/g, eventDetails.contact2 || "")
         .replace(/{venue}/g, eventDetails.eventHallName || "")
-        .replace(/{time}/g, `${eventDetails.time || ""} ${eventDetails.period || ""}`)
+        .replace(/{time}/g, timeVal)
         .replace(/{card_number}/g, guestObj?.code || "[Code]")
         .replace(/{card_type}/g, guestObj?.cardType || "DOUBLE")
         .replace(/- : /g, ""); // Clean up if any contact is missing but template had bullets
@@ -412,14 +546,16 @@ Karibu sana!`);
               channel: 'whatsapp',
               templateParams,
               templateName: 'hifadhi_tarehe',
-              imageUrl: compatibleImageUrl
+              imageUrl: compatibleImageUrl,
+              lang: language,
+              msgType: 'save_the_date'
             })
           });
 
           const data = await res.json().catch(() => ({}));
           if (res.ok) {
             showToast(isEn ? `✓ Sent to ${guest.name} via WhatsApp API!` : `✓ Save The Date imetumwa vizuri kwa ${guest.name} kupitia WhatsApp Business API!`, 'success');
-            markGuestAsSent(guest.id);
+            markGuestAsSent(guest.id, 'whatsapp');
             setSendLogs(prev => [`[✓ META WHATSAPP] Aliyepokea: ${guest.name} - ${data.log || 'Ujumbe umetumwa'}`, ...prev]);
           } else {
             showToast(`Imeshindwa kutuma: ${data.error || 'Hitilafu ya Meta API'}`, 'error');
@@ -438,7 +574,7 @@ Karibu sana!`);
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        markGuestAsSent(guest.id);
+        markGuestAsSent(guest.id, 'whatsapp');
         setSendLogs(prev => [`[✓ WHATSAPP] Aliyepokea: ${guest.name} - Dirisha limefunguliwa`, ...prev]);
         return;
       }
@@ -458,13 +594,15 @@ Karibu sana!`);
           eventId: eventDetails.id,
           phone: guest.phone,
           text: textMsg,
-          channel: 'sms'
+          channel: 'sms',
+          lang: language,
+          msgType: 'save_the_date'
         })
       });
 
       if (res.ok) {
         showToast(`✓ Save The Date imetumwa vizuri kwa ${guest.name} kupitia SMS (${gatewaySettings.senderId || 'SIMULATION'})!`, 'success');
-        markGuestAsSent(guest.id);
+        markGuestAsSent(guest.id, 'sms');
         setSendLogs(prev => [`[✓ SMS Sender ID: ${gatewaySettings.senderId || 'SIMULATION'}] Ujumbe umetumwa kwa ${guest.name} (${guest.phone})`, ...prev]);
       } else {
         const err = await res.json().catch(() => ({}));
@@ -571,13 +709,15 @@ Karibu sana!`);
                   channel: 'whatsapp',
                   templateParams,
                   templateName: 'hifadhi_tarehe',
-                  imageUrl: compatibleImageUrl
+                  imageUrl: compatibleImageUrl,
+                  lang: language,
+                  msgType: 'save_the_date'
                 })
               });
 
               const data = await res.json().catch(() => ({}));
               if (res.ok) {
-                markGuestAsSent(g.id);
+                markGuestAsSent(g.id, 'whatsapp');
                 setSendLogs(prev => [`[✓ META WHATSAPP] Ujumbe umetumwa kwa ${g.name} - ${data.log || 'Sawa'}`, ...prev]);
               } else {
                 setSendLogs(prev => [`[✗ META WHATSAPP] Imefeli kwa ${g.name}: ${data.error || 'Hitilafu'}`, ...prev]);
@@ -594,7 +734,7 @@ Karibu sana!`);
               a.click();
               document.body.removeChild(a);
               
-              markGuestAsSent(g.id);
+              markGuestAsSent(g.id, 'whatsapp');
               setSendLogs(prev => [`[✓ WHATSAPP] Aliyepokea: ${g.name} - Dirisha limefunguliwa`, ...prev]);
             }
           } else {
@@ -607,12 +747,14 @@ Karibu sana!`);
                 eventId: eventDetails.id,
                 phone: g.phone,
                 text: textMsg,
-                channel: 'sms'
+                channel: 'sms',
+                lang: language,
+                msgType: 'save_the_date'
               })
             });
 
             if (res.ok) {
-              markGuestAsSent(g.id);
+              markGuestAsSent(g.id, 'sms');
               setSendLogs(prev => [`[✓ SMS Sender ID: ${gatewaySettings.senderId || 'SIMULATION'}] Ujumbe umetumwa kwa ${g.name} (${g.phone})`, ...prev]);
             } else {
               const err = await res.json().catch(() => ({}));
@@ -976,10 +1118,16 @@ Karibu sana!`);
                         {g.rsvpStatus === 'Bado' || !g.rsvpStatus ? (isEn ? 'Pending' : 'Bado Jibu') : (isEn ? (g.rsvpStatus === 'Atahudhuria' ? 'Attending' : g.rsvpStatus === 'Hatahudhuria' ? 'Declined' : 'Maybe') : g.rsvpStatus)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono">
+                    <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-400 font-mono">
                       <span>{g.phone || (isEn ? 'No Phone' : 'Bila Namba')}</span>
                       <span className="w-1 h-1 rounded-full bg-white/20 hidden sm:block"></span>
                       <span className="hidden sm:inline">CODE: {g.code || (isEn ? 'None' : 'Bila')}</span>
+                      {renderDeliveryIndicator(g) && (
+                        <>
+                          <span className="w-1 h-1 rounded-full bg-white/20 hidden sm:block"></span>
+                          {renderDeliveryIndicator(g)}
+                        </>
+                      )}
                     </div>
                   </div>
 

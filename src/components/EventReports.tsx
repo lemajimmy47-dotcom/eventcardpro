@@ -4,9 +4,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
 import { 
-  FileText, Clipboard, CheckCircle, AlertTriangle, TrendingUp, 
-  DollarSign, Download, Printer, Activity, Search,
-  Users, Check, X, RefreshCw, Smartphone, ChevronRight, BarChart3, Filter, Mail, HelpCircle, History
+  FileText, Clipboard, CheckCircle, TrendingUp, 
+  Download, Printer, Activity, Search,
+  Users, Check, Smartphone, BarChart3
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { EventDetails, Guest, ContributionPayment } from '../types';

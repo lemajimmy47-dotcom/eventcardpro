@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { QrCode, CheckCircle, XCircle, AlertTriangle, ShieldCheck, Search, Users, Sparkles, MapPin, History, Clock, Download, Camera, Trash2, X, Globe, ExternalLink, RefreshCw } from 'lucide-react';
+import { QrCode, CheckCircle, XCircle, AlertTriangle, ShieldCheck, Search, Users, Sparkles, MapPin, History, Clock, Download, Camera, X, Globe, ExternalLink, RefreshCw } from 'lucide-react';
 import { EventDetails, Guest } from '../types';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';

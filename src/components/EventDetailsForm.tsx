@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Calendar, Clock, MapPin, Layers, Phone, Edit3, User, Check, Heart, Eye, Trash2 } from 'lucide-react';
+import { Save, Calendar, Clock, MapPin, Layers, Phone, Edit3, User, Check, Heart, Eye } from 'lucide-react';
 import { EventDetails } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 

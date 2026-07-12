@@ -2116,6 +2116,7 @@ export default function App() {
                 }
               }}
               onUpdateEvent={updateEventDetails}
+              onUpdateGuests={updateGuests}
             />
           </React.Fragment>
         );
