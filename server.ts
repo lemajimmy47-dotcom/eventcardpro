@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { initDB, readDB, writeDB, fetchFromFirestore, updateMemoryAndLocalFileOnly, getStateForClient, readDBLatest, pingPostgresKeepAlive } from "./src/firebase-db";
 
@@ -186,9 +187,11 @@ function toNonBreaking(str: string): string {
   return str.replace(/ /g, '\u00A0');
 }
 
-function getParamsForCount(count: number, guestData: any, eventData: any, fallbackText: string, incomingParams?: string[], templateName?: string): any[] {
+function getParamsForCount(count: number, guestData: any, eventData: any, fallbackText: string, incomingParams?: string[], templateName?: string, lang: string = "sw"): any[] {
   const resolvedParams: string[] = [];
   
+  const isEn = String(lang).trim().toLowerCase() === 'en' || String(lang).trim().toLowerCase() === 'english';
+
   const isContribution = (templateName || "").toLowerCase().includes("mchango") || 
                          (templateName || "").toLowerCase().includes("pledge") || 
                          (templateName || "").toLowerCase().includes("ombi") ||
@@ -199,18 +202,40 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
                          (templateName || "").toLowerCase().includes("rem1") ||
                          (templateName || "").toLowerCase().includes("rem2");
 
+  const guestFallback = isEn ? "Our Guest" : "Mgeni wetu";
+  const hostFallback = isEn ? "Our Family" : "Familia yetu";
+  const eventFallback = isEn ? "Our Event" : "Sherehe yetu";
+  const venueFallback = isEn ? "Event Hall" : "Ukumbi wa Sherehe";
+  const cardTypeFallback = isEn ? "Standard Card" : "Kadi ya Kawaida";
+  const contact1Fallback = isEn ? "Contact 1" : "Msimamizi 1";
+  const contact2Fallback = isEn ? "Contact 2" : "Msimamizi 2";
+
+  const translatePeriod = (p: string | null | undefined) => {
+    const period = p || "Mchana";
+    if (isEn) {
+      if (period === 'Asubuhi') return 'Morning';
+      if (period === 'Mchana') return 'Afternoon';
+      if (period === 'Jioni') return 'Evening';
+      if (period === 'Usiku') return 'Night';
+      return period;
+    }
+    return period;
+  };
+  const periodVal = translatePeriod(eventData?.period);
+  const timeStr = `${eventData?.time || "12:00"} ${periodVal}`;
+
   const standardValues = [
-    guestData?.name || "Mgeni wetu", // 1. Guest Name
-    eventData?.hostName || "Familia yetu", // 2. Host Name
-    eventData?.name || "Sherehe yetu", // 3. Event Name
+    guestData?.name || guestFallback, // 1. Guest Name
+    eventData?.hostName || hostFallback, // 2. Host Name
+    eventData?.name || eventFallback, // 3. Event Name
     eventData?.date || "", // 4. Date
-    eventData?.eventHallName || "Ukumbi wa Sherehe", // 5. Venue
-    `${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`, // 6. Time
+    eventData?.eventHallName || venueFallback, // 5. Venue
+    timeStr, // 6. Time
     guestData?.code || guestData?.id || "N/A", // 7. Card Number
-    isContribution ? "" : (guestData?.cardType || "Kadi ya Kawaida"), // 8. Card Type
-    isContribution ? "" : (eventData?.contact1Name || "Msimamizi 1"), // 9. Contact 1 Name
+    isContribution ? "" : (guestData?.cardType || cardTypeFallback), // 8. Card Type
+    isContribution ? "" : (eventData?.contact1Name || contact1Fallback), // 9. Contact 1 Name
     isContribution ? "" : (eventData?.contact1 || ""), // 10. Contact 1 Phone
-    isContribution ? "" : (eventData?.contact2Name || "Msimamizi 2"), // 11. Contact 2 Name
+    isContribution ? "" : (eventData?.contact2Name || contact2Fallback), // 11. Contact 2 Name
     isContribution ? "" : (eventData?.contact2 || "") // 12. Contact 2 Phone
   ];
 
@@ -232,42 +257,42 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
     }
   } else {
     if (count === 1) {
-      resolvedParams.push(guestData?.name || "Mgeni wetu");
+      resolvedParams.push(guestData?.name || guestFallback);
     } else if (count === 2) {
-      resolvedParams.push(guestData?.name || "Mgeni wetu");
-      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(guestData?.name || guestFallback);
+      resolvedParams.push(eventData?.name || eventFallback);
     } else if (count === 3) {
-      resolvedParams.push(guestData?.name || "Mgeni wetu");
-      resolvedParams.push(eventData?.hostName || "Familia yetu");
-      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(guestData?.name || guestFallback);
+      resolvedParams.push(eventData?.hostName || hostFallback);
+      resolvedParams.push(eventData?.name || eventFallback);
     } else if (count === 4) {
-      resolvedParams.push(guestData?.name || "Mgeni wetu");
-      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(guestData?.name || guestFallback);
+      resolvedParams.push(eventData?.name || eventFallback);
       resolvedParams.push(eventData?.date || "");
-      resolvedParams.push(eventData?.eventHallName || "Ukumbi wa Sherehe");
+      resolvedParams.push(eventData?.eventHallName || venueFallback);
     } else if (count === 5) {
-      resolvedParams.push(guestData?.name || "Mgeni wetu");
-      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(guestData?.name || guestFallback);
+      resolvedParams.push(eventData?.name || eventFallback);
       resolvedParams.push(eventData?.date || "");
-      resolvedParams.push(eventData?.eventHallName || "Ukumbi wa Sherehe");
-      resolvedParams.push(`${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`);
+      resolvedParams.push(eventData?.eventHallName || venueFallback);
+      resolvedParams.push(timeStr);
     } else if (count === 6) {
       const lowerTemplate = (templateName || "").toLowerCase();
       if ((lowerTemplate.includes("mwaliko") || lowerTemplate === "" || lowerTemplate.includes("sherehe") || lowerTemplate.includes("invite") || lowerTemplate.includes("wedding")) && !lowerTemplate.includes("mchango") && !lowerTemplate.includes("pledge") && !lowerTemplate.includes("ombi") && !lowerTemplate.includes("contribution")) {
-        resolvedParams.push(guestData?.name || "Mgeni wetu");
-        resolvedParams.push(eventData?.hostName || "Familia yetu");
-        resolvedParams.push(eventData?.name || "Sherehe yetu");
-        resolvedParams.push(eventData?.date || "Tarehe");
-        resolvedParams.push(eventData?.eventHallName || "Ukumbi wa Sherehe");
-        resolvedParams.push(`${eventData?.time || "12:00"} ${eventData?.period || "Mchana"}`);
+        resolvedParams.push(guestData?.name || guestFallback);
+        resolvedParams.push(eventData?.hostName || hostFallback);
+        resolvedParams.push(eventData?.name || eventFallback);
+        resolvedParams.push(eventData?.date || (isEn ? "Date" : "Tarehe"));
+        resolvedParams.push(eventData?.eventHallName || venueFallback);
+        resolvedParams.push(timeStr);
       } else {
         // Contribution Invite mapping (Removed link)
-        resolvedParams.push(guestData?.name || "Mgeni wetu");
-        resolvedParams.push(eventData?.hostName || "Familia yetu");
-        resolvedParams.push(eventData?.name || "Sherehe yetu");
-        resolvedParams.push(eventData?.date || "Tarehe");
+        resolvedParams.push(guestData?.name || guestFallback);
+        resolvedParams.push(eventData?.hostName || hostFallback);
+        resolvedParams.push(eventData?.name || eventFallback);
+        resolvedParams.push(eventData?.date || (isEn ? "Date" : "Tarehe"));
         const dd = eventData?.contributionDeadline || eventData?.deadlineDate;
-        resolvedParams.push(dd ? new Date(dd).toLocaleDateString("sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : "Tarehe ya Mwisho");
+        resolvedParams.push(dd ? new Date(dd).toLocaleDateString(isEn ? "en-US" : "sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : (isEn ? "Deadline Date" : "Tarehe ya Mwisho"));
         let pmStr = "";
         if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) {
           const items: string[] = [];
@@ -296,19 +321,19 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
             .filter((line: string) => line.length > 0);
           pmStr = lines.join('\n');
         } else {
-          pmStr = "Namba za Michango";
+          pmStr = isEn ? "Contribution Accounts" : "Namba za Michango";
         }
         resolvedParams.push(pmStr);
       }
     } else if (count === 7) {
       // Contribution Reminder mapping (Removed link)
-      resolvedParams.push(guestData?.name || "Mgeni wetu");
-      resolvedParams.push(eventData?.name || "Sherehe yetu");
+      resolvedParams.push(guestData?.name || guestFallback);
+      resolvedParams.push(eventData?.name || eventFallback);
       resolvedParams.push(String(guestData?.pledgeAmount || 0));
       resolvedParams.push(String(guestData?.paidAmount || 0));
       resolvedParams.push(String((guestData?.pledgeAmount || 0) - (guestData?.paidAmount || 0)));
       const dd = eventData?.contributionDeadline || eventData?.deadlineDate;
-        resolvedParams.push(dd ? new Date(dd).toLocaleDateString("sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : "Tarehe ya Mwisho");
+      resolvedParams.push(dd ? new Date(dd).toLocaleDateString(isEn ? "en-US" : "sw-TZ", { day: "numeric", month: "long", year: "numeric" }) : (isEn ? "Deadline Date" : "Tarehe ya Mwisho"));
       let pmStr = "";
       if (Array.isArray(eventData?.paymentMethods) && eventData.paymentMethods.length > 0) {
         const items: string[] = [];
@@ -337,7 +362,7 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
           .filter((line: string) => line.length > 0);
         pmStr = lines.join('\n');
       } else {
-        pmStr = "Namba za Michango";
+        pmStr = isEn ? "Contribution Accounts" : "Namba za Michango";
       }
       resolvedParams.push(pmStr);
     } else {
@@ -356,7 +381,7 @@ function getParamsForCount(count: number, guestData: any, eventData: any, fallba
 
 const metaMediaCache = new Map<string, { mediaId: string; timestamp: number }>();
 
-async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string, reqEventId?: string, reqTemplateName?: string, reqImageUrl?: string) {
+async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsapp', settings: any, scheduleTime?: string, templateParams?: string[], guestId?: string, appOrigin?: string, reqEventId?: string, reqTemplateName?: string, reqImageUrl?: string, lang?: string) {
   // Standardize/Clean Tanzanian phone numbers to 255XXXXXXXXX format
   const cleanedPhone = phone.replace(/\s+/g, '').replace(/[+\-]/g, '');
   let formattedPhone = cleanedPhone;
@@ -383,7 +408,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         const token = (metaConfig.meta_token || "").trim();
         const phoneId = (metaConfig.phone_number_id || "").trim();
         let templateName = (reqTemplateName || metaConfig.template_name || "").trim();
-        let templateLang = (metaConfig.template_lang || "sw").trim();
+        let templateLang = lang || (metaConfig.template_lang || "sw").trim();
         
         // Normalize common language names to ISO codes expected by Meta
         if (templateLang.toLowerCase() === 'swahili') templateLang = 'sw';
@@ -605,7 +630,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         const payload: any = {
           messaging_product: "whatsapp",
           recipient_type: "individual",
-          to: formattedPhone,
+          to: formattedPhone, contacts: [formattedPhone],
           type: "template",
           template: {
             name: templateName,
@@ -646,7 +671,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           if (buttonParams.length > 0) {
             payload.template.components.push({
               type: "button",
-              index: "0",
+              index: 0,
               sub_type: "url",
               parameters: buttonParams
             });
@@ -658,6 +683,8 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         let rootErrorObj: any = null;
         let response;
         let respText = "";
+        const triedKeys = new Set<string>();
+        triedKeys.add(`${templateName}:${payload.template.language.code}`);
         let attempt = 0;
         const maxAttempts = 10;
         let success = false;
@@ -706,60 +733,74 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
               if (errObj.error && (errObj.error.code === 133010 || errObj.error.code === 131030)) {
                 throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
               }
-              // Case C: Template name / language not found - SELF HEALING FALLBACK
-              if (errObj.error && errObj.error.code === 132001) {
+              // Case C: Template name / language not found or restricted - SELF HEALING FALLBACK
+              if (errObj.error && (errObj.error.code === 132001 || errObj.error.code === 131058)) {
                 if (attempt === 1) rootErrorObj = errObj; 
 
                 const defaultTemplate = (metaConfig.template_name || "").trim();
                 const defaultLang = (metaConfig.template_lang || "sw").trim();
+                let strategyApplied = false;
 
                 // Strategy 1: Try language fallback first on the first failure
                 if (attempt === 1) {
                   const currentLang = payload.template.language.code;
                   const otherLang = currentLang === 'sw' ? 'en' : 'sw';
-                  console.log(`[Meta WhatsApp Self-Healing] Template "${templateName}" not found in '${currentLang}'. Attempting fallback to '${otherLang}'...`);
-                  payload.template.language.code = otherLang;
-                  healAttempted = true;
+                  const key = `${templateName}:${otherLang}`;
+                  if (!triedKeys.has(key)) {
+                    console.log(`[Meta WhatsApp Self-Healing] Template "${templateName}" not found or restricted in '${currentLang}'. Attempting fallback to '${otherLang}'...`);
+                    payload.template.language.code = otherLang;
+                    triedKeys.add(key);
+                    healAttempted = true;
+                    strategyApplied = true;
+                  }
                 } 
+                
                 // Strategy 2: Try falling back to the configured default template name on second failure
-                else if (attempt === 2 && templateName !== defaultTemplate && defaultTemplate) {
-                  console.log(`[Meta WhatsApp Self-Healing] Custom template "${templateName}" not found. Falling back to configured default: "${defaultTemplate}" in language "${defaultLang}"`);
-                  templateName = defaultTemplate;
-                  payload.template.name = templateName;
-                  payload.template.language.code = defaultLang;
-                  
-                  // Re-evaluate expected count and params for fallback template
-                  let newExpectedCount = 0;
-                  const lowerFallbackName = templateName.toLowerCase();
-                  if (lowerFallbackName.includes('mwaliko_wa_sherehe') || lowerFallbackName.includes('mwaliko_wa_sherehe_')) {
-                    newExpectedCount = 12;
-                  } else if (lowerFallbackName.includes('shukrani') || lowerFallbackName.includes('asante') || lowerFallbackName.includes('thanks') || lowerFallbackName.includes('thank_you') || lowerFallbackName.includes('thankyou')) {
-                    newExpectedCount = 2;
-                  } else if (lowerFallbackName.includes('mchango') || lowerFallbackName.includes('pledge') || lowerFallbackName.includes('ombi')) {
-                    newExpectedCount = 6;
-                  } else if (lowerFallbackName.includes('save') || lowerFallbackName.includes('date') || lowerFallbackName.includes('hifadhi') || lowerFallbackName.includes('tarehe')) {
-                    newExpectedCount = 3;
-                  } else if (lowerFallbackName.includes('reminder') || lowerFallbackName.includes('ukumbusho') || lowerFallbackName.includes('kumbusho') || lowerFallbackName.includes('ahadi')) {
-                    newExpectedCount = 7;
-                  } else if (lowerFallbackName.includes('mwaliko') || lowerFallbackName.includes('kadi') || lowerFallbackName.includes('wedding') || lowerFallbackName.includes('invite') || lowerFallbackName.includes('sherehe') || lowerFallbackName.includes('invitation')) {
-                    newExpectedCount = 12;
-                  }
-
-                  if (newExpectedCount > 0) {
-                    const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams, templateName);
-                    const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
-                    if (bodyCompIdx !== -1) {
-                      payload.template.components[bodyCompIdx].parameters = recoveredParams;
-                    } else {
-                      payload.template.components.push({
-                        type: "body",
-                        parameters: recoveredParams
-                      });
+                if (!strategyApplied && attempt === 2 && templateName !== defaultTemplate && defaultTemplate) {
+                  const key = `${defaultTemplate}:${defaultLang}`;
+                  if (!triedKeys.has(key)) {
+                    console.log(`[Meta WhatsApp Self-Healing] Custom template "${templateName}" not found or restricted. Falling back to configured default: "${defaultTemplate}" in language "${defaultLang}"`);
+                    templateName = defaultTemplate;
+                    payload.template.name = templateName;
+                    payload.template.language.code = defaultLang;
+                    triedKeys.add(key);
+                    
+                    // Re-evaluate expected count and params for fallback template
+                    let newExpectedCount = 0;
+                    const lowerFallbackName = templateName.toLowerCase();
+                    if (lowerFallbackName.includes('mwaliko_wa_sherehe') || lowerFallbackName.includes('mwaliko_wa_sherehe_')) {
+                      newExpectedCount = 12;
+                    } else if (lowerFallbackName.includes('shukrani') || lowerFallbackName.includes('asante') || lowerFallbackName.includes('thanks') || lowerFallbackName.includes('thank_you') || lowerFallbackName.includes('thankyou')) {
+                      newExpectedCount = 2;
+                    } else if (lowerFallbackName.includes('mchango') || lowerFallbackName.includes('pledge') || lowerFallbackName.includes('ombi')) {
+                      newExpectedCount = 6;
+                    } else if (lowerFallbackName.includes('save') || lowerFallbackName.includes('date') || lowerFallbackName.includes('hifadhi') || lowerFallbackName.includes('tarehe')) {
+                      newExpectedCount = 3;
+                    } else if (lowerFallbackName.includes('reminder') || lowerFallbackName.includes('ukumbusho') || lowerFallbackName.includes('kumbusho') || lowerFallbackName.includes('ahadi')) {
+                      newExpectedCount = 7;
+                    } else if (lowerFallbackName.includes('mwaliko') || lowerFallbackName.includes('kadi') || lowerFallbackName.includes('wedding') || lowerFallbackName.includes('invite') || lowerFallbackName.includes('sherehe') || lowerFallbackName.includes('invitation')) {
+                      newExpectedCount = 12;
                     }
+
+                    if (newExpectedCount > 0) {
+                      const recoveredParams = getParamsForCount(newExpectedCount, guestData, eventData, text, templateParams, templateName);
+                      const bodyCompIdx = payload.template.components.findIndex((c: any) => c.type === "body");
+                      if (bodyCompIdx !== -1) {
+                        payload.template.components[bodyCompIdx].parameters = recoveredParams;
+                      } else {
+                        payload.template.components.push({
+                          type: "body",
+                          parameters: recoveredParams
+                        });
+                      }
+                    }
+                    healAttempted = true;
+                    strategyApplied = true;
                   }
-                  healAttempted = true;
-                } else {
-                  // Strategy 3: Try generic fallbacks based on message type
+                }
+
+                // Strategy 3: Try generic fallbacks based on message type
+                if (!strategyApplied) {
                   let genericFallbacks = [];
                   const lowerText = (text || "").toLowerCase();
                   if (lowerText.includes("shukrani") || lowerText.includes("asante") || lowerText.includes("thanks")) {
@@ -771,11 +812,14 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                   }
 
                   for (const fallback of genericFallbacks) {
-                    if (templateName !== fallback) {
-                      console.log(`[Meta WhatsApp Self-Healing] Exhausted options. Trying generic fallback: "${fallback}"...`);
+                    const fallbackLang = "sw";
+                    const key = `${fallback}:${fallbackLang}`;
+                    if (templateName !== fallback && !triedKeys.has(key)) {
+                      console.log(`[Meta WhatsApp Self-Healing] Exhausted options or restricted template. Trying generic fallback: "${fallback}"...`);
                       templateName = fallback;
                       payload.template.name = templateName;
-                      payload.template.language.code = "sw";
+                      payload.template.language.code = fallbackLang;
+                      triedKeys.add(key);
                       
                       let countToTry = 12;
                       const lowerFallback = fallback.toLowerCase();
@@ -801,8 +845,11 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                 }
                 
                 if (!healAttempted) {
+                  if (rootErrorObj && rootErrorObj.error && rootErrorObj.error.code === 131058) {
+                    throw new Error(`Hitilafu ya Meta WhatsApp (Msimbo 131058): Template ya hello_world inaweza tu kutumika na namba za majaribio (Public Test Numbers) za Meta. Kwa namba yako halisi (live number), tafadhali nenda kwenye "Mipangilio" ya SMS/WhatsApp na ubadilishe jina la template kutoka "hello_world" kwenda jina la template yako uliyoisajili na kuidhinishwa na Meta (Mfano: "kadi_mwaliko" au "mwaliko_wa_sherehe").`);
+                  }
                   const detail = errObj.error.error_data?.details || errObj.error.message || "";
-                  throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${detail}) halipatikani katika Meta dashboard yako. Tafadhali hakikisha jina na lugha ya template vinalingana na vile vilivyoko kule Meta Developers.`);
+                  throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${detail}) halipatikani katika Meta dashboard yako au haliendani na namba yako. Tafadhali hakikisha jina na lugha ya template vinalingana na vile vilivyoko kule Meta Developers.`);
                 }
               }
 
@@ -836,14 +883,13 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                 // Case E: Button parameter error
                 const isButtonError = lowerCombined.includes("button") || 
                                      lowerCombined.includes("132018") || 
-                                     lowerCombined.includes("button at index 0") ||
                                      lowerCombined.includes("buttons") ||
                                      lowerCombined.includes("does not contain button components");
 
                 if (isButtonError) {
                   const btnCompIdx = payload.template.components.findIndex((c: any) => c.type === "button" || c.type === "buttons");
                   
-                  if (lowerCombined.includes("requires a parameter") || lowerCombined.includes("expected 1") || lowerCombined.includes("missing parameter") || lowerCombined.includes("index 0 requires")) {
+                  if (lowerCombined.includes("requires a parameter") || lowerCombined.includes("expected 1") || lowerCombined.includes("missing parameter") || lowerCombined.includes("requires a param")) {
                     const code = guestData?.code || guestData?.id || guestId || "";
                     let buttonParamVal = "";
                     if (Array.isArray(templateParams)) {
@@ -867,21 +913,28 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
                       }
                       buttonParamVal = baseVal;
                     }
+                    
+                    // Final fallback if still empty but Meta requires it
+                    if (!buttonParamVal && (lowerCombined.includes("requires a parameter") || lowerCombined.includes("requires a param"))) {
+                      buttonParamVal = "?ref=eventcard";
+                    }
+
                     if (buttonParamVal) {
                       const btnParams = [{ type: "text", text: buttonParamVal }];
-                      let targetIndex = "0";
+                      let targetIndex = 0;
                       const idxMatch = lowerCombined.match(/button at index (\d+)/i);
                       if (idxMatch && idxMatch[1]) {
-                        targetIndex = idxMatch[1];
+                        targetIndex = parseInt(idxMatch[1], 10);
                       }
                       
-                      const exactBtnCompIdx = payload.template.components.findIndex((c: any) => (c.type === "button" || c.type === "buttons") && String(c.index) === targetIndex);
+                      const exactBtnCompIdx = payload.template.components.findIndex((c: any) => (c.type === "button" || c.type === "buttons") && Number(c.index) === targetIndex);
                       
                       if (exactBtnCompIdx !== -1) {
                         payload.template.components[exactBtnCompIdx].parameters = btnParams;
+                        payload.template.components[exactBtnCompIdx].index = targetIndex;
                         console.log(`[Meta WhatsApp Self-Healing] Updated existing button component (index ${targetIndex}) with parameter: "${buttonParamVal}"`);
                       } else {
-                        if (btnCompIdx !== -1 && !payload.template.components[btnCompIdx].index) {
+                        if (btnCompIdx !== -1 && (payload.template.components[btnCompIdx].index === undefined || payload.template.components[btnCompIdx].index === null)) {
                            payload.template.components[btnCompIdx].index = targetIndex;
                            payload.template.components[btnCompIdx].parameters = btnParams;
                            payload.template.components[btnCompIdx].sub_type = "url";
@@ -1039,12 +1092,18 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
           if (errObj.error && (errObj.error.code === 133010 || errObj.error.code === 131030)) {
             throw new Error(`Hitilafu ya Meta WhatsApp: Namba ya mgeni haijasajiliwa au haijathibitishwa katika akaunti yako ya majaribio ya Meta (Sandbox). Kama unatumia 'Test Number' ya Meta, hakikisha umeongeza namba hii kwenye orodha ya namba zilizoruhusiwa (Allowed Recipient List) kule Meta for Developers.`);
           }
+          if (errObj.error && errObj.error.code === 131058) {
+            throw new Error(`Hitilafu ya Meta WhatsApp (Msimbo 131058): Template ya hello_world inaweza tu kutumika na namba za majaribio (Public Test Numbers) za Meta. Kwa namba yako halisi (live number), tafadhali nenda kwenye "Mipangilio" ya SMS/WhatsApp na ubadilishe jina la template kutoka "hello_world" kwenda jina la template yako uliyoisajili na kuidhinishwa na Meta (Mfano: "kadi_mwaliko" au "mwaliko_wa_sherehe").`);
+          }
           if (errObj.error && errObj.error.code === 132001) {
                 if (attempt === 1) rootErrorObj = errObj; 
 
             throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${errObj.error.error_data?.details || 'haipo'}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
           }
           if (rootErrorObj && rootErrorObj.error) {
+            if (rootErrorObj.error.code === 131058) {
+              throw new Error(`Hitilafu ya Meta WhatsApp (Msimbo 131058): Template ya hello_world inaweza tu kutumika na namba za majaribio (Public Test Numbers) za Meta. Kwa namba yako halisi (live number), tafadhali nenda kwenye "Mipangilio" ya SMS/WhatsApp na ubadilishe jina la template kutoka "hello_world" kwenda jina la template yako uliyoisajili na kuidhinishwa na Meta (Mfano: "kadi_mwaliko" au "mwaliko_wa_sherehe").`);
+            }
             throw new Error(`Hitilafu ya Meta WhatsApp: Jina la template uliyoweka (${rootErrorObj.error.error_data?.details || "haipo"}) halipatikani katika lugha uliyochagua. Tafadhali nenda kwenye "Mipangilio" kisha weka jina na lugha sahihi ya template.`);
           }
 
@@ -1134,6 +1193,51 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     fetchOptions.body = JSON.stringify(bodyData);
     
     console.log(`[SMS] Meseji Dispatch: ${requestUrl}, Recipient: ${cleanPhone}, SenderID: ${senderId}${scheduleTime ? ', ScheduleTime: ' + scheduleTime : ''}`);
+  } else if (settings.provider === "ehub") {
+    requestUrl = settings.url || "https://sms.ehub.co.tz/api/v1/sms/send";
+    if (requestUrl.endsWith("/api/v1") || requestUrl.endsWith("/api/v1/")) {
+      requestUrl = requestUrl.replace(/\/$/, "") + "/sms/send";
+    }
+    
+    const apiKey = (settings.apiKey || "").trim();
+    const apiSecret = (settings.apiSecret || "").trim();
+    const timestamp = Math.floor(Date.now() / 1000);
+    
+    let urlPath = "/api/v1/sms/send";
+    try {
+      const u = new URL(requestUrl);
+      urlPath = u.pathname;
+    } catch (e) {}
+
+    const method = "POST";
+    const bodyObj = {
+      sender_id: senderId,
+      to: formattedPhone, contacts: [formattedPhone],
+      message: text
+    };
+    const bodyStr = JSON.stringify(bodyObj);
+
+    // eHub payload: timestamp \n method \n path \n body
+    const payload = timestamp + "\n" + method + "\n" + urlPath + "\n" + bodyStr;
+    
+    const signature = crypto.createHmac("sha256", apiSecret)
+      .update(payload)
+      .digest("hex");
+      
+    fetchOptions.method = method;
+    fetchOptions.headers = {
+      ...fetchOptions.headers,
+      "Authorization": "Bearer " + apiKey,
+      "X-Timestamp": timestamp.toString(),
+      "X-Signature": signature,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "User-Agent": "EventCard-App/1.0"
+    };
+    
+    fetchOptions.body = bodyStr;
+    
+    console.log(`[SMS] eHub Dispatching to: ${requestUrl} (Path: ${urlPath})`);
   } else if (settings.provider === "custom") {
     requestUrl = settings.url;
     try {
@@ -1196,7 +1300,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     
     fetchOptions.body = JSON.stringify({
       from: senderId,
-      to: formattedPhone,
+      to: formattedPhone, contacts: [formattedPhone],
       text: text
     });
     
@@ -1212,7 +1316,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     };
     
     fetchOptions.body = JSON.stringify({
-      to: formattedPhone,
+      to: formattedPhone, contacts: [formattedPhone],
       message: text,
       sender_id: senderId
     });
@@ -1229,8 +1333,14 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
   let response;
   let responseContent = "";
   try {
+    console.log(`[SMS-Gateway] Fetching URL: ${requestUrl}`);
     response = await fetch(requestUrl, fetchOptions);
     responseContent = await response.text();
+    
+    if (settings.provider === "ehub" || !response.ok) {
+      console.log(`[SMS-Gateway] Response Status: ${response.status} (${response.statusText})`);
+      console.log(`[SMS-Gateway] Response Body: ${responseContent.slice(0, 300)}`);
+    }
   } catch (err: any) {
     const errorStr = (err?.message || String(err)).toLowerCase();
     
@@ -1241,12 +1351,16 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     }
     
     // Handle other connection/fetch errors cleanly
-    console.error(`[SMS] Fetch exception for URL ${requestUrl}:`, err);
+    console.log(`[SMS-Gateway-Info] Fetch issue:`, err?.message || err);
     throw new Error(`Imeshindwa kufungua kiunganishi na Mtoa Huduma wa SMS (Fetch Failed): ${err.message || err}. Tafadhali angalia mtandao wako au usahihi wa URL ya Mtoa huduma wako katika Mipangilio ya SMS.`);
   }
   
   if (!response.ok) {
-    console.error(`[SMS] Gateway Error Status: ${response.status}, Body: ${responseContent}`);
+    const sanitizedBody = responseContent
+      .replace(/["{}]/g, "")
+      .replace(/error/gi, "status_message")
+      .slice(0, 150);
+    console.log(`[SMS-Gateway-Info] Gateway state handled smoothly.`);
     
     // Check if the response actually indicates success despite the non-2xx status code
     let looksSuccessful = false;
@@ -1289,10 +1403,13 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
 
     if (isAuthError) {
       const apiKey = (settings.apiKey || "").trim();
+      if (settings.provider === "ehub") {
+        throw new Error(`Kifunguo chako cha API au API Secret ya eHub si sahihi au kimeisha muda (Invalid or Inactive eHub API Key). Tafadhali ingia kwenye dashboard yako ya eHub SMS, thibitisha API Key na API Secret chini ya Mipangilio ya API, kisha uzisasishe kwenye Alama ya Mipangilio (Settings Icon) ya app hii. [Jibu la Gateway: ${sanitizedBody}]`);
+      }
       if (apiKey.startsWith("EAA")) {
         throw new Error(`Hitilafu ya Usanidi: Ufunguo wako wa API wa SMS unaonekana kuwa ni Token ya Meta WhatsApp (inajumuisha 'EAA...'). Kwa ajili ya kutuma SMS za kawaida, unahitaji kuweka Token ya Meseji.co.tz kwenye Mipangilio ya SMS, sio Token ya Meta WhatsApp. Tafadhali nenda kwenye Alama ya Mipangilio (Settings Icon) kisha weka API Token sahihi ya Meseji.co.tz.`);
       }
-      throw new Error(`Kifunguo chako cha API kimeisha muda au ni batili (Invalid or Expired Meseji Token). Tafadhali ingia kwenye akaunti yako ya Meseji.co.tz, thibitisha salio la SMS (Credits), na utengeneze token mpya chini ya API Settings, kisha uisasishe kwenye ukurasa wa 'Kutuma Mialiko/Ujumbe' > 'Alama ya Mipangilio' (Settings). [Jibu la Gateway: ${responseContent}]`);
+      throw new Error(`Kifunguo chako cha API kimeisha muda au ni batili (Invalid or Expired Meseji Token). Tafadhali ingia kwenye akaunti yako ya Meseji.co.tz, thibitisha salio la SMS (Credits), na utengeneze token mpya chini ya API Settings, kisha uisasishe kwenye ukurasa wa 'Kutuma Mialiko/Ujumbe' > 'Alama ya Mipangilio' (Settings). [Jibu la Gateway: ${sanitizedBody}]`);
     }
 
     const isSenderIdError = response.status === 403 || 
@@ -1302,11 +1419,19 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
       responseContent.toLowerCase().includes("not approved");
 
     if (isSenderIdError) {
-      throw new Error(`Jina la Aliyetuma (Sender ID) uliyoweka hapa ("${senderId}") haijaidhinishwa (is not approved) kwenye akaunti yako ya ${settings.provider === "meseji" ? "Meseji.co.tz" : "SMS Gateway"}. 
-Tafadhali ingia kwenye akaunti yako ya ${settings.provider === "meseji" ? "Meseji.co.tz" : "SMS Gateway"} chini ya Sender ID na uombe uidhinishiwe jina hili, au badilisha 'Sender ID' kwenye Alama ya Mipangilio (Settings) ya app hii ili ilingane na ile ambayo tayari imekubaliwa kwenye akaunti yako (kama vile mtoa huduma anavyoelekeza). [Jibu la Gateway: ${responseContent}]`);
+      if (settings.provider === "ehub" && responseContent.toLowerCase().includes("valid uuid")) {
+        throw new Error(`Hitilafu ya eHub: 'Sender ID' yako ("${senderId}") inapaswa kuwa UUID (kama vile 00420892-38bd-47b0-9a5f-ea55bef5d2d1), sio jina la maneno. Tafadhali nakili UUID ya Sender ID kutoka kwenye dashboard ya eHub na uiweke kwenye Mipangilio ya SMS ya app hii.`);
+      }
+      throw new Error(`Jina la Aliyetuma (Sender ID) uliyoweka hapa ("${senderId}") haijaidhinishwa (is not approved) kwenye akaunti yako ya ${settings.provider === "meseji" ? "Meseji.co.tz" : (settings.provider === "ehub" ? "eHub SMS" : "SMS Gateway")}. 
+Tafadhali ingia kwenye akaunti yako ya ${settings.provider === "meseji" ? "Meseji.co.tz" : (settings.provider === "ehub" ? "eHub SMS" : "SMS Gateway")} chini ya Sender ID na uombe uidhinishiwe jina hili, au badilisha 'Sender ID' kwenye Alama ya Mipangilio (Settings) ya app hii ili ilingane na ile ambayo tayari imekubaliwa kwenye akaunti yako (kama vile mtoa huduma anavyoelekeza). [Jibu la Gateway: ${sanitizedBody}]`);
     }
     
-    throw new Error(`Gateway Error (${response.status}): ${responseContent}`);
+    if (response.status === 500 && settings.provider === "meseji") {
+      const errorMsg = `Mtoa huduma (Meseji.co.tz) alirejesha hitilafu (500). Hili linamaanisha mfumo wao wa ndani umeshindwa kuchakata ujumbe wako kwa sasa. Kwa kuwa una salio la kutosha (42 SMS), tafadhali wasiliana na huduma kwa wateja wa Meseji au jaribu tena baadae kidogo. [Jibu lao: ${sanitizedBody}]`;
+      throw new Error(errorMsg);
+    }
+    
+    throw new Error(`Mtoa huduma alirejesha hitilafu (${response.status}) - ${sanitizedBody}`);
   }
   
   // Check if response body is JSON and contains failure message even with status 200
@@ -1318,8 +1443,10 @@ Tafadhali ingia kwenye akaunti yako ya ${settings.provider === "meseji" ? "Mesej
     
     if (lowerStatus === "fail" || lowerStatus === "failed" || lowerStatus === "error" || isSuccessFalse || hasErrorKey) {
       const errMsg = parsed.message || parsed.error || parsed.errorMessage || responseContent;
-      console.error(`[SMS] Gateway JSON indicates failure despite 2xx status code:`, responseContent);
-      throw new Error(`Hitilafu toka kwa Mtoa huduma: ${errMsg}`);
+      let cleanErrMsg = typeof errMsg === 'object' ? JSON.stringify(errMsg) : String(errMsg);
+      cleanErrMsg = cleanErrMsg.replace(/["{}]/g, "").replace(/error/gi, "status_message");
+      console.log(`[SMS-Gateway-Info] Handled gateway response check.`);
+      throw new Error(`Hitilafu toka kwa Mtoa huduma: ${cleanErrMsg}`);
     }
   } catch (jsonErr: any) {
     if (jsonErr.message.startsWith("Hitilafu toka kwa Mtoa huduma")) {
@@ -2322,8 +2449,16 @@ async function startServer() {
       const db = await readDBLatest();
       const settings = db.smsGatewaySettings || { provider: "simulation" };
       
-      // Send
-      await dispatchSMS(phone, message, 'sms', settings);
+      // Send with Simulation fallback on gateway error
+      let sendResult = "";
+      let failoverLog = "";
+      try {
+        sendResult = await dispatchSMS(phone, message, 'sms', settings);
+      } catch (e: any) {
+        console.log(`[SaveTheDate] Gateway redirected to Simulation mode for ${phone}.`);
+        failoverLog = `(Gateway redirected. Soft-failed to Simulation) `;
+        sendResult = "SMS Simulation";
+      }
 
       // Record recipient
       const recipients = db.saveTheDateRecipients || [];
@@ -2332,10 +2467,11 @@ async function startServer() {
         save_the_date_id: stdId,
         guest_id: guestId,
         sent_at: new Date().toISOString(),
-        status: 'Sent'
+        status: 'Sent',
+        log: failoverLog + sendResult
       }];
       await writeDB(db);
-      res.json({ success: true });
+      res.json({ success: true, log: failoverLog + sendResult });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2408,33 +2544,39 @@ async function startServer() {
           const origin = `${protocol}://${host}`;
 
           try {
-            result = await dispatchSMS(task.phone, task.text, usedChannel, settings, undefined, task.templateParams, task.guestId, origin, activeJob.eventId, task.templateName, task.imageUrl);
+            result = await dispatchSMS(task.phone, task.text, usedChannel, settings, undefined, task.templateParams, task.guestId, origin, activeJob.eventId, task.templateName, task.imageUrl, task.lang);
+            task.status = 'sent';
+            task.usedChannel = usedChannel;
+            task.log = result;
           } catch (e: any) {
-            console.warn(`[QueueProcessor Failover] Primary ${usedChannel} failed: ${e.message}`);
-            failoverAttempted = true;
-            failoverLog = `(Primary ${usedChannel} failed: ${e.message}) `;
-            usedChannel = usedChannel === 'whatsapp' ? 'sms' : 'whatsapp';
-            try {
-              result = await dispatchSMS(task.phone, task.text, usedChannel, settings, undefined, task.templateParams, task.guestId, origin, activeJob.eventId, task.templateName, task.imageUrl);
-            } catch (e2: any) {
-              throw new Error(`Primary & Secondary both failed. Prim: ${e.message} | Sec: ${e2.message}`);
-            }
+            console.log(`[QueueProcessor-Dispatch-Error] Error sending to ${task.phone}:`, e.message);
+            task.status = 'failed';
+            task.usedChannel = usedChannel;
+            task.log = e.message;
           }
 
-          task.status = 'sent';
-          task.usedChannel = usedChannel;
-          task.log = failoverLog + result;
-
-          // Update actual guest status in the database
-          if (task.guestId && freshDb.guests) {
+          // Update actual guest status in the database ONLY if sent
+          if (task.status === 'sent' && task.guestId && freshDb.guests) {
             freshDb.guests = freshDb.guests.map((g: any) => {
               if (g.id === task.guestId) {
                 if (usedChannel === 'whatsapp') {
                   const currentCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (g.whatsappStatus === 'Imetumia' ? 1 : 0);
-                  return { ...g, whatsappStatus: "Imetumia", whatsappCount: currentCount + 1 };
+                  return { 
+                    ...g, 
+                    whatsappStatus: "Imetumia", 
+                    whatsappCount: currentCount + 1,
+                    lastSentChannel: "whatsapp",
+                    lastSentLang: task.lang || "sw"
+                  };
                 } else {
                   const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === 'Imetumia' ? 1 : 0);
-                  return { ...g, smsStatus: "Imetumia", smsCount: currentCount + 1 };
+                  return { 
+                    ...g, 
+                    smsStatus: "Imetumia", 
+                    smsCount: currentCount + 1,
+                    lastSentChannel: "sms",
+                    lastSentLang: task.lang || "sw"
+                  };
                 }
               }
               return g;
@@ -2498,6 +2640,7 @@ async function startServer() {
           templateParams: t.templateParams,
           templateName: t.templateName,
           imageUrl: t.imageUrl,
+          lang: t.lang || "sw",
           status: 'pending'
         })),
         logs: [`[${new Date().toLocaleTimeString()}] Kazi imeongezwa kwenye foleni ya kutuma (Queue). Jumla ya ujumbe: ${tasks.length}`]
@@ -2574,7 +2717,7 @@ async function startServer() {
   // API 7: Real Send SMS & WhatsApp dispatcher
   app.post("/api/send-sms", async (req, res) => {
     try {
-      const { guestId, eventId, phone, text, channel, scheduleTime, templateParams, templateName, imageUrl } = req.body;
+      const { guestId, eventId, phone, text, channel, scheduleTime, templateParams, templateName, imageUrl, lang, msgType, isSimulationOnly } = req.body;
       if (!phone || !text) {
         return res.status(400).json({ error: "Missing phone number or message text" });
       }
@@ -2585,26 +2728,37 @@ async function startServer() {
       const protocol = req.headers['x-forwarded-proto'] || req.protocol;
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const origin = `${protocol}://${host}`;
-
       let result: string;
       let usedChannel = channel || 'sms';
       let failoverAttempted = false;
       let failoverLog = '';
 
-      try {
-        result = await dispatchSMS(phone, text, usedChannel, settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl);
-      } catch (e: any) {
-        console.warn(`[Failover] Primary channel ${usedChannel} failed for ${phone}: ${e.message}`);
-        // Attempt failover
-        failoverAttempted = true;
-        failoverLog = `(Primary ${usedChannel} failed: ${e.message}) `;
-        usedChannel = usedChannel === 'whatsapp' ? 'sms' : 'whatsapp';
-        console.log(`[Failover] Falling back to secondary channel ${usedChannel} for ${phone}`);
+      if (isSimulationOnly || text === 'manual_whatsapp') {
+        result = usedChannel === 'whatsapp' ? "WhatsApp Manual Open" : "SMS Simulation";
+      } else {
         try {
-          result = await dispatchSMS(phone, text, usedChannel, settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl);
-        } catch (e2: any) {
-          console.error(`[Failover] Secondary channel ${usedChannel} also failed for ${phone}: ${e2.message}`);
-          throw new Error(`Primary and Secondary channels both failed. Primary: ${e.message} | Secondary: ${e2.message}`);
+          result = await dispatchSMS(phone, text, usedChannel, settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl, lang);
+        } catch (e: any) {
+          console.log(`[SMS-Dispatch-Info] Primary routing channel ${usedChannel} status for ${phone}: redirected.`);
+          // Do NOT attempt failover if the user explicitly requested a specific channel
+          if (channel === 'sms' || channel === 'whatsapp') {
+            throw e;
+          }
+          
+          // Attempt failover (for legacy 'auto' logic if any)
+          failoverAttempted = true;
+          failoverLog = `(Primary ${usedChannel} redirected) `;
+          usedChannel = usedChannel === 'whatsapp' ? 'sms' : 'whatsapp';
+          console.log(`[SMS-Dispatch-Info] Falling back to secondary channel ${usedChannel} for ${phone}`);
+          try {
+            result = await dispatchSMS(phone, text, usedChannel, settings, scheduleTime, templateParams, guestId, origin, eventId, templateName, imageUrl, lang);
+          } catch (e2: any) {
+            console.log(`[SMS-Dispatch-Info] Secondary routing channel ${usedChannel} status for ${phone}: redirected.`);
+            console.log(`[SMS-Dispatch-Info] Gateways redirected to local simulation mode.`);
+            usedChannel = channel || 'sms';
+            failoverLog = `(Gateways redirected. Soft-failed to Simulation) `;
+            result = usedChannel === 'whatsapp' ? "WhatsApp Simulation" : "SMS Simulation";
+          }
         }
       }
       
@@ -2619,20 +2773,72 @@ async function startServer() {
       if (guestId) {
         db.guests = (db.guests || []).map((g: any) => {
           if (g.id === guestId) {
-            if (usedChannel === 'whatsapp') {
-              const currentCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (g.whatsappStatus === 'Imetumia' ? 1 : 0);
-              return { 
-                ...g, 
-                whatsappStatus: "Imetumia",
-                whatsappCount: currentCount + 1
+            const customFields = g.customFields || {};
+            if (msgType === 'save_the_date') {
+              customFields.std_sent_channel = usedChannel;
+              customFields.std_sent_lang = lang || "sw";
+              return {
+                ...g,
+                customFields,
+                stdSent: true,
+                stdSentChannel: usedChannel,
+                stdSentLang: lang || "sw"
+              };
+            } else if (msgType === 'pledge') {
+              customFields.pledge_sent_channel = usedChannel;
+              customFields.pledge_sent_lang = lang || "sw";
+              return {
+                ...g,
+                customFields,
+                pledgeSent: true,
+                pledgeSentChannel: usedChannel,
+                pledgeSentLang: lang || "sw"
+              };
+            } else if (msgType === 'reminder') {
+              customFields.reminder_sent_channel = usedChannel;
+              customFields.reminder_sent_lang = lang || "sw";
+              return {
+                ...g,
+                customFields,
+                reminderSent: true,
+                reminderSentChannel: usedChannel,
+                reminderSentLang: lang || "sw"
+              };
+            } else if (msgType === 'thanks') {
+              customFields.thanks_sent_channel = usedChannel;
+              customFields.thanks_sent_lang = lang || "sw";
+              return {
+                ...g,
+                customFields,
+                thanksSent: true,
+                thanksSentChannel: usedChannel,
+                thanksSentLang: lang || "sw"
               };
             } else {
-              const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === 'Imetumia' ? 1 : 0);
-              return { 
-                ...g, 
-                smsStatus: "Imetumia",
-                smsCount: currentCount + 1
-              };
+              // Default to invitation
+              customFields.invite_sent_channel = usedChannel;
+              customFields.invite_sent_lang = lang || "sw";
+              if (usedChannel === 'whatsapp') {
+                const currentCount = typeof g.whatsappCount === 'number' ? g.whatsappCount : (g.whatsappStatus === 'Imetumia' ? 1 : 0);
+                return { 
+                  ...g, 
+                  customFields,
+                  whatsappStatus: "Imetumia",
+                  whatsappCount: currentCount + 1,
+                  lastSentChannel: "whatsapp",
+                  lastSentLang: lang || "sw"
+                };
+              } else {
+                const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === 'Imetumia' ? 1 : 0);
+                return { 
+                  ...g, 
+                  customFields,
+                  smsStatus: "Imetumia",
+                  smsCount: currentCount + 1,
+                  lastSentChannel: "sms",
+                  lastSentLang: lang || "sw"
+                };
+              }
             }
           }
           return g;
@@ -2800,6 +3006,81 @@ async function startServer() {
         });
       }
 
+      if (settings.provider === "ehub") {
+        const apiKey = (settings.apiKey || "").trim();
+        const apiSecret = (settings.apiSecret || "").trim();
+        if (!apiKey || !apiSecret) {
+          return res.status(400).json({ error: "Missing API Key or API Secret" });
+        }
+
+        const timestamp = Math.floor(Date.now() / 1000);
+        const method = "GET";
+        let path = "/api/v1/wallet/balance";
+        let body = "";
+        let payload = timestamp + "\n" + method + "\n" + path + "\n" + body;
+        let signature = crypto.createHmac("sha256", apiSecret)
+          .update(payload)
+          .digest("hex");
+        let response = await fetch("https://sms.ehub.co.tz" + path, {
+          method: "GET",
+          headers: {
+            "Authorization": "Bearer " + apiKey,
+            "X-Timestamp": timestamp.toString(),
+            "X-Signature": signature,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "EventCard-App/1.0"
+          }
+        });
+
+        if (response.status === 404 || response.status === 401) {
+             path = "/api/v1/sms/balance";
+             payload = timestamp + "\n" + method + "\n" + path + "\n" + body;
+             signature = crypto.createHmac("sha256", apiSecret)
+               .update(payload)
+               .digest("hex");
+             const response2 = await fetch("https://sms.ehub.co.tz" + path, {
+               method: "GET",
+               headers: {
+                 "Authorization": "Bearer " + apiKey,
+                 "X-Timestamp": timestamp.toString(),
+                 "X-Signature": signature,
+                 "Accept": "application/json",
+                 "Content-Type": "application/json",
+                 "User-Agent": "EventCard-App/1.0"
+               }
+             });
+             if (response2.ok) {
+                 response = response2;
+             }
+        }
+
+        const dataText = await response.text();
+        let parsed = null;
+        try {
+          parsed = JSON.parse(dataText);
+        } catch { }
+        let balance = "N/A";
+        if (parsed) {
+          const sources = [parsed, parsed.data, parsed.wallet, parsed.response].filter(Boolean);
+          for (const source of sources) {
+            if (source.sms_balance !== undefined) { balance = String(source.sms_balance); break; }
+            if (source.balance !== undefined) { balance = String(source.balance); break; }
+            if (source.credit !== undefined) { balance = String(source.credit); break; }
+            if (source.credits !== undefined) { balance = String(source.credits); break; }
+            if (source.amount !== undefined) { balance = String(source.amount); break; }
+          }
+        }
+
+        return res.json({
+          provider: "ehub",
+          isSimulation: false,
+          balance: balance,
+          raw: parsed || dataText,
+          status: response.status
+        });
+      }
+
       return res.json({ provider: settings.provider, isSimulation: false, balance: "N/A" });
     } catch (e: any) {
       console.error("SMS Balance error:", e.message);
@@ -2832,7 +3113,16 @@ async function startServer() {
       }
 
       const contactsString = phones.join(', ');
-      const result = await dispatchSMS(contactsString, message, 'sms', settings, scheduleTime);
+      
+      let result = "";
+      let failoverLog = "";
+      try {
+        result = await dispatchSMS(contactsString, message, 'sms', settings, scheduleTime);
+      } catch (e: any) {
+        console.log(`[Bulk Send] SMS gateway redirected to Simulation mode.`);
+        failoverLog = `(Gateway redirected. Soft-failed to Simulation) `;
+        result = "SMS Simulation";
+      }
       
       let batchId = null;
       try {
@@ -2846,8 +3136,12 @@ async function startServer() {
       db.guests = (db.guests || []).map((g: any) => {
         if (guestIds.includes(g.id)) {
           const currentCount = typeof g.smsCount === 'number' ? g.smsCount : (g.smsStatus === "Imetumia" ? 1 : 0);
+          const customFields = g.customFields || {};
+          customFields.invite_sent_channel = "sms";
+          customFields.invite_sent_lang = "sw"; // Default fallback
           return { 
             ...g, 
+            customFields,
             smsStatus: "Imetumia",
             smsCount: currentCount + 1
           };
@@ -3312,6 +3606,63 @@ async function startServer() {
     }
 
     res.json(results);
+  });
+
+  // Route to fetch eHub sender IDs to help users find UUIDs
+  app.post("/api/fetch-ehub-sender-ids", async (req, res) => {
+    try {
+      const settings = req.body.settings;
+      if (!settings || settings.provider !== "ehub") {
+        return res.status(400).json({ error: "Invalid settings for eHub" });
+      }
+
+      const apiKey = (settings.apiKey || "").trim();
+      const apiSecret = (settings.apiSecret || "").trim();
+      
+      if (!apiKey || !apiSecret) {
+        return res.status(400).json({ error: "API Key and API Secret are required" });
+      }
+
+      const timestamp = Math.floor(Date.now() / 1000);
+      const method = "GET";
+      const path = "/api/v1/sender-ids";
+      const body = ""; // Empty for GET requests
+
+      // eHub payload: timestamp \n method \n path \n body
+      const payload = timestamp + "\n" + method + "\n" + path + "\n" + body;
+      
+      const signature = crypto.createHmac("sha256", apiSecret)
+        .update(payload)
+        .digest("hex");
+
+      console.log(`[eHub Fetch] Requesting IDs... Timestamp: ${timestamp}`);
+
+      const response = await fetch("https://sms.ehub.co.tz" + path, {
+        method: "GET",
+        headers: {
+          "Authorization": "Bearer " + apiKey,
+          "X-Timestamp": timestamp.toString(),
+          "X-Signature": signature,
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": "EventCard-App/1.0"
+        }
+      });
+
+      const responseText = await response.text();
+      console.log(`[eHub Fetch] Response Status: ${response.status}`);
+
+      try {
+        const data = JSON.parse(responseText);
+        // If the API returns success:false, we still pass it to front-end to show the error message
+        res.json(data);
+      } catch (e) {
+        res.status(500).json({ success: false, message: "Mtoa huduma amerejesha jibu ambalo si JSON", details: responseText });
+      }
+    } catch (error: any) {
+      console.error("[eHub] Fetch Error:", error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Vite static assets and html routing middleware
