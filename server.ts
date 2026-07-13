@@ -630,7 +630,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
         const payload: any = {
           messaging_product: "whatsapp",
           recipient_type: "individual",
-          to: formattedPhone, contacts: [formattedPhone],
+          to: formattedPhone,
           type: "template",
           template: {
             name: templateName,
@@ -1212,7 +1212,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     const method = "POST";
     const bodyObj = {
       sender_id: senderId,
-      to: formattedPhone, contacts: [formattedPhone],
+      to: formattedPhone,
       message: text
     };
     const bodyStr = JSON.stringify(bodyObj);
@@ -1300,7 +1300,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     
     fetchOptions.body = JSON.stringify({
       from: senderId,
-      to: formattedPhone, contacts: [formattedPhone],
+      to: formattedPhone,
       text: text
     });
     
@@ -1316,7 +1316,7 @@ async function dispatchSMS(phone: string, text: string, channel: 'sms' | 'whatsa
     };
     
     fetchOptions.body = JSON.stringify({
-      to: formattedPhone, contacts: [formattedPhone],
+      to: formattedPhone,
       message: text,
       sender_id: senderId
     });
@@ -1648,6 +1648,41 @@ async function startServer() {
       res.status(400).send("Unsupported image format");
     } catch (error: any) {
       res.status(500).send("Error serving image: " + error.message);
+    }
+  });
+
+  let loginLogsCache: any[] = [];
+
+  app.post("/api/auth/login-attempt", async (req, res) => {
+    try {
+      const { username, success } = req.body;
+      const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'Unknown IP';
+      
+      const newLog = {
+        id: Date.now().toString() + Math.random().toString(36).substring(7),
+        timestamp: Date.now(),
+        username: username || 'Unknown',
+        ipAddress: ip,
+        success: !!success
+      };
+
+      loginLogsCache.unshift(newLog);
+      // Keep only last 200 logs
+      if (loginLogsCache.length > 200) {
+        loginLogsCache = loginLogsCache.slice(0, 200);
+      }
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/auth/login-logs", async (req, res) => {
+    try {
+      res.json(loginLogsCache);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
