@@ -280,7 +280,7 @@ export default function SMSGatewayConfig() {
           <Settings className="w-4 h-4 text-emerald-400" />
           {isEn ? "Global SMS Gateway Settings" : "Mipangilio ya SMS Gateway (Jumla)"}
         </h3>
-        {gatewaySettings.provider !== 'simulation' && gatewaySettings.senderId && (
+        {(gatewaySettings.provider !== 'simulation' || gatewaySettings.senderId || balance !== null) && (
           <div className="flex items-center gap-3">
             {balance !== null && (
               <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase cursor-pointer hover:bg-blue-500/20 transition" onClick={fetchBalance} title="Click to refresh balance">
@@ -288,16 +288,18 @@ export default function SMSGatewayConfig() {
                 <span>{balance} SMS</span>
               </div>
             )}
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[9px] font-bold uppercase ${
-              gatewaySettings.senderIdStatus === 'approved' 
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                : gatewaySettings.senderIdStatus === 'pending'
-                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-            }`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-              <span>{gatewaySettings.senderId}</span>
-            </div>
+            {gatewaySettings.senderId && (
+              <div className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[9px] font-bold uppercase ${
+                gatewaySettings.senderIdStatus === 'approved' 
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                  : gatewaySettings.senderIdStatus === 'pending'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+              }`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                <span>{gatewaySettings.senderId}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

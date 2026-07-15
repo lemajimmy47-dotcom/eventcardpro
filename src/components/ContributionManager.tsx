@@ -134,10 +134,10 @@ export default function ContributionManager({
 
     // Fallback for older database records
     if (!pledgeAdded) {
-      if (g.whatsappStatus === 'Imetumia') {
+      if (isStatusSent(g.whatsappStatus)) {
         deliveries.push({ type: isEn ? 'Pledge' : 'Ahadi', channel: 'whatsapp', lang: language || 'sw' });
       }
-      if (g.smsStatus === 'Imetumia') {
+      if (isStatusSent(g.smsStatus)) {
         deliveries.push({ type: isEn ? 'Pledge' : 'Ahadi', channel: 'sms', lang: language || 'sw' });
       }
     }
@@ -647,7 +647,7 @@ export default function ContributionManager({
                 const mType = actionType === 'Pledge' ? 'pledge' : (actionType === 'Reminder' ? 'reminder' : 'thanks');
                 const isSmsSent = (g.customFields?.[`${mType}_sent_channel`] || g[`${mType}SentChannel` as any]) === 'sms' || 
                                   (mType === 'pledge' && g.pledgeSent && (g.pledgeSentChannel || g.lastSentChannel || 'sms') === 'sms') ||
-                                  (mType === 'pledge' && g.smsStatus === 'Imetumia');
+                                  (mType === 'pledge' && isStatusSent(g.smsStatus));
                 let smsBadge = isEn ? "Pending" : "Bado";
                 let smsColor = "text-slate-500 bg-white/5 border-white/10";
                 if (isSmsSent) {
@@ -657,7 +657,7 @@ export default function ContributionManager({
 
                 const isWaSent = (g.customFields?.[`${mType}_sent_channel`] || g[`${mType}SentChannel` as any]) === 'whatsapp' || 
                                  (mType === 'pledge' && g.pledgeSent && (g.pledgeSentChannel || g.lastSentChannel) === 'whatsapp') ||
-                                 (mType === 'pledge' && g.whatsappStatus === 'Imetumia');
+                                 (mType === 'pledge' && isStatusSent(g.whatsappStatus));
                 let waBadge = isEn ? "Pending" : "Bado";
                 let waColor = "text-slate-500 bg-white/5 border-white/10";
                 if (isWaSent) {

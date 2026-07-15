@@ -1158,9 +1158,9 @@ Karibu sana!`);
 
     const pendingGuests = filteredGuests.filter(g => {
       if (channel === 'whatsapp') {
-        return g.whatsappStatus !== 'Imetumia';
+        return !isStatusSent(g.whatsappStatus);
       } else {
-        return g.smsStatus !== 'Imetumia';
+        return !isStatusSent(g.smsStatus);
       }
     });
     
@@ -1438,20 +1438,18 @@ Karibu sana!`);
     // Collect what has been successfully delivered
     const deliveries: { channel: 'whatsapp' | 'sms'; lang: string }[] = [];
 
-    // If we have direct records of lastSentChannel, use them
-    if (g.lastSentChannel) {
+    // Check both channels independently using central isStatusSent helper so we support all success statuses (sent, delivered, success, imetumia, etc.)
+    if (isStatusSent(g.whatsappStatus)) {
       deliveries.push({
-        channel: g.lastSentChannel as 'whatsapp' | 'sms',
+        channel: 'whatsapp',
         lang: g.lastSentLang || language || 'sw'
       });
-    } else {
-      // Fallback detection for existing data
-      if (g.whatsappStatus === 'Imetumia') {
-        deliveries.push({ channel: 'whatsapp', lang: language || 'sw' });
-      }
-      if (g.smsStatus === 'Imetumia') {
-        deliveries.push({ channel: 'sms', lang: language || 'sw' });
-      }
+    }
+    if (isStatusSent(g.smsStatus)) {
+      deliveries.push({
+        channel: 'sms',
+        lang: g.lastSentLang || language || 'sw'
+      });
     }
 
     if (deliveries.length === 0) return null;

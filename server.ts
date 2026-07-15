@@ -2891,7 +2891,7 @@ async function startServer() {
   // API 7C: Get SMS Balance
   app.get("/api/sms-balance", async (req, res) => {
     try {
-      const db = readDB();
+      const db = await readDBLatest();
       const settings = db.smsGatewaySettings || { provider: "simulation" };
 
       if (settings.provider === "simulation" || !settings.provider) {

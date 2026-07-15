@@ -60,7 +60,20 @@ export default function Login({ onSuccess, onBack }: LoginProps) {
       const trimmedUser = username.trim().toLowerCase();
       const trimmedPass = password.trim();
 
+      const logAttempt = async (success: boolean) => {
+        try {
+          await fetch('/api/auth/login-attempt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: trimmedUser, success })
+          });
+        } catch (err) {
+          console.warn('Failed to log login attempt', err);
+        }
+      };
+
       if (trimmedUser === 'jimson' && (trimmedPass === 'jimson' || trimmedPass === 'admin')) {
+        await logAttempt(true);
         safeLocalStorage.removeItem('eventcard_scanner_mode');
         safeLocalStorage.removeItem('eventcard_scanner_event_id');
         onSuccess();
@@ -69,12 +82,14 @@ export default function Login({ onSuccess, onBack }: LoginProps) {
         (validEventIds.includes(trimmedPass) || 
          validEventIds.map(id => id.toLowerCase()).includes(trimmedPass.toLowerCase()))
       ) {
+        await logAttempt(true);
         // Find correct cased ID if matched in a case-insensitive way
         const correctCasedId = validEventIds.find(id => id.toLowerCase() === trimmedPass.toLowerCase()) || trimmedPass;
         safeLocalStorage.setItem('eventcard_scanner_mode', 'true');
         safeLocalStorage.setItem('eventcard_scanner_event_id', correctCasedId);
         onSuccess();
       } else {
+        await logAttempt(false);
         setError(language === 'sw' 
           ? 'Jina la mtumiaji au nenosiri si sahihi! Kwa mlinzi mlangoni, weka username kuelekezwa "scanner" na password kuwa ID ya tukio.'
           : 'Incorrect username or password! Scanners should use username "scanner" and Event ID as password.');
@@ -106,7 +121,20 @@ export default function Login({ onSuccess, onBack }: LoginProps) {
       const trimmedUser = username.trim().toLowerCase();
       const trimmedPass = password.trim();
 
+      const logAttempt = async (success: boolean) => {
+        try {
+          await fetch('/api/auth/login-attempt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: trimmedUser, success })
+          });
+        } catch (err) {
+          console.warn('Failed to log login attempt', err);
+        }
+      };
+
       if (trimmedUser === 'jimson' && (trimmedPass === 'jimson' || trimmedPass === 'admin')) {
+        await logAttempt(true);
         safeLocalStorage.removeItem('eventcard_scanner_mode');
         safeLocalStorage.removeItem('eventcard_scanner_event_id');
         onSuccess();
@@ -115,11 +143,13 @@ export default function Login({ onSuccess, onBack }: LoginProps) {
         (fallbackEventIds.includes(trimmedPass) || 
          fallbackEventIds.map(id => id.toLowerCase()).includes(trimmedPass.toLowerCase()))
       ) {
+        await logAttempt(true);
         const correctCasedId = fallbackEventIds.find(id => id.toLowerCase() === trimmedPass.toLowerCase()) || trimmedPass;
         safeLocalStorage.setItem('eventcard_scanner_mode', 'true');
         safeLocalStorage.setItem('eventcard_scanner_event_id', correctCasedId);
         onSuccess();
       } else {
+        await logAttempt(false);
         setError(language === 'sw' 
           ? 'Hitilafu ya mtandao au taarifa zisizo sahihi! Tafadhali thibitisha muunganisho wa internet na ujaribu tena.'
           : 'Network error or incorrect credentials! Please check your internet connection and verify credentials.');

@@ -56,6 +56,7 @@ import GuestInvitePage from './components/GuestInvitePage';
 import GuestSaveTheDatePage from './components/GuestSaveTheDatePage';
 import GuestPledgeSubmissionPage from './components/GuestPledgeSubmissionPage';
 import AuditLogsPage from './components/AuditLogsPage';
+import SecurityDashboard from './components/SecurityDashboard';
 import { ConnectivityDebug } from './components/ConnectivityDebug';
 import { safeLocalStorage } from './utils/storage';
 import { EventDetails, Guest, TemplateSettings, UserAccount, CommitteeMember, CommitteeNotification, ContributionCardTemplate } from './types';
@@ -385,7 +386,7 @@ export default function App() {
     if (!activeGuests || activeGuests.length === 0) {
       return 'Planning';
     }
-    const sentCount = activeGuests.filter(g => g.smsStatus === 'Imetumia' || g.whatsappStatus === 'Imetumia').length;
+    const sentCount = activeGuests.filter(g => isStatusSent(g.smsStatus) || isStatusSent(g.whatsappStatus)).length;
     if (sentCount > 0) {
       return 'Dispatched';
     }
@@ -2058,6 +2059,8 @@ export default function App() {
         );
       case 'audit-logs':
         return <AuditLogsPage language={language} />;
+      case 'security-dashboard':
+        return <SecurityDashboard language={language} />;
       case 'debug':
         return <ConnectivityDebug />;
       case 'contributions':
@@ -2152,7 +2155,8 @@ export default function App() {
     { id: 'debug', icon: ShieldCheck, label: language === 'sw' ? 'Mtatuzi wa Muunganisho' : 'Debug Connectivity' },
     { id: 'settings', icon: Settings, label: t('nav.settings') },
     { id: 'wallet', icon: Wallet, label: t('nav.wallet') },
-    { id: 'audit-logs', icon: ShieldCheck, label: language === 'sw' ? 'Audit Logs (Ulinzi)' : 'Audit Logs' }
+    { id: 'audit-logs', icon: ShieldCheck, label: language === 'sw' ? 'Audit Logs (Ulinzi)' : 'Audit Logs' },
+    { id: 'security-dashboard', icon: ShieldCheck, label: language === 'sw' ? 'Ulinzi wa Kuingia' : 'Security Dashboard' }
   ];
 
   return (
