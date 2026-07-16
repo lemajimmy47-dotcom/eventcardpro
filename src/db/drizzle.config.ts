@@ -19,19 +19,18 @@ const getDbCredentials = () => {
     };
   }
 
-  if (!sqlHost || !sqlDbName || !user || !password) {
-    throw new Error("DATABASE_URL or (SQL_HOST, SQL_DB_NAME, SQL_ADMIN_USER, SQL_ADMIN_PASSWORD) must be set in environment variables.");
+  if (sqlHost && sqlDbName && user && password) {
+    const isUnixSocket = sqlHost.startsWith("/");
+    return {
+      host: sqlHost,
+      user: user,
+      password: password,
+      database: sqlDbName,
+      ssl: isUnixSocket ? false : { rejectUnauthorized: false },
+    };
   }
 
-  const isUnixSocket = sqlHost && sqlHost.startsWith("/");
-
-  return {
-    host: sqlHost,
-    user: user,
-    password: password,
-    database: sqlDbName,
-    ssl: isUnixSocket ? false : { rejectUnauthorized: false },
-  };
+  throw new Error("Either (SQL_HOST, SQL_DB_NAME, SQL_ADMIN_USER, SQL_ADMIN_PASSWORD) or DATABASE_URL must be set in environment variables.");
 };
 
 export default defineConfig({

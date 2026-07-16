@@ -23,25 +23,26 @@ export const createPool = () => {
   const password = process.env.SQL_PASSWORD;
   const database = process.env.SQL_DB_NAME;
 
-  if (!host) {
-    console.warn("[Database] SQL_HOST and DATABASE_URL are missing. Fallback to local storage expected.");
-  } else {
-    console.log(`[Database] Connecting to Postgres at ${host} as ${user} (DB: ${database})`);
+  if (host) {
+    console.log(`[Database] Connecting to Cloud SQL at ${host} as ${user} (DB: ${database || "postgres"})`);
+    const isUnixSocket = host.startsWith("/");
+    return new Pool({
+      host,
+      port: 5432,
+      user,
+      password,
+      database: database || "postgres",
+      ssl: isUnixSocket ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 30000,
+      idleTimeoutMillis: 30000,
+      max: 15,
+      keepAlive: true,
+    });
   }
 
-  const isUnixSocket = host && host.startsWith("/");
-
+  console.warn("[Database] Both SQL_HOST and DATABASE_URL are missing. Fallback to local storage expected.");
   return new Pool({
-    host,
-    port: 5432,
-    user,
-    password,
-    database: database || "postgres",
-    ssl: isUnixSocket ? false : (host ? { rejectUnauthorized: false } : false),
-    connectionTimeoutMillis: 30000,
-    idleTimeoutMillis: 30000,
-    max: 15,
-    keepAlive: true,
+    connectionTimeoutMillis: 5000,
   });
 };
 

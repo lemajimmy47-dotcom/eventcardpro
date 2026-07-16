@@ -8,7 +8,10 @@ import { execSync } from "child_process";
 const DB_PATH = path.join(process.cwd(), "database.json");
 let inMemoryDB: any = null;
 
+let isSQLDisabledTemporarily = false;
+
 function hasSQLConfig() {
+  if (isSQLDisabledTemporarily) return false;
   return !!(process.env.SQL_HOST || process.env.DATABASE_URL || process.env.SQL_DATABASE_URL);
 }
 
@@ -96,7 +99,8 @@ export async function initDB() {
   } catch (error) {
     console.error("[CloudSQL Initializer] Setup failed: ", error);
     // Fallback safely to local JSON file
-    console.log("[CloudSQL Initializer] Falling back to local database.json due to failure.");
+    console.log("[CloudSQL Initializer] Falling back to local database.json due to database connection/setup failure.");
+    isSQLDisabledTemporarily = true;
     inMemoryDB = getLocalDBFallback();
     return inMemoryDB;
   }
@@ -150,7 +154,8 @@ export async function readDBLatest() {
   try {
     return await activeFetchPromise;
   } catch (error) {
-    console.error("[CloudSQL readDBLatest] PostgreSQL read failed, returning cache: ", error);
+    console.error("[CloudSQL readDBLatest] PostgreSQL read failed, temporarily bypassing SQL and returning cache: ", error);
+    isSQLDisabledTemporarily = true;
     if (!inMemoryDB) {
       inMemoryDB = getLocalDBFallback();
     }
@@ -206,9 +211,10 @@ export async function writeDB(data: any) {
     await syncStateToRelationalDB(data);
     isSyncingToDB = false;
   } catch (error) {
-    console.error("[CloudSQL writeDB] Relational sync error (synchronous):", error);
+    console.error("[CloudSQL writeDB] Relational sync error (synchronous), temporarily disabling SQL updates:", error);
+    isSQLDisabledTemporarily = true;
     isSyncingToDB = false;
-    throw error;
+    // Do not throw the error so the client can continue saving locally
   }
 }
 

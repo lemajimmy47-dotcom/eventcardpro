@@ -371,11 +371,11 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                 </p>
                 <p className="text-slate-400">
                   <strong>{language === 'sw' ? 'Namba ya Mlipakodi (TRA TIN):' : 'Taxpayer Identification Number (TIN):'}</strong>{' '}
-                  <span className="text-amber-400 font-mono">138-950-557</span>
+                  <span className="text-amber-400 font-mono">168-234-698</span>
                 </p>
                 <p className="text-slate-400">
                   <strong>{language === 'sw' ? 'Mlipakodi Aliyesajiliwa:' : 'Registered Taxpayer:'}</strong>{' '}
-                  <span className="text-white font-medium">JIMSON FANUEL LEMA</span>
+                  <span className="text-white font-medium">EVENT CARD</span>
                 </p>
                 <p className="text-slate-400">
                   <strong>{language === 'sw' ? 'Sheria na Nchi:' : 'Act & Jurisdiction:'}</strong>{' '}
@@ -518,7 +518,7 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                       {language === 'sw' ? 'Namba ya Sajili BRELA: 705371' : 'Tanzanian BRELA Registration No: 705371'}
                     </p>
                     <p className="text-xs text-slate-400 mb-0.5">
-                      {language === 'sw' ? 'TIN ya Mlipakodi: 138-950-557' : 'Taxpayer Identification Number (TIN): 138-950-557'} (JIMSON FANUEL LEMA)
+                      {language === 'sw' ? 'TIN ya Mlipakodi: 168-234-698' : 'Taxpayer Identification Number (TIN): 168-234-698'} (EVENT CARD)
                     </p>
                     <p className="text-xs text-slate-400 mb-2">
                       {language === 'sw' ? 'Anwani ya Ofisi: Plot 00, Block 00, Kilungule B, Kinondoni, Dar es Salaam, Tanzania' : 'Physical Address: Plot 00, Block 00, Kilungule B, Kinondoni, Dar es Salaam, Tanzania'}
