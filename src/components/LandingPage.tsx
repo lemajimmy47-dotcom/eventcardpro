@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Mail, CheckCircle, MessageSquare, Phone, Users, Heart, Sparkles, Send, QrCode, X, Shield, FileText } from 'lucide-react';
+import { Mail, CheckCircle, MessageSquare, Phone, Users, Heart, Sparkles, Send, QrCode, X, Shield, FileText, Coins } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 interface LandingPageProps {
@@ -189,6 +189,176 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
 
               {/* Floating badges REMOVED per user request */}
             </motion.div>
+          </div>
+        </section>
+
+        {/* Attention-Catching Contribution Collection Announcement Section */}
+        <section className="py-12 px-4 sm:px-6 lg:px-8 relative">
+          <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+            <div className="absolute top-[20%] left-[30%] w-[40%] h-[40%] bg-emerald-600/10 rounded-full blur-[120px]"></div>
+          </div>
+          
+          <div className="max-w-7xl mx-auto relative z-10">
+            <div className="bg-gradient-to-br from-[#0c152b] via-[#0d1c3e] to-[#0a1024] border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-10 shadow-[0_0_40px_rgba(16,185,129,0.15)] relative overflow-hidden">
+              {/* Shiny Corner Tag */}
+              <div className="absolute top-0 right-0 bg-gradient-to-l from-emerald-600 to-teal-500 text-white font-extrabold text-[10px] sm:text-xs uppercase tracking-widest px-6 py-2 rounded-bl-2xl shadow-md flex items-center gap-1.5 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                <span>{language === 'sw' ? 'KIPENGELE KIPYA CHA KIPEKEE 💎' : 'NEW EXCLUSIVE FEATURE 💎'}</span>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center mt-4">
+                {/* Left Column: Core Message and Value Proposition */}
+                <div className="lg:col-span-7 space-y-6">
+                  <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider">
+                    <Coins className="w-4 h-4" />
+                    <span>{language === 'sw' ? 'USIMAMIZI WA MICHANGO YA SHEREHE' : 'EVENT FUNDRAISING & CONTRIBUTIONS'}</span>
+                  </div>
+
+                  <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight font-sans">
+                    {language === 'sw' ? (
+                      <>Sasa Kusanya Michango ya Sherehe <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">Rahisi & Salama Zaidi Kidijitali!</span></>
+                    ) : (
+                      <>Seamlessly Collect Event Contributions <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">& Pledges Digitally!</span></>
+                    )}
+                  </h2>
+
+                  <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                    {language === 'sw' ? (
+                      'Usisumbuke tena na magroup ya WhatsApp au kufuatilia ahadi (pledges) kwa mkono na makaratasi. Wageni wako wanaweza kutoa michango yao na kujaza ahadi zao moja kwa moja wanapofungua kadi zao za mwaliko wa kidijitali.'
+                    ) : (
+                      'No more manual follow-ups or chaotic WhatsApp groups. Guests can view payment details, log contributions, or submit formal pledges directly inside their interactive invitation screen.'
+                    )}
+                  </p>
+
+                  {/* Bullet Highlights */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div className="flex items-start space-x-3">
+                      <div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/20 text-emerald-400 mt-0.5">
+                        <CheckCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{language === 'sw' ? 'Namba za Malipo Moja kwa Moja' : 'Direct Payment Integration'}</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">{language === 'sw' ? 'Wageni wanaona namba za malipo (Lipa Namba, M-Pesa, n.k.) kwenye kadi zao.' : 'Guests view secure mobile payment details instantly on their cards.'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3">
+                      <div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/20 text-emerald-400 mt-0.5">
+                        <CheckCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{language === 'sw' ? 'Ufuatiliaji wa Ahadi (Pledges)' : 'Smart Pledge Management'}</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">{language === 'sw' ? 'Wageni wanaweza kuweka kiwango cha ahadi na tarehe ya kutoa mchango.' : 'Guests can log target pledges and expected dates effortlessly.'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3">
+                      <div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/20 text-emerald-400 mt-0.5">
+                        <CheckCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{language === 'sw' ? 'Ujumbe wa Shukrani wa Papo Hapo' : 'Automated Thank-You SMS'}</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">{language === 'sw' ? 'Mfumo unatuma ujumbe maalum wa shukrani kwa kila aliyelipia au kuahidi.' : 'Instant appreciation messages dispatched to guest phones.'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3">
+                      <div className="bg-emerald-500/10 p-1 rounded-lg border border-emerald-500/20 text-emerald-400 mt-0.5">
+                        <CheckCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{language === 'sw' ? 'Ripoti na Grafu Dashboard' : 'Real-Time Analytics'}</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">{language === 'sw' ? 'Kagua michango iliyolipwa, ahadi, na kiasi kilichobaki kupitia chati.' : 'Visualize target bars, outstanding logs, and export clean reports.'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <button
+                      onClick={onStart}
+                      className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-semibold px-6 py-3 rounded-xl transition duration-150 text-sm shadow-lg flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>{language === 'sw' ? 'Jaribu Mfumo wa Michango Bure' : 'Try Contribution System Free'}</span>
+                      <Sparkles className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Column: Live Interactive-Like Mockup of Contribution Dashboard */}
+                <div className="lg:col-span-5">
+                  <div className="bg-slate-950/80 border border-emerald-500/30 rounded-2xl p-5 shadow-2xl relative">
+                    {/* Header bar of mini-dashboard */}
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">{language === 'sw' ? 'MICHANGO LIVE TRACKER' : 'LIVE CONTRIBUTION TRACKER'}</span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/35 text-emerald-400 font-extrabold px-2 py-0.5 rounded-full">ACTIVE</span>
+                    </div>
+
+                    {/* Progress details */}
+                    <div className="space-y-3 mb-4">
+                      <div className="flex justify-between text-xs font-medium">
+                        <span className="text-slate-300">{language === 'sw' ? 'Sherehe: Harusi ya Joachim & Diana' : 'Event: Wedding of Joachim & Diana'}</span>
+                        <span className="text-emerald-400 font-bold">65%</span>
+                      </div>
+                      
+                      {/* Animated Progress Bar */}
+                      <div className="w-full bg-slate-900 rounded-full h-3.5 p-0.5 border border-white/5 overflow-hidden">
+                        <div className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-1000" style={{ width: '65%' }}></div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-900/50 p-2.5 rounded-lg border border-white/5 font-sans">
+                        <div>
+                          <p className="text-slate-400">{language === 'sw' ? 'Michango Iliyopokelewa' : 'Collected Cash'}</p>
+                          <p className="text-xs font-bold text-white mt-0.5">TSh 7,850,000</p>
+                        </div>
+                        <div className="border-l border-white/10 pl-3">
+                          <p className="text-slate-400">{language === 'sw' ? 'Lengo la Kamati' : 'Target Target'}</p>
+                          <p className="text-xs font-bold text-slate-300 mt-0.5">TSh 12,000,000</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent mini logs */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{language === 'sw' ? 'Mwenendo wa Hivi Karibuni' : 'Recent Contributions'}</p>
+                      
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                        <div className="flex items-center justify-between text-xs bg-white/5 p-2 rounded-lg border border-white/5">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            <span className="text-slate-200 font-medium">Jimson Lema</span>
+                          </div>
+                          <span className="text-emerald-400 font-mono font-bold">TSh 500,000</span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs bg-white/5 p-2 rounded-lg border border-white/5">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            <span className="text-slate-200 font-medium">Mary Mollel</span>
+                          </div>
+                          <span className="text-emerald-400 font-mono font-bold">TSh 250,000</span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs bg-white/5 p-2 rounded-lg border border-white/5">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                            <span className="text-slate-300 font-medium">Rev. Fidelis</span>
+                          </div>
+                          <span className="text-amber-400 font-mono font-bold">TSh 1,000,000 (Ahadi)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Micro footnote */}
+                    <p className="text-[9px] text-slate-500 mt-3 text-center italic">
+                      {language === 'sw' ? '* Ripoti hutolewa kama PDF & Excel papohapo.' : '* Automated reports generated instantly as PDF & Excel.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
