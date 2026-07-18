@@ -1210,9 +1210,15 @@ export default function App() {
               {/* Header: Greeting & Dynamic Event Dropdown Selector */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="dashboard-header-row">
                 <div className="space-y-1 text-left">
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight" id="greeting-title">
-                    {language === 'sw' ? 'Habari,' : 'Hello,'} {user?.username || 'Jimson'} 👋
-                  </h1>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight" id="greeting-title">
+                      {language === 'sw' ? 'Habari,' : 'Hello,'} {user?.username || 'Jimson'} 👋
+                    </h1>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-bold shrink-0 shadow-lg shadow-emerald-950/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>{language === 'sw' ? 'Muda Halisi (Website Sync Active)' : 'Real-time Website Sync Active'}</span>
+                    </div>
+                  </div>
                   <p className="text-slate-400 text-xs sm:text-sm" id="greeting-subtitle">
                     {language === 'sw' 
                       ? `Muhtasari wa sherehe ya ${eventDetails?.name || 'sherehe zako'}` 
@@ -2283,9 +2289,15 @@ export default function App() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h2 className="font-bold text-sm tracking-tight capitalize">
-              {activeTab.replace(/-/g, ' ')}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-sm tracking-tight capitalize">
+                {activeTab.replace(/-/g, ' ')}
+              </h2>
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 rounded-full text-[9px] font-bold font-mono tracking-wide shadow-sm shadow-emerald-950/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{language === 'sw' ? 'MUDA HALISI' : 'LIVE SYNC'}</span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center space-x-3.5">

@@ -74,8 +74,8 @@ export function EventCardProvider({ children }: { children: ReactNode }) {
   // Central useSWR logic for background revalidation & smart caching
   const { data, error: swrError, isLoading: swrLoading, mutate: swrMutate } = useSWR('/api/state', fetcher, {
     revalidateOnFocus: true,
-    refreshInterval: 180000, // 3 minutes revalidation interval
-    dedupingInterval: 5000,
+    refreshInterval: 6000, // 6 seconds real-time background synchronization
+    dedupingInterval: 2000,
     errorRetryCount: 3,
   });
 

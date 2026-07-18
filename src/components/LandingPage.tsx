@@ -149,39 +149,58 @@ export default function LandingPage({ onStart, onLoginClick }: LandingPageProps)
                 </div>
 
                 {/* Simulated Invite screen */}
-                <div className="flex-grow mt-6 bg-[#030712] rounded-[2rem] p-4 flex flex-col text-white border border-white/15 relative overflow-y-auto">
-                  <div className="border border-white/10 p-2 rounded-lg text-center mt-2 flex-grow flex flex-col justify-between">
-                    <div>
-                      <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">{language === 'sw' ? 'MIAKOTI (EVENT PREVIEW)' : 'EVENT PREVIEW'}</p>
-                      <h4 className="font-bold text-sm text-white leading-tight">{language === 'sw' ? 'IMANI & NEEMA' : 'JOHN & MARY'}</h4>
-                      <p className="text-[9px] text-slate-400 italic mt-0.5">{language === 'sw' ? 'Mwaliko wa Kipekee' : 'Exclusive Invitation'}</p>
+                <div 
+                  className="flex-grow mt-6 rounded-[2rem] p-4 flex flex-col text-slate-800 border border-white/15 relative overflow-y-auto bg-cover bg-center shadow-inner"
+                  style={{ backgroundImage: "url('/sample_wedding_card.jpg')" }}
+                >
+                  <div className="absolute inset-0 bg-white/5 backdrop-blur-[0.5px] z-0 pointer-events-none"></div>
+                  
+                  <div className="relative z-10 flex flex-col justify-between h-full min-h-[360px]">
+                    <div className="text-center space-y-1">
+                      <p className="text-[10px] text-purple-700 font-extrabold uppercase tracking-wider bg-purple-50/85 backdrop-blur-md px-2.5 py-0.5 rounded-full inline-block border border-purple-200/50 shadow-sm">
+                        {language === 'sw' ? 'UHAKIKI WA MWALIKO' : 'EVENT PREVIEW'}
+                      </p>
+                      <h4 className="font-extrabold text-lg text-purple-950 tracking-tight leading-tight drop-shadow-sm mt-1">
+                        {language === 'sw' ? 'JULIE & JULIAN' : 'JULIE & JULIAN'}
+                      </h4>
+                      <p className="text-[9.5px] text-purple-850 font-semibold italic">
+                        {language === 'sw' ? 'Mwaliko wa Kipekee' : 'Exclusive Invitation'}
+                      </p>
                     </div>
 
-                    {/* Styled Card Image in Mockup */}
-                    <div className="my-2 border border-dashed border-blue-500/30 bg-blue-500/10 rounded-lg p-3 flex flex-col items-center justify-center">
-                      <Heart className="w-6 h-6 text-purple-400 animate-pulse mb-1" />
-                      <p className="text-[10px] font-bold text-white">{language === 'sw' ? 'JIMSON LEMA' : 'JIMSON LEMA'}</p>
-                      <span className="text-[8px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full mt-1">DOUBLE</span>
+                    {/* Styled Card Image in Mockup - high premium glassmorphic guest badge */}
+                    <div className="my-3 backdrop-blur-md bg-white/80 border border-purple-200/40 rounded-2xl p-4 flex flex-col items-center justify-center shadow-[0_12px_24px_-10px_rgba(109,40,217,0.3)]">
+                      <Heart className="w-5.5 h-5.5 text-rose-500 animate-pulse mb-1" />
+                      <p className="text-[11.5px] font-black text-slate-900 tracking-wide">
+                        {language === 'sw' ? 'JIMSON LEMA' : 'JIMSON LEMA'}
+                      </p>
+                      <span className="text-[8.5px] font-extrabold bg-gradient-to-r from-purple-600 to-rose-500 text-white px-3 py-0.5 rounded-full mt-1.5 shadow-sm uppercase tracking-wider">
+                        DOUBLE
+                      </span>
                     </div>
 
-                    <div className="text-[9px] text-slate-300 space-y-0.5 text-left pl-2 font-sans">
-                      <p>• <strong>{language === 'sw' ? 'Tarehe:' : 'Date:'}</strong> 26/11/2026</p>
-                      <p>• <strong>{language === 'sw' ? 'Saa:' : 'Time:'}</strong> 12:00 PM</p>
-                      <p>• <strong>{language === 'sw' ? 'Mahali:' : 'Venue:'}</strong> Isamuhyo Hall</p>
+                    <div className="text-[9.5px] text-slate-800 space-y-1 text-left pl-3 py-2 bg-white/85 backdrop-blur-sm border border-purple-100/50 rounded-2xl font-sans shadow-md">
+                      <p>• <strong>{language === 'sw' ? 'Tarehe:' : 'Date:'}</strong> Sunday, 20 Aug 2025</p>
+                      <p>• <strong>{language === 'sw' ? 'Saa:' : 'Time:'}</strong> 10:00 PM</p>
+                      <p>• <strong>{language === 'sw' ? 'Mahali:' : 'Venue:'}</strong> Naeda Social Hall</p>
                     </div>
 
                     {/* Simulated QR block */}
-                    <div className="mt-2 flex flex-col items-center">
-                      <div className="w-12 h-12 bg-white flex items-center justify-center p-1 rounded-lg border border-white/20">
-                        <QrCode className="w-10 h-10 text-slate-900" />
+                    <div className="mt-3 flex flex-col items-center">
+                      <div className="w-13 h-13 bg-white/90 backdrop-blur-sm flex items-center justify-center p-1.5 rounded-2xl border border-purple-200/40 shadow-md">
+                        <QrCode className="w-10 h-10 text-purple-950" />
                       </div>
-                      <span className="text-[7px] text-slate-450 mt-1 uppercase font-mono">GUEST QR-982</span>
+                      <span className="text-[7.5px] text-purple-950 bg-white/80 px-2 py-0.5 rounded-full font-mono font-bold mt-1.5 border border-purple-100 shadow-sm uppercase">GUEST QR-982</span>
                     </div>
 
                     {/* Interactive Simulated RSVP Option */}
-                    <div className="flex gap-2 mt-3 justify-center">
-                      <span className="text-[9px] bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-1 px-3 rounded-full cursor-pointer transition">{language === 'sw' ? 'Nitafika' : 'Attending'}</span>
-                      <span className="text-[9px] bg-white/10 hover:bg-white/20 text-slate-300 font-semibold py-1 px-3 rounded-full cursor-pointer transition">{language === 'sw' ? 'Sitaweza' : 'Declined'}</span>
+                    <div className="flex gap-2.5 mt-3.5 justify-center">
+                      <span className="text-[9.5px] bg-gradient-to-r from-purple-600 to-rose-500 hover:shadow-lg text-white font-extrabold py-2 px-4 rounded-full cursor-pointer transition-all active:scale-95 shadow-md shadow-purple-500/10">
+                        {language === 'sw' ? 'Nitafika' : 'Attending'}
+                      </span>
+                      <span className="text-[9.5px] bg-white/85 hover:bg-white text-slate-800 font-extrabold py-2 px-4 rounded-full cursor-pointer transition-all active:scale-95 border border-purple-250/30 shadow-sm">
+                        {language === 'sw' ? 'Sitaweza' : 'Declined'}
+                      </span>
                     </div>
                   </div>
                 </div>
