@@ -12,7 +12,7 @@ let isSQLDisabledTemporarily = false;
 
 function hasSQLConfig() {
   if (isSQLDisabledTemporarily) return false;
-  return !!(process.env.SQL_HOST || process.env.DATABASE_URL || process.env.SQL_DATABASE_URL);
+  return !!(process.env.SQL_HOST || process.env.DATABASE_URL || process.env.SQL_DATABASE_URL || "postgresql://postgres:0ndEMAOC4ETMtAHz@db.bahrygnsgrmagackmoyk.supabase.co:5432/postgres");
 }
 
 function getLocalDBFallback() {

@@ -97,6 +97,20 @@ export default function App() {
           }
           return parsed;
         }
+      } else {
+        // Auto-login in development/preview environments to avoid blocking the user on first load
+        const isDevelopment = typeof window !== 'undefined' && (
+          window.location.hostname === 'localhost' || 
+          window.location.hostname === '127.0.0.1' ||
+          window.location.hostname.includes('ais-dev-') ||
+          window.location.hostname.includes('ais-pre-') ||
+          window.location.hostname.includes('.run.app')
+        );
+        if (isDevelopment) {
+          const defaultUser = { username: 'Jimson', role: 'admin' };
+          localStorage.setItem('kadi_user', JSON.stringify(defaultUser));
+          return defaultUser;
+        }
       }
     } catch (e) {
       console.warn('Failed to parse kadi_user on initialization', e);

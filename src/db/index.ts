@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import * as schema from "./schema.ts";
 
 export const createPool = () => {
-  const databaseUrl = process.env.DATABASE_URL || process.env.SQL_DATABASE_URL;
+  const databaseUrl = process.env.DATABASE_URL || process.env.SQL_DATABASE_URL || "postgresql://postgres:0ndEMAOC4ETMtAHz@db.bahrygnsgrmagackmoyk.supabase.co:5432/postgres";
 
   if (databaseUrl) {
     console.log("[Database] Connecting using connection string (DATABASE_URL)...");
