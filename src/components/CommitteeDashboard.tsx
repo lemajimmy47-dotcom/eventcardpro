@@ -3,7 +3,7 @@ import {
   Users, Coins, CheckCircle, AlertTriangle, TrendingUp, DollarSign, 
   Layers, Download, Printer, PlusCircle, Activity, Bell, Share2, 
   ExternalLink, Code, ShieldCheck, RefreshCw, Smartphone, Eye, Check, X, Clipboard,
-  FolderOpen, FileText, Upload, Paperclip
+  FolderOpen, FileText, Upload, Paperclip, Sparkles
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { EventDetails, Guest, CommitteeMember, CommitteeActivityLog, CommitteeNotification, ContributionPayment } from '../types';
@@ -15,6 +15,7 @@ import autoTable from 'jspdf-autotable';
 import ContributionManager from './ContributionManager';
 import { addPdfWatermarks } from '../utils/pdfWatermark';
 import { ReportWatermark } from './ReportWatermark';
+import { AIChatbotWidget } from './AIChatbotWidget';
 
 interface CommitteeDashboardProps {
   key?: React.Key;
@@ -1760,49 +1761,96 @@ export default function CommitteeDashboard({
       </div>
 
       {/* Primary tab switcher */}
-      <div className="flex overflow-x-auto gap-2 border-b border-white/10 pb-1 shrink-0" id="committee-subtabs-nav">
-        {[
-          { id: 'dashboard', label: isEn ? 'Dashboard Summary' : 'Mwanzo wa Kamati', icon: Layers },
-          { id: 'analytics', label: isEn ? 'Analytics & Trends' : 'Takwimu za Chati', icon: TrendingUp },
-          { id: 'reports', label: isEn ? 'Committee Reports' : 'Ripoti za Kamati', icon: Printer },
-          { id: 'members', label: isEn ? 'Manage Committee' : 'Wanakamati wote', icon: Users },
-          { id: 'contributions', label: isEn ? 'Contribution Module' : 'Michango & Kadi', icon: Coins },
-          { id: 'files', label: isEn ? 'Documents & Files' : 'Nyaraka & Faili', icon: FolderOpen },
-          { id: 'activity', label: isEn ? 'Activity Logs' : 'Kihistoria cha Logs', icon: Activity },
-          { id: 'public-link', label: isEn ? 'Public Tracking Link' : 'Public Progress Link', icon: Share2 }
-        ].map((tab) => {
-          // Hide tabs depending on simulated permissions
-          if (tab.id === 'members' || tab.id === 'activity') {
-            if (activeRole !== 'Event Owner') return null; // Only Owner
-          }
-          if (tab.id === 'contributions') {
-            if (activeRole !== 'Event Owner' && activeRole !== 'Treasurer') return null; // Owner & Treasurer
-          }
-          if (tab.id === 'reports' || tab.id === 'public-link') {
-            if (activeRole === 'Committee Member') return null; // Owner, Treasurer, Secretary
-          }
-          
-          const isActive = currentSubTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setCurrentSubTab(tab.id as any)}
-              className={`flex items-center gap-2 py-2.5 px-4 font-mono font-extrabold text-[10.5px] uppercase border-b-2 transition shrink-0 cursor-pointer ${
-                isActive 
-                  ? 'border-amber-500 text-amber-400 bg-white/[0.02]' 
-                  : 'border-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              <tab.icon className="w-3.5 h-3.5" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+      <div className="flex items-center justify-between overflow-x-auto gap-2 border-b border-white/10 pb-1 shrink-0" id="committee-subtabs-nav">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {[
+            { id: 'dashboard', label: isEn ? 'Dashboard Summary' : 'Mwanzo wa Kamati', icon: Layers },
+            { id: 'analytics', label: isEn ? 'Analytics & Trends' : 'Takwimu za Chati', icon: TrendingUp },
+            { id: 'reports', label: isEn ? 'Committee Reports' : 'Ripoti za Kamati', icon: Printer },
+            { id: 'members', label: isEn ? 'Manage Committee' : 'Wanakamati wote', icon: Users },
+            { id: 'contributions', label: isEn ? 'Contribution Module' : 'Michango & Kadi', icon: Coins },
+            { id: 'files', label: isEn ? 'Documents & Files' : 'Nyaraka & Faili', icon: FolderOpen },
+            { id: 'activity', label: isEn ? 'Activity Logs' : 'Kihistoria cha Logs', icon: Activity },
+            { id: 'public-link', label: isEn ? 'Public Tracking Link' : 'Public Progress Link', icon: Share2 }
+          ].map((tab) => {
+            // Hide tabs depending on simulated permissions
+            if (tab.id === 'members' || tab.id === 'activity') {
+              if (activeRole !== 'Event Owner') return null; // Only Owner
+            }
+            if (tab.id === 'contributions') {
+              if (activeRole !== 'Event Owner' && activeRole !== 'Treasurer') return null; // Owner & Treasurer
+            }
+            if (tab.id === 'reports' || tab.id === 'public-link') {
+              if (activeRole === 'Committee Member') return null; // Owner, Treasurer, Secretary
+            }
+            
+            const isActive = currentSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setCurrentSubTab(tab.id as any)}
+                className={`flex items-center gap-2 py-2.5 px-4 font-mono font-extrabold text-[10.5px] uppercase border-b-2 transition shrink-0 cursor-pointer ${
+                  isActive 
+                    ? 'border-amber-500 text-amber-400 bg-white/[0.02]' 
+                    : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Dedicated Direct AI Assistant Launcher Button in Navigation */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('open-ai-chatbot'))}
+          className="flex items-center gap-2 py-1.5 px-3.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-mono font-black text-[11px] uppercase shadow-lg shadow-indigo-500/30 hover:scale-105 active:scale-95 border border-amber-400/50 transition shrink-0 cursor-pointer animate-pulse"
+          title="Fungua Msaidizi wa AI"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+          <span>🤖 {isEn ? "AI Assistant" : "Msaidizi wa AI"}</span>
+        </button>
       </div>
 
       {/* SUB-TAB 1: COMMITTEE DASHBOARD */}
       {currentSubTab === 'dashboard' && (
         <div className="space-y-6 animate-fade-in" id="panel-committee-home">
+
+          {/* Glowing AI Assistant Banner Card */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-900 to-purple-950 border-2 border-indigo-500/40 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5 relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white shadow-xl border border-amber-400/40 shrink-0">
+                <Sparkles className="w-6 h-6 text-amber-300 animate-spin-slow" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    NEW • EVENTCARD AI
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block"></span>
+                    ONLINE
+                  </span>
+                </div>
+                <h3 className="text-sm font-black text-white uppercase tracking-wide">
+                  {isEn ? "Msaidizi wa AI (Committee & Event Smart AI Assistant)" : "Msaidizi wa AI wa Kamati na Sherehe"}
+                </h3>
+                <p className="text-slate-300 text-xs leading-relaxed max-w-2xl">
+                  {isEn 
+                    ? "Ask questions about pledges, payments, guest lists, RSVP status, or messaging features anytime!" 
+                    : "Muulize Msaidizi wa AI kuhusu hali ya michango, wageni walioahidi, kadi zilizotumwa, au ushauri wa bajeti!"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-ai-chatbot'))}
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-extrabold text-xs uppercase tracking-wider hover:opacity-95 shadow-xl shadow-blue-600/30 active:scale-95 transition-all border border-amber-300/40 flex items-center gap-2 shrink-0 cursor-pointer"
+            >
+              <span>💬 {isEn ? "Ask AI Assistant" : "Anza Kuzungumza na AI"}</span>
+            </button>
+          </div>
           
           {/* Target Tracking progress bar */}
           <div className="backdrop-blur-md bg-white/[0.02] border border-white/10 rounded-3xl p-6 relative overflow-hidden">
@@ -3848,7 +3896,6 @@ export default function CommitteeDashboard({
           </div>
         </div>
       )}
-
     </div>
   );
 }

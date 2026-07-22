@@ -27,6 +27,7 @@ import {
   Info,
   ArrowLeft,
   Sparkles,
+  Bot,
   Play,
   ChevronDown,
   MessageSquare,
@@ -35,6 +36,7 @@ import {
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useLanguage } from './context/LanguageContext';
 import { useEventCard } from './context/EventCardContext';
+import { AIChatbotWidget } from './components/AIChatbotWidget';
 import LandingPage from './components/LandingPage';
 import Login from './components/Login';
 import CreateEventPage from './components/CreateEventPage';
@@ -1264,6 +1266,24 @@ export default function App() {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span>{language === 'sw' ? 'Muda Halisi (Website Sync Active)' : 'Real-time Website Sync Active'}</span>
                     </div>
+
+                    {/* Prominent Msaidizi wa AI Button */}
+                    <button
+                      onClick={() => window.dispatchEvent(new CustomEvent('open-ai-chatbot'))}
+                      id="ai-assistant-pill-btn"
+                      className="flex items-center gap-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:scale-105 active:scale-95 transition-all duration-300 text-white px-4 py-1.5 rounded-full font-black text-xs border-2 border-amber-400/80 shadow-[0_0_20px_rgba(79,70,229,0.6)] cursor-pointer shrink-0 animate-pulse"
+                      title={language === 'sw' ? 'Fungua Msaidizi wa AI' : 'Open AI Assistant'}
+                    >
+                      <div className="relative">
+                        <Bot className="w-4 h-4 text-white" />
+                        <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-90"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-300"></span>
+                        </span>
+                      </div>
+                      <span>{language === 'sw' ? 'Msaidizi wa AI' : 'AI Assistant'}</span>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    </button>
                   </div>
                   <p className="text-slate-400 text-xs sm:text-sm" id="greeting-subtitle">
                     {language === 'sw' 
@@ -1365,6 +1385,44 @@ export default function App() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Msaidizi wa AI Banner Card on Main Dashboard */}
+              <div className="bg-gradient-to-r from-indigo-950/90 via-slate-900 to-purple-950/90 backdrop-blur-xl border-2 border-indigo-500/50 rounded-[2rem] p-5 sm:p-6 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden" id="main-ai-assistant-banner">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white shadow-lg border border-amber-400/50 shrink-0">
+                    <Bot className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-left text-white max-w-xl space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        EVENTCARD AI ASSISTANT
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block"></span>
+                        ONLINE
+                      </span>
+                    </div>
+                    <h3 className="font-extrabold text-base text-white">
+                      {language === 'sw' ? 'Msaidizi wa AI wa Mfumo (AI Assistant)' : 'EVENTCARD Smart AI Assistant'}
+                    </h3>
+                    <p className="text-slate-300 text-xs leading-relaxed">
+                      {language === 'sw' 
+                        ? 'Uliza chochote kuhusu michango, bajeti, orodha ya wageni, majibu ya RSVP au jinsi ya kutuma SMS & WhatsApp!' 
+                        : 'Ask anything about pledges, budget, guest list, RSVP responses, or sending SMS & WhatsApp messages!'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('open-ai-chatbot'))}
+                  className="px-5 py-3 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-extrabold text-xs uppercase tracking-wider hover:opacity-95 shadow-xl shadow-indigo-600/40 active:scale-95 transition-all border-2 border-amber-400/70 flex items-center gap-2 shrink-0 cursor-pointer animate-bounce sm:animate-none"
+                  id="open-ai-chat-from-main-dashboard-btn"
+                >
+                  <Bot className="w-4 h-4 text-white" />
+                  <span>{language === 'sw' ? 'Anza Kuzungumza na AI' : 'Ask AI Assistant'}</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                </button>
               </div>
 
               {/* Automatic WhatsApp Reminders Section */}
@@ -2707,6 +2765,8 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Global Floating AI Chatbot Assistant */}
+      <AIChatbotWidget eventId={eventDetails?.id} language={language} />
     </div>
   );
 }

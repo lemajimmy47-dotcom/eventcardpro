@@ -7,6 +7,15 @@ import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { initDB, readDB, writeDB, fetchFromFirestore, updateMemoryAndLocalFileOnly, getStateForClient, readDBLatest, pingPostgresKeepAlive } from "./src/firebase-db";
+import { GoogleGenAI } from "@google/genai";
+
+let genAIClient: GoogleGenAI | null = null;
+function getGenAI() {
+  if (!genAIClient && process.env.GEMINI_API_KEY) {
+    genAIClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return genAIClient;
+}
 
 // Database file path
 const DB_PATH = path.join(process.cwd(), "database.json");
@@ -3735,6 +3744,179 @@ async function startServer() {
     } catch (error: any) {
       console.error("[eHub] Fetch Error:", error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // AI Assistant Chatbot API Endpoint
+  app.post("/api/ai-assistant", async (req, res) => {
+    try {
+      const { message, eventId } = req.body;
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: "Ujumbe unahitajika (Message is required)" });
+      }
+
+      const db = await readDBLatest();
+      // Find event by eventId or fallback to db.eventDetails
+      let event = db.eventDetails || {};
+      if (eventId && Array.isArray(db.eventsList)) {
+        const found = db.eventsList.find((e: any) => String(e.id) === String(eventId));
+        if (found) event = found;
+      }
+
+      let guests = db.guests || [];
+      // Filter by eventId if provided and present on guests
+      if (eventId && guests.some((g: any) => g.eventId)) {
+        guests = guests.filter((g: any) => String(g.eventId) === String(eventId));
+      }
+
+      const totalGuests = guests.length;
+      const totalPledged = guests.reduce((sum: number, g: any) => sum + (Number(g.pledgeAmount) || 0), 0);
+      const totalPaid = guests.reduce((sum: number, g: any) => sum + (Number(g.paidAmount) || 0), 0);
+      
+      const targetAmount = Number(event.fundraisingGoal || event.targetAmount) || 0;
+      const remainingTarget = Math.max(0, targetAmount - totalPaid);
+      const venueName = event.eventHallName || event.venue || 'Haijawekwa';
+
+      const rsvpAttending = guests.filter((g: any) => g.rsvpStatus === 'Atahudhuria' || g.rsvpStatus === 'Attending').length;
+      const rsvpNotAttending = guests.filter((g: any) => g.rsvpStatus === 'Hatahudhuria' || g.rsvpStatus === 'Not Attending').length;
+      const rsvpUndecided = guests.filter((g: any) => !g.rsvpStatus || g.rsvpStatus === 'Bado' || g.rsvpStatus === 'Sijajua' || g.rsvpStatus === 'Subiri').length;
+
+      const fullyPaid = guests.filter((g: any) => (Number(g.paidAmount) || 0) >= (Number(g.pledgeAmount) || 0) && (Number(g.pledgeAmount) || 0) > 0).length;
+      const partialPaid = guests.filter((g: any) => (Number(g.paidAmount) || 0) > 0 && (Number(g.paidAmount) || 0) < (Number(g.pledgeAmount) || 0)).length;
+      const noPledge = guests.filter((g: any) => !g.pledgeAmount || Number(g.pledgeAmount) === 0).length;
+
+      const pledgedGuests = guests.filter((g: any) => (Number(g.pledgeAmount) || 0) > 0);
+      const pledgedGuestsSummary = pledgedGuests.map((g: any, i: number) => {
+        const pledge = Number(g.pledgeAmount) || 0;
+        const paid = Number(g.paidAmount) || 0;
+        return `• **${g.name}** (${g.phone || 'Hana namba'}): Ahadi TZS ${pledge.toLocaleString()} | Amelipa TZS ${paid.toLocaleString()}`;
+      }).join('\n');
+
+      const guestDetailsList = guests.slice(0, 50).map((g: any, i: number) => {
+        const pledge = Number(g.pledgeAmount) || 0;
+        const paid = Number(g.paidAmount) || 0;
+        return `${i + 1}. ${g.name} (${g.phone || 'Hana simu'}): Ahadi TZS ${pledge.toLocaleString()}, Amelipa TZS ${paid.toLocaleString()}, Status RSVP: ${g.rsvpStatus || 'Bado'}`;
+      }).join('\n');
+
+      const eventContext = `
+Tukio: ${event.name || 'Harusi / Sherehe'}
+Waandaji: ${event.hostName || 'Kamati ya Sherehe'}
+Tarehe ya Sherehe: ${event.date || 'Haijawekwa'}
+Mahali / Ukumbi: ${venueName}
+Lengo la Michango (Target Goal): TZS ${targetAmount.toLocaleString()}
+Jumla ya Ahadi / Pledges Zote: TZS ${totalPledged.toLocaleString()}
+Jumla Iliyokusanywa / Iliyolipwa (Paid): TZS ${totalPaid.toLocaleString()}
+Kiasi Kilichobaki Kufikia Lengo: TZS ${remainingTarget.toLocaleString()}
+Jumla ya Wageni Waalikwa: ${totalGuests}
+Wageni Walioahidi (Pledged Guests): ${pledgedGuests.length} wageni
+Waliothibitisha Kuhudhuria (RSVP Attending): ${rsvpAttending}
+Wasioweza Kuhudhuria (Not Attending): ${rsvpNotAttending}
+Bado Hawajajibu RSVP (Undecided): ${rsvpUndecided}
+Wageni Waliolipa Yote (Fully Paid): ${fullyPaid}
+Wageni Waliolipa Nusu (Partial Paid): ${partialPaid}
+Wageni Wasioweka Ahadi Bado (No Pledge): ${noPledge}
+
+ORODHA YA WAGENI WALIOAHIDI MICHANGO (PLEDGES):
+${pledgedGuestsSummary || 'Hakuna mgeni aliyeahidi mchango bado.'}
+
+ORODHA KAMILI YA WAGENI NA MICHANGO ZAO:
+${guestDetailsList || 'Hakuna wageni waliosajiliwa bado.'}
+`;
+
+      const ai = getGenAI();
+      if (ai) {
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `Wewe ni Msaidizi wa AI wa Mfumo wa EVENTCARD (EVENTCARD AI Assistant). Unasaidia Wanakamati wa Sherehe PAMOJA na Wageni Waalikwa.
+
+TAARIFA HALISI ZA SHEREHE HII:
+${eventContext}
+
+Swali la Mtumiaji: ${message}
+
+MWAZO NA MWONGOZO WA KUJIBU:
+1. Ikiwa swali linatoka kwa MGENI WAALIKWA (mfano: anauliza ukumbi uko wapi, tarehe, mchango unalipwaje, RSVP, nguo/dress code):
+   - Mjibu kwa ukarimu na heshima kama mgeni rasmi wa sherehe.
+   - Mpe maelekezo ya ukumbi (${venueName}), tarehe ya sherehe (${event.date || 'Iliyoainishwa'}), na jinsi ya kuthibitisha RSVP au kutoa mchango.
+
+2. Ikiwa swali linatoka kwa WANAKAMATI / WAANDAJI (mfano: maendeleo ya michango, walioahidi, bajeti, vikumbusho):
+   - Toa majibu ya kitaalamu yenye takwimu halisi za ahadi, kiasi kilichokusanywa, na orodha ya walioahidi kutoka kwenye data hapo juu.
+
+Tumia Kiswahili fasaha, mpangilio mzuri wa vitone (bullet points) na lugha yenye staha.`,
+          });
+
+          if (response && response.text) {
+            return res.json({ reply: response.text, source: 'gemini' });
+          }
+        } catch (geminiErr: any) {
+          console.error("[AI Assistant] Gemini call error:", geminiErr?.message || geminiErr);
+        }
+      }
+
+      // Smart Swahili NLP Fallback
+      const query = message.toLowerCase();
+      let reply = "";
+
+      if (
+        query.includes("mchango") || 
+        query.includes("pesa") || 
+        query.includes("fedha") || 
+        query.includes("paid") || 
+        query.includes("lengo") || 
+        query.includes("target") || 
+        query.includes("bajeti") ||
+        query.includes("pledge") ||
+        query.includes("ahadi") ||
+        query.includes("walioahidi") ||
+        query.includes("250") ||
+        query.includes("jimson") ||
+        query.includes("lema")
+      ) {
+        reply = `📊 **Muhtasari wa Michango & Ahadi (Pledges):**\n\n` +
+          `• **Lengo Kuu la Michango:** TZS ${targetAmount.toLocaleString()}\n` +
+          `• **Jumla ya Ahadi Zilizowekwa (Pledges):** TZS ${totalPledged.toLocaleString()} (${pledgedGuests.length} mgeni/wageni)\n` +
+          `• **Jumla Iliyolipwa Sasa (Paid):** TZS ${totalPaid.toLocaleString()}\n` +
+          `• **Kiasi Kilichobaki Kufikia Lengo:** TZS ${remainingTarget.toLocaleString()}\n\n` +
+          `👥 **Orodha ya Wageni Walioahidi:**\n` +
+          `${pledgedGuestsSummary || '• Hakuna ahadi zilizorekodiwa bado.'}\n\n` +
+          `💡 *Ushauri:* Unaweza kuwatumia vikumbusho wageni hawa kupitia sehemu ya **'Tuma Ujumbe'** au **WhatsApp** ili watimize ahadi zao.`;
+      } else if (query.includes("mgeni") || query.includes("wageni") || query.includes("guest") || query.includes("idadi") || query.includes("waalikwa")) {
+        reply = `👥 **Taarifa za Waalikwa / Wageni:**\n\n` +
+          `• **Jumla ya Wageni Registered:** ${totalGuests}\n` +
+          `• **Waliotimiza Ahadi zote (Fully Paid):** ${fullyPaid}\n` +
+          `• **Waliolipa kiasi (Partial):** ${partialPaid}\n` +
+          `• **Wenye Ahadi Zisizolipwa (Pledged):** ${pledgedGuests.length}\n` +
+          `• **Hawajaweka Ahadi Bado:** ${noPledge}\n\n` +
+          `💡 Unaweza kukagua au kupakua orodha kamili kupitia sehemu ya **'Usimamizi wa Wageni'** au **'Ripoti'**.`;
+      } else if (query.includes("rsvp") || query.includes("kuhudhuria") || query.includes("mwaliko") || query.includes("kadi")) {
+        reply = `📩 **Hali ya Majibu ya Kadi & RSVP:**\n\n` +
+          `• **Watahudhuria:** ${rsvpAttending} wageni\n` +
+          `• **Hawatahudhuria:** ${rsvpNotAttending} wageni\n` +
+          `• **Hawajajibu RSVP:** ${rsvpUndecided} wageni\n\n` +
+          `💡 Mfumo unaweza kutuma vikumbusho vya kiotomatiki vya RSVP kupitia WhatsApp au SMS.`;
+      } else if (query.includes("sms") || query.includes("whatsapp") || query.includes("ujumbe") || query.includes("gateway")) {
+        reply = `💬 **Ujumbe & Mfumo wa Mawasiliano:**\n\n` +
+          `Mfumo wa EVENTCARD unasaidia kutuma Kadi za Digitali na Risiti za Michango kupitia **SMS** na **WhatsApp Cloud API** au Direct WhatsApp Link.\n\n` +
+          `Unganisha SMS Gateway (k.m. Beem, Meseji, Notify, au eHub) kutoka tab ya **'SMS Gateway'** kuanza kutuma jumbe!`;
+      } else {
+        reply = `Habari! Mimi ni **Msaidizi wa AI wa EVENTCARD** 🤖.\n\n` +
+          `Takwimu za hivi punde za sherehe yako:\n` +
+          `• **Waalikwa Registered:** ${totalGuests} wageni\n` +
+          `• **Jumla ya Ahadi (Pledges):** TZS ${totalPledged.toLocaleString()} (${pledgedGuests.length} walioweka ahadi)\n` +
+          `• **Michango Iliyopatikana (Paid):** TZS ${totalPaid.toLocaleString()} (Kati ya TZS ${targetAmount.toLocaleString()})\n` +
+          `• **Waliothibitisha RSVP:** ${rsvpAttending} wageni\n\n` +
+          `Unaweza kuniuliza chochote kuhusu:\n` +
+          `1. *Hali ya ahadi (pledges) & michango ya sherehe*\n` +
+          `2. *Orodha ya wageni & waliolipa ahadi*\n` +
+          `3. *Majibu ya kadi & RSVP status*\n` +
+          `4. *Jinsi ya kutuma jumbe za SMS au WhatsApp*`;
+      }
+
+      return res.json({ reply, source: 'fallback' });
+    } catch (error: any) {
+      console.error("[AI Assistant Endpoint Error]:", error);
+      return res.status(500).json({ error: "Imeshindwa kuchakata majibu ya AI: " + error.message });
     }
   });
 
