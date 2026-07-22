@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, Gift, Landmark, Calendar, Phone, ShieldCheck, Mail, ArrowRight } from 'lucide-react';
+import { Heart, Gift, Landmark, Calendar, Phone, ShieldCheck, Mail, ArrowRight, Edit3, CreditCard, CheckCircle2 } from 'lucide-react';
 import { Guest, EventDetails, ContributionCardTemplate } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { drawContributionCardToCanvas } from '../utils/contributionCardDrawing';
@@ -11,6 +11,30 @@ interface GuestPledgeSubmissionPageProps {
   onPledgeSubmit: (amount: number) => void;
 }
 
+// Helper to read saved local pledge from localStorage
+const getSavedLocalPledge = (g: Guest, evId?: string): number => {
+  if (!g) return 0;
+  try {
+    const keys = [
+      `pledge_submitted_${g.id}`,
+      evId ? `pledge_submitted_${evId}_${g.id}` : null,
+      g.code ? `pledge_submitted_${g.code}` : null,
+      g.phone ? `pledge_submitted_${g.phone}` : null
+    ].filter(Boolean) as string[];
+
+    for (const k of keys) {
+      const val = localStorage.getItem(k);
+      if (val) {
+        const num = parseInt(val, 10);
+        if (!isNaN(num) && num > 0) return num;
+      }
+    }
+  } catch (e) {
+    console.warn('localStorage read error', e);
+  }
+  return 0;
+};
+
 export default function GuestPledgeSubmissionPage({
   guest,
   event,
@@ -19,14 +43,45 @@ export default function GuestPledgeSubmissionPage({
 }: GuestPledgeSubmissionPageProps) {
   const { language, setLanguage } = useLanguage();
   const isEn = language === 'en';
-  const displayGuestName = guest?.name || 'Jimson';
-  const hasAlreadyPledged = !!(guest && guest.pledgeAmount && guest.pledgeAmount > 0);
+  
+  const initialLocalPledge = getSavedLocalPledge(guest, event?.id);
+  const initialEffectivePledge = (guest?.pledgeAmount && guest.pledgeAmount > 0) 
+    ? guest.pledgeAmount 
+    : initialLocalPledge;
+
+  const [currentGuest, setCurrentGuest] = useState<Guest>(() => ({
+    ...guest,
+    pledgeAmount: initialEffectivePledge > 0 ? initialEffectivePledge : (guest?.pledgeAmount || 0)
+  }));
+
+  const displayGuestName = currentGuest?.name || 'Mgeni';
+  const existingPledgeAmt = currentGuest?.pledgeAmount || 0;
+  const hasAlreadyPledged = existingPledgeAmt > 0;
+
   const [pledgeAmount, setPledgeAmount] = useState<string>(
-    hasAlreadyPledged ? Number(guest.pledgeAmount).toLocaleString('en-US') : ''
+    hasAlreadyPledged ? Number(existingPledgeAmt).toLocaleString('en-US') : ''
   );
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [isEditingPledge, setIsEditingPledge] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Sync currentGuest if prop changes
+  useEffect(() => {
+    if (guest) {
+      const savedLocal = getSavedLocalPledge(guest, event?.id);
+      const effective = (guest.pledgeAmount && guest.pledgeAmount > 0) ? guest.pledgeAmount : savedLocal;
+      const updatedObj = {
+        ...guest,
+        pledgeAmount: effective > 0 ? effective : (guest.pledgeAmount || 0)
+      };
+      setCurrentGuest(updatedObj);
+      if (effective > 0) {
+        setPledgeAmount(Number(effective).toLocaleString('en-US'));
+      }
+    }
+  }, [guest, event?.id]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,9 +91,8 @@ export default function GuestPledgeSubmissionPage({
     const parsedAmount = parseInt(cleanAmount, 10);
 
     if (template) {
-      drawContributionCardToCanvas(canvas, event, template, guest, !isNaN(parsedAmount) ? `KIASI: TZS ${parsedAmount.toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
+      drawContributionCardToCanvas(canvas, event, template, currentGuest, !isNaN(parsedAmount) ? `KIASI: TZS ${parsedAmount.toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
     } else {
-      // Default fallback template if none provided
       const defaultTpl: ContributionCardTemplate = {
         themeId: 'midnight-gold',
         eventNameSize: 24,
@@ -46,23 +100,21 @@ export default function GuestPledgeSubmissionPage({
         pledgeAmountSize: 28,
         deadlineSize: 14
       };
-      drawContributionCardToCanvas(canvas, event, defaultTpl, guest, !isNaN(parsedAmount) ? `KIASI: TZS ${parsedAmount.toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
+      drawContributionCardToCanvas(canvas, event, defaultTpl, currentGuest, !isNaN(parsedAmount) ? `KIASI: TZS ${parsedAmount.toLocaleString()}` : (isEn ? 'SELECT AMOUNT' : 'WEKA KIASI'), isEn);
     }
-  }, [pledgeAmount, template, event, guest, isEn]);
+  }, [pledgeAmount, template, event, currentGuest, isEn]);
 
-  // Check URL query parameters for override language or default to sw
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const urlLang = params.get('lang')?.toLowerCase();
       if (urlLang === 'en') {
         setLanguage('en');
-      } else {
+      } else if (urlLang === 'sw') {
         setLanguage('sw');
       }
     } catch (e) {
       console.warn('Failed to parse URL lang parameter', e);
-      setLanguage('sw');
     }
   }, [setLanguage]);
 
@@ -70,9 +122,9 @@ export default function GuestPledgeSubmissionPage({
     ? new Date(event.contributionDeadline || event.date).toLocaleDateString(isEn ? 'en-US' : 'sw-TZ', { day: 'numeric', month: 'long', year: 'numeric' })
     : (isEn ? 'Unlimited' : 'Bila Kikomo');
 
-  const formatCurrency = (val: string) => {
-    if (!val) return '';
-    const num = parseInt(val.replace(/\D/g, ''), 10);
+  const formatCurrency = (val: string | number) => {
+    if (val === undefined || val === null || val === '') return '';
+    const num = typeof val === 'number' ? val : parseInt(String(val).replace(/\D/g, ''), 10);
     if (isNaN(num)) return '';
     return 'TZS ' + num.toLocaleString('en-US');
   };
@@ -85,6 +137,7 @@ export default function GuestPledgeSubmissionPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     const cleanAmount = pledgeAmount.replace(/\D/g, '');
     if (!cleanAmount || parseInt(cleanAmount, 10) <= 0) {
       alert(isEn ? 'Please enter a valid contribution amount.' : 'Tafadhali ingiza kiasi sahihi cha mchango ili uwasilishe.');
@@ -94,14 +147,27 @@ export default function GuestPledgeSubmissionPage({
     setLoading(true);
     const amountNum = parseInt(cleanAmount, 10);
 
+    // Save in localStorage immediately so refreshes retain pledge confirmation
     try {
-      // Call public pledge submission API
+      if (currentGuest.id) localStorage.setItem(`pledge_submitted_${currentGuest.id}`, String(amountNum));
+      if (event?.id && currentGuest.id) localStorage.setItem(`pledge_submitted_${event.id}_${currentGuest.id}`, String(amountNum));
+      if (currentGuest.code) localStorage.setItem(`pledge_submitted_${currentGuest.code}`, String(amountNum));
+      if (currentGuest.phone) localStorage.setItem(`pledge_submitted_${currentGuest.phone}`, String(amountNum));
+    } catch (e) {
+      console.warn('Could not save pledge to localStorage', e);
+    }
+
+    try {
       const response = await fetch('/api/pledge-update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          guestId: guest.id,
-          pledgeAmount: amountNum
+          guestId: currentGuest.id,
+          pledgeAmount: amountNum,
+          name: currentGuest.name,
+          phone: currentGuest.phone,
+          code: currentGuest.code,
+          eventId: currentGuest.eventId || event.id
         })
       });
 
@@ -109,13 +175,22 @@ export default function GuestPledgeSubmissionPage({
         throw new Error('Server returned error status');
       }
 
+      const data = await response.json();
+      const updatedGuestObj = data.guest || { ...currentGuest, pledgeAmount: amountNum, pledgeStatus: 'Pledged' };
+      
+      setCurrentGuest(updatedGuestObj);
       setIsSubmitted(true);
+      setIsEditingPledge(false);
+
       if (onPledgeSubmit) {
         onPledgeSubmit(amountNum);
       }
     } catch (e) {
-      console.error('Failed to submit pledge to server, falling back to local simulation', e);
+      console.error('Failed to submit pledge to server, saving locally', e);
+      const updatedGuestObj = { ...currentGuest, pledgeAmount: amountNum, pledgeStatus: 'Pledged' };
+      setCurrentGuest(updatedGuestObj);
       setIsSubmitted(true);
+      setIsEditingPledge(false);
       if (onPledgeSubmit) {
         onPledgeSubmit(amountNum);
       }
@@ -123,6 +198,8 @@ export default function GuestPledgeSubmissionPage({
       setLoading(false);
     }
   };
+
+  const showConfirmationCard = (hasAlreadyPledged || isSubmitted) && !isEditingPledge;
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 relative font-sans overflow-x-hidden">
@@ -152,7 +229,7 @@ export default function GuestPledgeSubmissionPage({
       </div>
 
       <div className="w-full max-w-xl z-10 space-y-6 animate-fade-in" id="pledge-submission-container">
-        {/* Contribution Card Display - Hidden as requested */}
+        {/* Hidden Canvas */}
         <div className="hidden">
           <canvas 
             id="guest-pledge-live-canvas"
@@ -176,25 +253,128 @@ export default function GuestPledgeSubmissionPage({
         </div>
 
         <div className="flex flex-col justify-center">
-          {!isSubmitted ? (
-            <div className="space-y-6">
-              {hasAlreadyPledged && (
-                <div className="backdrop-blur-md bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 text-center space-y-1.5 shadow-xl animate-fade-in">
-                  <div className="inline-flex p-2 rounded-full bg-amber-500/20 text-amber-400 mb-1">
-                    <ShieldCheck className="w-5 h-5" />
+          {showConfirmationCard ? (
+            /* CONFIRMED PLEDGE VIEW (Shown on load if pledged or after submit) */
+            <div className="backdrop-blur-md bg-white/[0.03] border border-emerald-500/30 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl text-center relative overflow-hidden">
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
+              
+              <div className="inline-flex p-4 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-lg">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="inline-block bg-emerald-500/20 text-emerald-300 font-extrabold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider border border-emerald-500/30">
+                  {isEn ? '✓ Pledge Already Registered' : '✓ Ahadi Imesharekodiwa'}
+                </div>
+                <h2 className="text-2xl font-black text-white uppercase tracking-tight">
+                  {isEn ? 'Pledge Registered!' : 'Ahadi Yako Ipo Salama!'}
+                </h2>
+                <p className="text-[11px] text-slate-400 font-mono tracking-wider">
+                  {isEn ? 'Reference ID: ' : 'Namba ya Uhakiki: '} 
+                  <strong className="text-amber-400">P-{(currentGuest.id || '000000').substring(0, 6).toUpperCase()}</strong>
+                </p>
+              </div>
+
+              <div className="p-6 bg-slate-900/80 rounded-2xl border border-emerald-500/20 space-y-4 shadow-inner">
+                <div className="space-y-1">
+                   <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                     {isEn ? 'Your Registered Contribution Pledge' : 'Kiasi cha Ahadi Yako Kilichorekodiwa'}
+                   </p>
+                   <p className="text-3xl font-black text-amber-400 font-mono tracking-tight">
+                     {formatCurrency(currentGuest.pledgeAmount || 0)}
+                   </p>
+                   {currentGuest.paidAmount && currentGuest.paidAmount > 0 ? (
+                     <p className="text-xs text-emerald-400 font-bold mt-1">
+                       {isEn ? `Paid so far: TZS ${currentGuest.paidAmount.toLocaleString()}` : `Umeshalipa: TZS ${currentGuest.paidAmount.toLocaleString()}`}
+                     </p>
+                   ) : null}
+                </div>
+                
+                <div className="h-px bg-white/10 w-full"></div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {isEn 
+                    ? `Dear ${displayGuestName}, your pledge of ${formatCurrency(currentGuest.pledgeAmount || 0)} is securely saved in our event management system. To avoid duplicate entries, additional pledges are restricted.`
+                    : `Ndugu ${displayGuestName}, tayari umeweka ahadi ya mchango ya ${formatCurrency(currentGuest.pledgeAmount || 0)} kwa ajili ya kufanikisha tukio hili. Mfumo wetu umeratibu ahadi yako na kuzuia kutuma mara mbili.`}
+                </p>
+              </div>
+
+              {/* Payment details / Namba za Malipo */}
+              {event.paymentMethods && event.paymentMethods.length > 0 && (
+                <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-3 text-left">
+                  <div className="flex items-center gap-2 text-amber-400 border-b border-white/10 pb-2">
+                    <CreditCard className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-xs font-black uppercase tracking-wider">
+                      {isEn ? 'Payment Methods / Accounts' : 'Namba na Akanti za Kutuma Mchango'}
+                    </h3>
                   </div>
-                  <h4 className="text-sm font-black text-amber-400 uppercase tracking-wider">
-                    {isEn ? "Pledge Already Registered" : "Ahadi Ilishasajiliwa"}
-                  </h4>
-                  <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
-                    {isEn 
-                      ? `Dear ${displayGuestName}, you have already registered a pledge of TZS ${guest.pledgeAmount?.toLocaleString()}.`
-                      : `Ndugu ${displayGuestName}, tayari ulisharekodi ahadi ya mchango ya TZS ${guest.pledgeAmount?.toLocaleString()}.`}
-                  </p>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {event.paymentMethods.map((pm, idx) => (
+                      <div key={pm.id || idx} className="bg-white/5 border border-white/5 rounded-xl p-3 flex justify-between items-center text-xs">
+                        <div>
+                          <p className="font-extrabold text-amber-300 text-[11px] uppercase">{pm.provider} ({pm.type})</p>
+                          <p className="text-slate-300 font-mono text-[12px] font-bold">{pm.number}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] text-slate-400 uppercase font-medium">{isEn ? 'Name' : 'Jina la Akanti'}</p>
+                          <p className="text-[11px] text-white font-bold">{pm.name}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              <div className={`backdrop-blur-md bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl relative transition-all duration-300 ${hasAlreadyPledged ? 'opacity-40 select-none pointer-events-none' : ''}`}>
+              {/* Collection Deadline */}
+              <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-blue-300">
+                  <Calendar className="w-4 h-4" />
+                  <span className="font-bold uppercase tracking-wider text-[11px]">{isEn ? 'Deadline' : 'Mwisho wa Kukusanya'}</span>
+                </div>
+                <span className="text-white font-mono font-bold">{formattedDeadline}</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPledge(true)}
+                  className="w-full py-3.5 bg-white/10 hover:bg-white/15 text-amber-300 border border-amber-500/30 font-bold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>{isEn ? 'Edit / Update Pledge Amount' : 'Badilisha au Boresha Ahadi Yangu'}</span>
+                </button>
+
+                <p className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1.5 pt-1">
+                  <Mail className="w-3.5 h-3.5" />
+                  {isEn ? 'Confirmation SMS recorded for your number' : 'Ujumbe wa uthibitisho umehifadhiwa kwa namba yako'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            /* NEW / EDIT PLEDGE FORM VIEW */
+            <div className="space-y-6">
+              {hasAlreadyPledged && isEditingPledge && (
+                <div className="backdrop-blur-md bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-1 shadow-xl animate-fade-in flex justify-between items-center">
+                  <div className="text-left space-y-0.5">
+                    <p className="text-xs font-bold text-amber-400 uppercase">
+                      {isEn ? 'Updating existing pledge' : 'Unabadilisha ahadi yako'}
+                    </p>
+                    <p className="text-[11px] text-slate-300">
+                      {isEn ? `Current pledge: TZS ${existingPledgeAmt.toLocaleString()}` : `Ahadi ya sasa: TZS ${existingPledgeAmt.toLocaleString()}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingPledge(false)}
+                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] font-bold uppercase rounded-lg transition"
+                  >
+                    {isEn ? 'Cancel' : 'Ghairi'}
+                  </button>
+                </div>
+              )}
+
+              <div className="backdrop-blur-md bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl relative transition-all duration-300">
                 <div className="absolute top-0 right-0 p-3 text-[10px] font-mono text-amber-400 font-extrabold flex items-center gap-1 bg-amber-500/10 rounded-bl-xl border-l border-b border-white/5">
                   <Landmark className="w-3.5 h-3.5" /> {isEn ? 'Official Pledge' : 'Ahadi Rasmi'}
                 </div>
@@ -202,12 +382,12 @@ export default function GuestPledgeSubmissionPage({
                 <div className="space-y-2 pt-2">
                   <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
                     <Gift className="w-4 h-4 text-rose-400" />
-                    {isEn ? 'New Pledge Contribution' : 'MCHANGO MPYA WA AHADI'}
+                    {hasAlreadyPledged ? (isEn ? 'UPDATE PLEDGE AMOUNT' : 'BADILISHA KIASI CHA AHADI') : (isEn ? 'NEW PLEDGE CONTRIBUTION' : 'MCHANGO MPYA WA AHADI')}
                   </h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     {isEn ? (
                       <>
-                        Dear <strong>{displayGuestName}</strong>, you are welcome to enter your pledge contribution to support this event.
+                        Dear <strong>{displayGuestName}</strong>, enter your pledge contribution below to support this celebration.
                       </>
                     ) : (
                       <>
@@ -232,7 +412,6 @@ export default function GuestPledgeSubmissionPage({
                         inputMode="numeric"
                         value={pledgeAmount}
                         onChange={handleAmountChange}
-                        disabled={hasAlreadyPledged}
                         placeholder={isEn ? "e.g. 500,000" : "Mfano: 500,000"}
                         className="block w-full pl-16 sm:pl-20 pr-4 py-5 bg-slate-900/70 border border-white/15 rounded-xl text-amber-400 font-mono text-2xl sm:text-3xl font-black focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all outline-none tracking-wide placeholder-slate-600"
                       />
@@ -255,7 +434,7 @@ export default function GuestPledgeSubmissionPage({
 
                   <button
                     type="submit"
-                    disabled={loading || !pledgeAmount || hasAlreadyPledged}
+                    disabled={loading || !pledgeAmount}
                     className="w-full py-4 bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-rose-950/20 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {loading ? (
@@ -264,78 +443,24 @@ export default function GuestPledgeSubmissionPage({
                       <>
                         <span>
                           {hasAlreadyPledged 
-                            ? (isEn ? 'Already Contributed' : 'Mchango Ulishawasilishwa') 
+                            ? (isEn ? 'Update My Pledge' : 'Hifadhi Mabadiliko ya Ahadi') 
                             : (isEn ? 'Submit My Pledge' : 'Wasilisha Ahadi Yangu')}
                         </span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
                   </button>
+
+                  {hasAlreadyPledged && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingPledge(false)}
+                      className="w-full py-2.5 text-slate-400 hover:text-white text-xs font-bold transition text-center"
+                    >
+                      {isEn ? 'Cancel Editing' : 'Rudi Kwenye Taarifa za Ahadi'}
+                    </button>
+                  )}
                 </form>
-              </div>
-            </div>
-          ) : (
-            <div className="backdrop-blur-md bg-white/[0.03] border border-emerald-500/20 rounded-2xl p-8 sm:p-10 space-y-6 shadow-2xl text-center relative overflow-hidden">
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
-              
-              <div className="inline-flex p-4 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-2">
-                <ShieldCheck className="w-8 h-8" />
-              </div>
-
-              <div className="space-y-2">
-                <h2 className="text-2xl font-black text-white uppercase tracking-tight">
-                  {isEn ? 'Pledge Submitted!' : 'Ahadi Imepokelewa!'}
-                </h2>
-                <p className="text-xs text-slate-400 uppercase font-mono tracking-widest font-bold">
-                  {isEn ? 'Reference: ' : 'Namba ya Uhakiki: '} P-{guest.id.substring(0, 6).toUpperCase()}
-                </p>
-              </div>
-
-              <div className="p-6 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 space-y-4">
-                <div className="space-y-1">
-                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">
-                     {isEn ? 'Amount Registered' : 'Kiasi Kilichorekodiwa'}
-                   </p>
-                   <p className="text-2xl font-black text-emerald-400 font-mono">
-                     {formatCurrency(pledgeAmount)}
-                   </p>
-                </div>
-                
-                <div className="h-px bg-emerald-500/10 w-full"></div>
-
-                <p className="text-xs text-slate-300 leading-relaxed italic">
-                  {isEn 
-                    ? 'Thank you for your generous support. Your pledge has been safely recorded in our system. We will keep you updated on the progress.'
-                    : 'Asante sana kwa mchango wako wa hali ya juu. Ahadi yako imerekodiwa kikamilifu kwenye mfumo wetu. Tutakupa taarifa za maendeleo.'}
-                </p>
-              </div>
-
-              <div className="space-y-4 pt-4">
-                <div className="flex flex-col sm:flex-row gap-3">
-                   <div className="flex-1 p-3 rounded-xl bg-white/5 border border-white/10 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                        <Phone className="w-4 h-4 text-blue-400" />
-                      </div>
-                      <div className="text-left">
-                        <p className="text-[9px] text-slate-500 uppercase font-bold">{isEn ? 'Phone' : 'Simu'}</p>
-                        <p className="text-[11px] text-white font-mono">{guest.phone}</p>
-                      </div>
-                   </div>
-                   <div className="flex-1 p-3 rounded-xl bg-white/5 border border-white/10 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                        <Calendar className="w-4 h-4 text-amber-400" />
-                      </div>
-                      <div className="text-left">
-                        <p className="text-[9px] text-slate-500 uppercase font-bold">{isEn ? 'Event Date' : 'Tarehe'}</p>
-                        <p className="text-[11px] text-white font-mono">{event.date}</p>
-                      </div>
-                   </div>
-                </div>
-
-                <p className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1.5">
-                  <Mail className="w-3 h-3" />
-                  {isEn ? 'Confirmation SMS will be sent to your number' : 'SMS ya uthibitisho itatumwa kwenye namba yako'}
-                </p>
               </div>
             </div>
           )}

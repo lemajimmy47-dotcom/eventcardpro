@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import * as schema from "./schema.ts";
 
 export const createPool = () => {
-  const databaseUrl = process.env.DATABASE_URL || process.env.SQL_DATABASE_URL || "postgresql://postgres:0ndEMAOC4ETMtAHz@db.bahrygnsgrmagackmoyk.supabase.co:5432/postgres";
+  const databaseUrl = process.env.DATABASE_URL || process.env.SQL_DATABASE_URL || "postgresql://eventcard_db_oon8_user:O1Py1I6UxaPBab0IsVRxwtqHaTOTcimD@dpg-d9fnvqnavr4c73clehog-a.oregon-postgres.render.com/eventcard_db_oon8?sslmode=require";
 
   if (databaseUrl) {
     console.log("[Database] Connecting using connection string (DATABASE_URL)...");
@@ -15,7 +15,7 @@ export const createPool = () => {
       ssl: isLocal ? false : { rejectUnauthorized: false },
       connectionTimeoutMillis: 15000,
       idleTimeoutMillis: 10000,
-      max: 10,
+      max: 4,
       keepAlive: true,
     });
   }

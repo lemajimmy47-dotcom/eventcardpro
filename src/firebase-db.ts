@@ -8,11 +8,8 @@ import { execSync } from "child_process";
 const DB_PATH = path.join(process.cwd(), "database.json");
 let inMemoryDB: any = null;
 
-let isSQLDisabledTemporarily = false;
-
 function hasSQLConfig() {
-  if (isSQLDisabledTemporarily) return false;
-  return !!(process.env.SQL_HOST || process.env.DATABASE_URL || process.env.SQL_DATABASE_URL || "postgresql://postgres:0ndEMAOC4ETMtAHz@db.bahrygnsgrmagackmoyk.supabase.co:5432/postgres");
+  return !!(process.env.SQL_HOST || process.env.DATABASE_URL || process.env.SQL_DATABASE_URL || "postgresql://eventcard_db_oon8_user:O1Py1I6UxaPBab0IsVRxwtqHaTOTcimD@dpg-d9fnvqnavr4c73clehog-a.oregon-postgres.render.com/eventcard_db_oon8?sslmode=require");
 }
 
 function getLocalDBFallback() {
@@ -100,7 +97,6 @@ export async function initDB() {
     console.error("[CloudSQL Initializer] Setup failed: ", error);
     // Fallback safely to local JSON file
     console.log("[CloudSQL Initializer] Falling back to local database.json due to database connection/setup failure.");
-    isSQLDisabledTemporarily = true;
     inMemoryDB = getLocalDBFallback();
     return inMemoryDB;
   }
@@ -141,25 +137,35 @@ export async function readDBLatest() {
   }
 
   activeFetchPromise = (async () => {
-    try {
-      const state = await fetchFullStateFromDB();
-      inMemoryDB = state;
-      lastFetchTime = Date.now();
-      return state;
-    } finally {
-      activeFetchPromise = null;
+    let attempts = 3;
+    while (attempts > 0) {
+      try {
+        const state = await fetchFullStateFromDB();
+        inMemoryDB = state;
+        lastFetchTime = Date.now();
+        return state;
+      } catch (error) {
+        attempts--;
+        console.error(`[CloudSQL readDBLatest] PostgreSQL read failed. Attempts remaining: ${attempts}. Error:`, error);
+        if (attempts === 0) {
+          throw error;
+        }
+        // Brief exponential-like backoff
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
   })();
 
   try {
     return await activeFetchPromise;
   } catch (error) {
-    console.error("[CloudSQL readDBLatest] PostgreSQL read failed, temporarily bypassing SQL and returning cache: ", error);
-    isSQLDisabledTemporarily = true;
+    console.error("[CloudSQL readDBLatest] PostgreSQL read failed completely, returning last known cache/local fallback: ", error);
     if (!inMemoryDB) {
       inMemoryDB = getLocalDBFallback();
     }
     return inMemoryDB;
+  } finally {
+    activeFetchPromise = null;
   }
 }
 
@@ -205,16 +211,26 @@ export async function writeDB(data: any) {
     return;
   }
 
-  // Sync / write directly to PostgreSQL synchronously! (Await write complete)
-  try {
-    isSyncingToDB = true;
-    await syncStateToRelationalDB(data);
-    isSyncingToDB = false;
-  } catch (error) {
-    console.error("[CloudSQL writeDB] Relational sync error (synchronous), temporarily disabling SQL updates:", error);
-    isSQLDisabledTemporarily = true;
-    isSyncingToDB = false;
-    // Do not throw the error so the client can continue saving locally
+  // Sync / write directly to PostgreSQL synchronously with 3 retries! (Await write complete)
+  let attempts = 3;
+  while (attempts > 0) {
+    try {
+      isSyncingToDB = true;
+      await syncStateToRelationalDB(data);
+      isSyncingToDB = false;
+      return;
+    } catch (error) {
+      attempts--;
+      console.error(`[CloudSQL writeDB] Relational sync error (synchronous). Attempts remaining: ${attempts}. Error:`, error);
+      if (attempts === 0) {
+        isSyncingToDB = false;
+        // Throw the error so the caller/client is notified that database persistence failed!
+        throw new Error("Failed to persist data update to PostgreSQL database: " + (error instanceof Error ? error.message : String(error)));
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } finally {
+      isSyncingToDB = false;
+    }
   }
 }
 

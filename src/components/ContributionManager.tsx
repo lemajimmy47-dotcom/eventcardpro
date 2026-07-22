@@ -180,7 +180,7 @@ export default function ContributionManager({
       </div>
     );
   };
-  const [subTab, setSubTab] = useState<'dashboard' | 'contributors' | 'card-design' | 'payment-methods' | 'pledge-requests' | 'reminders' | 'thank-you' | 'message-center' | 'reports'>('dashboard');
+  const [subTab, setSubTab] = useState<'dashboard' | 'contributors' | 'card-design' | 'social-poster' | 'payment-methods' | 'pledge-requests' | 'reminders' | 'thank-you' | 'message-center' | 'reports'>('dashboard');
   
   // Local states for forms
   const [searchQuery, setSearchQuery] = useState('');

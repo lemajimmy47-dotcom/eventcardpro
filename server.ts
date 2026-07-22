@@ -1905,39 +1905,37 @@ async function startServer() {
       }
       console.log(`[lookup] Searching in ${guests.length} guests`);
       
-      const cleanSearch = code.trim().toLowerCase();
-      let foundGuest = guests.find((g: any) => {
-        const guestCode = String(g.code || '').trim().toLowerCase();
+      const rawSearch = code.trim().toLowerCase();
+      const cleanSearch = rawSearch.replace(/^#/, '');
+      const alphaNumSearch = cleanSearch.replace(/[^a-z0-9]/g, '');
+
+      const matchGuest = (g: any) => {
+        const guestCode = String(g.code || '').trim().toLowerCase().replace(/^#/, '');
         const guestId = String(g.id || '').trim().toLowerCase();
         const guestName = String(g.name || '').trim().toLowerCase();
+        
+        const guestCodeAlpha = guestCode.replace(/[^a-z0-9]/g, '');
+        const guestIdAlpha = guestId.replace(/[^a-z0-9]/g, '');
         const guestNameNoSpaces = guestName.replace(/\s+/g, '');
         const cleanSearchNoSpaces = cleanSearch.replace(/\s+/g, '');
 
         return (
           guestCode === cleanSearch ||
+          guestCode === rawSearch ||
           guestId === cleanSearch ||
+          guestId === rawSearch ||
+          (alphaNumSearch.length > 2 && (guestCodeAlpha === alphaNumSearch || guestIdAlpha === alphaNumSearch)) ||
           guestName === cleanSearch ||
-          guestNameNoSpaces === cleanSearchNoSpaces
+          (cleanSearchNoSpaces.length > 2 && guestNameNoSpaces === cleanSearchNoSpaces)
         );
-      });
+      };
+
+      let foundGuest = guests.find(matchGuest);
 
       // If eventId was specified but guest was not found in that event context, fallback to search in all guests
       if (!foundGuest && eventId) {
         const allGuests = db.guests || [];
-        foundGuest = allGuests.find((g: any) => {
-          const guestCode = String(g.code || '').trim().toLowerCase();
-          const guestId = String(g.id || '').trim().toLowerCase();
-          const guestName = String(g.name || '').trim().toLowerCase();
-          const guestNameNoSpaces = guestName.replace(/\s+/g, '');
-          const cleanSearchNoSpaces = cleanSearch.replace(/\s+/g, '');
-
-          return (
-            guestCode === cleanSearch ||
-            guestId === cleanSearch ||
-            guestName === cleanSearch ||
-            guestNameNoSpaces === cleanSearchNoSpaces
-          );
-        });
+        foundGuest = allGuests.find(matchGuest);
       }
 
       console.log(`[lookup] Found guest:`, foundGuest);
@@ -1949,17 +1947,22 @@ async function startServer() {
 
       if (!guestResponse) {
         console.warn(`[lookup] Guest not found for code: ${code}, using graceful fallback`);
-        foundEvent = events[0] || eventDetails || {};
+        foundEvent = events.find((ev: any) => String(ev.id) === String(eventId)) || events[0] || eventDetails || {};
+        
+        // If code looks like a code (e.g. IP-xxxx, PLG-xxxx, etc.), don't use it as the person's display name
+        const isCodeLike = /^IP-|^PLG-|^STD-|^#|[0-9]{4,}/i.test(code.trim());
+        const fallbackName = isCodeLike ? "Mgeni Mchangiaji" : code;
+
         guestResponse = {
-          id: "guest-fallback",
-          name: code, // Fallback to searched name as guest name
+          id: `guest-${code.trim().replace(/[^a-zA-Z0-9]/g, '') || Date.now()}`,
+          name: fallbackName,
           phone: "",
-          code: "STD",
-          eventId: foundEvent.id || "event-starter",
+          code: code.trim(),
+          eventId: foundEvent.id || eventId || "event-starter",
           status: "Bado"
         };
       } else {
-        foundEvent = events.find((ev: any) => ev.id === guestResponse.eventId) || eventDetails || {};
+        foundEvent = events.find((ev: any) => String(ev.id) === String(guestResponse.eventId)) || eventDetails || {};
       }
 
       const saveTheDates = db.saveTheDates || [];
@@ -2107,24 +2110,38 @@ async function startServer() {
   // API 4B: Pledge submission endpoint (Public/Guest)
   app.post("/api/pledge-update", async (req, res) => {
     try {
-      const { guestId, pledgeAmount } = req.body;
-      if (!guestId) {
-        return res.status(400).json({ error: "Missing guestId" });
+      const { guestId, pledgeAmount, name, phone, code, eventId } = req.body;
+      if (!guestId && !name && !code && !phone) {
+        return res.status(400).json({ error: "Missing guest information" });
       }
 
       const db = await readDBLatest();
       const guests = db.guests || [];
       let found = false;
+      let targetGuestObj: any = null;
 
       const amt = parseInt(pledgeAmount, 10);
       if (isNaN(amt) || amt < 0) {
         return res.status(400).json({ error: "Invalid pledge amount" });
       }
 
+      const cleanName = (name || '').trim().toLowerCase();
+      const cleanCode = (code || '').trim().toLowerCase();
+      const cleanPhoneNum = (phone || '').replace(/\D/g, '');
+
       const updatedGuests = guests.map((g: any) => {
-        if (g.id === guestId) {
+        const gId = String(g.id || '').trim();
+        const gCode = String(g.code || '').trim().toLowerCase();
+        const gName = String(g.name || '').trim().toLowerCase();
+        const gPhone = String(g.phone || '').replace(/\D/g, '');
+
+        const matchId = guestId && gId === String(guestId).trim();
+        const matchCode = cleanCode && gCode && gCode === cleanCode;
+        const matchPhone = cleanPhoneNum && cleanPhoneNum.length > 5 && gPhone && gPhone === cleanPhoneNum;
+        const matchName = cleanName && gName && (gName === cleanName || gName.replace(/\s+/g, '') === cleanName.replace(/\s+/g, ''));
+
+        if (matchId || matchCode || matchPhone || matchName) {
           found = true;
-          // Decide status based on existing payment records if any
           const paid = g.paidAmount || 0;
           let status: any = 'Pledged';
           if (paid > 0) {
@@ -2133,25 +2150,45 @@ async function startServer() {
             status = amt > 0 ? 'Pledged' : 'No Pledge';
           }
 
-          return {
+          targetGuestObj = {
             ...g,
             pledgeAmount: amt,
             pledgeStatus: status,
-            paidAmount: paid
+            paidAmount: paid,
+            phone: g.phone || phone || '',
+            name: g.name || name || 'Mgeni'
           };
+          return targetGuestObj;
         }
         return g;
       });
 
       if (!found) {
-        return res.status(404).json({ error: "Guest not found inside database" });
+        const finalGuestId = (guestId && !String(guestId).includes('fallback')) ? String(guestId) : `guest-${Date.now()}`;
+        const targetEventId = eventId || db.eventsList?.[0]?.id || "event-starter";
+        targetGuestObj = {
+          id: finalGuestId,
+          name: name || (guestId && !String(guestId).includes('fallback') ? guestId : "Mgeni Mchangiaji"),
+          phone: phone || "",
+          code: code || `PLG-${Math.floor(1000 + Math.random() * 9000)}`,
+          eventId: targetEventId,
+          cardType: "SINGLE",
+          pledgeAmount: amt,
+          pledgeStatus: "Pledged",
+          paidAmount: 0,
+          rsvpStatus: "Atahudhuria"
+        };
+        updatedGuests.push(targetGuestObj);
       }
 
       db.guests = updatedGuests;
       await writeDB(db);
 
-      res.json({ success: true, message: "Contribution Pledge registered successfully" });
+      console.log(`[pledge-update] Saved pledge for ${targetGuestObj.name} (${targetGuestObj.id}): TZS ${amt}`);
+
+      res.json({ success: true, message: "Contribution Pledge registered successfully", guest: targetGuestObj });
     } catch (e: any) {
+      console.error("[pledge-update] Error:", e);
       res.status(500).json({ error: e.message });
     }
   });
@@ -2391,11 +2428,11 @@ async function startServer() {
                           if (guestLast9 === fromLast9 && guestLast9.length >= 7) {
                           // Try to automatically process RSVPs to system-wide standard values: 'Atahudhuria', 'Hatahudhuria', 'Labda'
                           let newRsvp: 'Atahudhuria' | 'Hatahudhuria' | 'Labda' | null = null;
-                          if (textBody.includes('ndio') || textBody.includes('yes') || textBody.includes('nitakuja') || textBody.includes('nitahudhuria') || textBody.includes('atahudhuria') || textBody.includes('kuhudhuria') || textBody.includes('tatahudhuria') || textBody.includes('ntahudhuria') || textBody.includes('ntakuja') || textBody.includes('nakuja') || textBody.includes('1')) {
+                          if (textBody.includes('ndio') || textBody.includes('yes') || textBody.includes('nitakuja') || textBody.includes('nitahudhuria') || textBody.includes('atahudhuria') || textBody.includes('kuhudhuria') || textBody.includes('tatahudhuria') || textBody.includes('ntahudhuria') || textBody.includes('ntakuja') || textBody.includes('nakuja') || textBody.includes('tutakuja') || textBody.includes('tutahudhuria') || textBody.includes('nitafika') || textBody.includes('ntafika') || textBody.includes('tutafika') || textBody.includes('1')) {
                             newRsvp = 'Atahudhuria';
-                          } else if (textBody.includes('hapana') || textBody.includes('no') || textBody.includes('sitakuja') || textBody.includes('sintahudhuria') || textBody.includes('hatahudhuria') || textBody.includes('sitohudhuria') || textBody.includes('stahudhuria') || textBody.includes('2')) {
+                          } else if (textBody.includes('hapana') || textBody.includes('no') || textBody.includes('sitakuja') || textBody.includes('sintahudhuria') || textBody.includes('hatahudhuria') || textBody.includes('sitohudhuria') || textBody.includes('stahudhuria') || textBody.includes('hatutakuja') || textBody.includes('hatutahudhuria') || textBody.includes('sitafika') || textBody.includes('siwezi') || textBody.includes('2')) {
                             newRsvp = 'Hatahudhuria';
-                          } else if (textBody.includes('sina uhakika') || textBody.includes('maybe') || textBody.includes('labda') || textBody.includes('3')) {
+                          } else if (textBody.includes('sina uhakika') || textBody.includes('maybe') || textBody.includes('labda') || textBody.includes('sijajua') || textBody.includes('ntakujulisha') || textBody.includes('nitakujulisha') || textBody.includes('3')) {
                             newRsvp = 'Labda';
                           }
 

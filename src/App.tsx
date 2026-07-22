@@ -50,6 +50,7 @@ import GitHubSyncConfig from './components/GitHubSyncConfig';
 import BackupManager from './components/BackupManager';
 import ContributionManager from './components/ContributionManager';
 import CommitteeDashboard from './components/CommitteeDashboard';
+import PublicReportView from './components/PublicReportView';
 import SaveTheDateManager from './components/SaveTheDateManager';
 import EventReports from './components/EventReports';
 import GuestInvitePage from './components/GuestInvitePage';
@@ -168,6 +169,7 @@ export default function App() {
   const [isSeatingView, setIsSeatingView] = useState(false);
   const [isVenueView, setIsVenueView] = useState(false);
   const [isCommitteePortal, setIsCommitteePortal] = useState(false);
+  const [isPublicReportPortal, setIsPublicReportPortal] = useState(false);
   const [portalEventId, setPortalEventId] = useState<string | null>(null);
   const [isScanOnlyPortal, setIsScanOnlyPortal] = useState(false);
   const [scanPortalEventId, setScanPortalEventId] = useState<string | null>(null);
@@ -203,6 +205,9 @@ export default function App() {
       } else if (savedScannerMode) {
         setIsScanOnlyPortal(true);
         setScanPortalEventId(localStorage.getItem('eventcard_scanner_event_id'));
+      } else if (params.get('progress') === 'true' && eventIdParam) {
+        setIsPublicReportPortal(true);
+        setPortalEventId(eventIdParam);
       } else if (portalParam === 'committee' && eventIdParam) {
         setIsCommitteePortal(true);
         setPortalEventId(eventIdParam);
@@ -792,11 +797,12 @@ export default function App() {
           event={guestInviteData.event} 
           template={guestInviteData.pledgeTemplate || payloadTpl}
           onPledgeSubmit={(amount) => {
-             // The GuestPledgeSubmissionPage already updates the state locally or via API
+             const updatedG = { ...guestInviteData.guest, pledgeAmount: amount, pledgeStatus: 'Pledged' as any };
              setGuestInviteData({
                 ...guestInviteData,
-                guest: { ...guestInviteData.guest, pledgeAmount: amount }
+                guest: updatedG
              });
+             setGuests(prev => prev.map(g => g.id === updatedG.id ? updatedG : g));
           }}
         />
       );
@@ -816,6 +822,32 @@ export default function App() {
         />
       );
     }
+  }
+
+  if (isPublicReportPortal) {
+    if (isLoading && eventsList.length === 0) {
+      return (
+        <div className="min-h-screen bg-[#050b18] text-white flex flex-col items-center justify-center font-sans p-6 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500 mb-6"></div>
+          <p className="text-sm text-slate-350 font-bold uppercase tracking-widest animate-pulse">Inapakia Ripoti...</p>
+        </div>
+      );
+    }
+
+    const portalEvent = eventsList.find(e => e.id === portalEventId);
+    if (!portalEvent) {
+      return (
+        <div className="min-h-screen bg-[#050b18] text-white flex flex-col items-center justify-center p-6 text-center font-sans">
+          <AlertTriangle className="w-16 h-16 text-rose-500 mb-4" />
+          <h2 className="text-xl font-black uppercase mb-2">Tukio halijapatikana</h2>
+          <p className="text-xs text-slate-400 max-w-sm mb-6">Inaonekana tukio hili limefutwa au link uliyopewa sio sahihi.</p>
+        </div>
+      );
+    }
+
+    const eventGuests = guests.filter(g => g.eventId === portalEvent.id || (!g.eventId && portalEvent.id === 'event-starter'));
+
+    return <PublicReportView event={portalEvent} guests={eventGuests} />;
   }
 
   if (isCommitteePortal) {
