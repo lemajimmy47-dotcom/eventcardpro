@@ -3920,6 +3920,150 @@ Tumia Kiswahili fasaha, mpangilio mzuri wa vitone (bullet points) na lugha yenye
     }
   });
 
+  // Meta WhatsApp Cloud API Webhook Verification (GET)
+  app.get(["/api/whatsapp/webhook", "/api/webhook/whatsapp"], (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    const VERIFY_TOKEN = process.env.META_WEBHOOK_VERIFY_TOKEN || "eventcard_secret_token";
+
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      console.log("[WhatsApp Webhook Verified Successfully]");
+      return res.status(200).send(challenge);
+    } else {
+      return res.sendStatus(403);
+    }
+  });
+
+  // Meta WhatsApp Cloud API Webhook Messages Listener (POST)
+  app.post(["/api/whatsapp/webhook", "/api/webhook/whatsapp"], async (req, res) => {
+    try {
+      const body = req.body;
+      if (body?.object === 'whatsapp_business_account') {
+        const entry = body.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const value = changes?.value;
+        const messages = value?.messages;
+
+        if (messages && messages[0]) {
+          const msg = messages[0];
+          const fromPhone = msg.from; // Sender's phone number
+          const textBody = msg.text?.body;
+
+          if (textBody && fromPhone) {
+            console.log(`[WhatsApp Incoming Msg from ${fromPhone}]: ${textBody}`);
+
+            // Fetch DB Context
+            const db = await readDBLatest();
+            const event = db.eventDetails || {};
+            let guests = db.guests || [];
+            const matchedGuest = guests.find((g: any) => g.phone && g.phone.replace(/\D/g, '') === fromPhone.replace(/\D/g, ''));
+
+            const targetAmount = Number(event.fundraisingGoal || event.targetAmount) || 0;
+            const totalPaid = guests.reduce((sum: number, g: any) => sum + (Number(g.paidAmount) || 0), 0);
+            const remainingTarget = Math.max(0, targetAmount - totalPaid);
+            const venueName = event.eventHallName || event.venue || 'Haijawekwa';
+
+            const guestContext = matchedGuest 
+              ? `Mgeni anayeuliza anaitwa: ${matchedGuest.name}, Ahadi yake: TZS ${(Number(matchedGuest.pledgeAmount) || 0).toLocaleString()}, Amelipa: TZS ${(Number(matchedGuest.paidAmount) || 0).toLocaleString()}, RSVP: ${matchedGuest.rsvpStatus || 'Bado'}`
+              : `Mgeni anayeuliza (Simu: ${fromPhone}) hajasajiliwa rasmi kwa jina.`;
+
+            const aiContext = `
+Tukio: ${event.name || 'Harusi / Sherehe'}
+Waandaji: ${event.hostName || 'Kamati ya Sherehe'}
+Tarehe ya Sherehe: ${event.date || 'Haijawekwa'}
+Ukumbi / Mahali: ${venueName}
+Muda: ${event.time || '12:00'} ${event.period || 'Mchana'}
+Kadi ya Mgeni: ${matchedGuest?.cardType || 'Standard Card'}
+
+${guestContext}
+Lengo la Michango: TZS ${targetAmount.toLocaleString()}
+Jumla Iliyokusanywa: TZS ${totalPaid.toLocaleString()}
+`;
+
+            let botReply = "";
+            const ai = getGenAI();
+            if (ai) {
+              try {
+                const response = await ai.models.generateContent({
+                  model: "gemini-2.5-flash",
+                  contents: `Wewe ni Msaidizi wa AI wa WhatsApp wa EVENTCARD (EVENTCARD WhatsApp AI Bot).
+Unajibu mgeni aliyetuma ujumbe kwenye WhatsApp kuhusu sherehe.
+
+TAARIFA ZA SHEREHE:
+${aiContext}
+
+Ujumbe wa Mgeni: "${textBody}"
+
+MWONGOZO:
+- Jibu kwa Kiswahili kirafiki, kwa heshima na ukarimu.
+- Kama anauliza ukumbi au tarehe au jinsi ya kuchangia/RSVP, mpe maelekezo kamili ya ukumbi (${venueName}), tarehe, na namba za simu za waandaji (${event.contact1 || ''}).
+- Majibu yawe mafupi, yasiwe marefu sana kwani ni ya kuonekana kwenye WhatsApp chat.`,
+                });
+                if (response && response.text) {
+                  botReply = response.text;
+                }
+              } catch (e: any) {
+                console.error("[WhatsApp AI Gemini Error]:", e?.message);
+              }
+            }
+
+            if (!botReply) {
+              botReply = `Habari! Asante kwa kuwasiliana na Msaidizi wa AI wa sherehe ya ${event.name || 'EVENTCARD'} 🤖.\n\n• **Tarehe:** ${event.date || 'Haijawekwa'}\n• **Ukumbi:** ${venueName}\n• **Mawasiliano:** ${event.contact1 || ''}\n\nKwa taarifa zaidi au uthibitisho wa RSVP, tafadhali wasiliana na waandaji.`;
+            }
+
+            // Send reply via Meta Cloud API if settings are configured
+            let metaToken = process.env.META_WHATSAPP_TOKEN || db.settings?.metaToken;
+            let phoneId = process.env.META_PHONE_NUMBER_ID || db.settings?.metaPhoneNumberId;
+
+            if ((!metaToken || !phoneId) && db.settings?.whatsappUrl) {
+              try {
+                const wUrlData = typeof db.settings.whatsappUrl === 'string' ? JSON.parse(db.settings.whatsappUrl) : db.settings.whatsappUrl;
+                if (wUrlData) {
+                  if (!metaToken) metaToken = wUrlData.meta_token || wUrlData.metaToken;
+                  if (!phoneId) phoneId = wUrlData.phone_number_id || wUrlData.metaPhoneNumberId || wUrlData.phoneId;
+                }
+              } catch (e) {
+                console.warn("[Parse WhatsApp Settings Warning]:", e);
+              }
+            }
+
+            console.log(`[WhatsApp Auto-Reply Debug] metaToken: ${metaToken ? 'EXISTS' : 'MISSING'}, phoneId: ${phoneId || 'MISSING'}`);
+
+            if (metaToken && phoneId) {
+              try {
+                const resMeta = await fetch(`https://graph.facebook.com/v18.0/${phoneId}/messages`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${metaToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    to: fromPhone,
+                    type: 'text',
+                    text: { body: botReply }
+                  })
+                });
+                const resMetaJson = await resMeta.json();
+                console.log(`[WhatsApp Auto-Reply Sent to ${fromPhone}] Response:`, JSON.stringify(resMetaJson));
+              } catch (sendErr: any) {
+                console.error("[WhatsApp Auto-Reply Send Error]:", sendErr);
+              }
+            } else {
+              console.warn(`[WhatsApp Auto-Reply Warning]: Cannot send auto-reply to ${fromPhone} because Meta Access Token or Phone Number ID is missing in settings.`);
+            }
+          }
+        }
+      }
+      return res.status(200).send('EVENT_RECEIVED');
+    } catch (err: any) {
+      console.error("[WhatsApp Webhook Error]:", err);
+      return res.status(200).send('ERROR');
+    }
+  });
+
   // Vite static assets and html routing middleware
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
