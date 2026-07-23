@@ -1856,7 +1856,7 @@ async function startServer() {
       }
 
       await writeDB(updated);
-      res.json({ success: true, message: "State saved successfully" });
+      res.json({ success: true, message: "State saved successfully", state: updated });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

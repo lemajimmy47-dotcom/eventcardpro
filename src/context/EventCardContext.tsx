@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { safeLocalStorage } from '../utils/storage';
 import { EventDetails, Guest, TemplateSettings, UserAccount, CommitteeMember } from '../types';
@@ -45,6 +45,10 @@ export function EventCardProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [localLoading, setLocalLoading] = useState(false);
 
+  // Track deleted IDs so background polling doesn't resurrect them, while preserving unsaved local additions
+  const deletedGuestIdsRef = useRef<Set<string>>(new Set());
+  const deletedEventIdsRef = useRef<Set<string>>(new Set());
+
   const setEventsList = (newEvents: EventDetails[] | ((prev: EventDetails[]) => EventDetails[])) => {
     setEventsListState((prev) => {
       const resolved = typeof newEvents === 'function' ? newEvents(prev) : newEvents;
@@ -83,17 +87,33 @@ export function EventCardProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (data) {
       if (data.eventsList) {
-        setEventsList(data.eventsList);
+        setEventsList((prevEvents) => {
+          const incomingIds = new Set(data.eventsList.map((e: any) => e.id));
+          const unsavedLocalEvents = prevEvents.filter(
+            (localE) => !incomingIds.has(localE.id) && !deletedEventIdsRef.current.has(localE.id)
+          );
+          return [...data.eventsList, ...unsavedLocalEvents];
+        });
       }
       if (data.guests) {
         setGuests((prevGuests) => {
-          return data.guests.map((cg: any) => {
+          const incomingIds = new Set(data.guests.map((g: any) => g.id));
+          
+          // Preserve local guests that aren't in incoming server data yet (e.g. freshly created or during local save)
+          // UNLESS they were explicitly deleted!
+          const unsavedLocalGuests = prevGuests.filter(
+            (localG) => !incomingIds.has(localG.id) && !deletedGuestIdsRef.current.has(localG.id)
+          );
+
+          const mergedFromData = data.guests.map((cg: any) => {
             const localG = prevGuests?.find((g) => g.id === cg.id);
             if (localG && localG.cardImageUrl) {
               return { ...cg, cardImageUrl: localG.cardImageUrl };
             }
             return cg;
           });
+
+          return [...mergedFromData, ...unsavedLocalGuests];
         });
       }
       if (data.templateSettings) {
@@ -180,6 +200,7 @@ export function EventCardProvider({ children }: { children: ReactNode }) {
         const deletedEventIds = eventsListState.filter(e => !incomingEventIds.has(e.id)).map(e => e.id);
         if (deletedEventIds.length > 0) {
           sanitizedUpdates.deletedEventIds = deletedEventIds;
+          deletedEventIds.forEach(id => deletedEventIdsRef.current.add(id));
         }
       }
 
@@ -188,6 +209,7 @@ export function EventCardProvider({ children }: { children: ReactNode }) {
         const deletedGuestIds = guestsState.filter(g => !incomingIds.has(g.id)).map(g => g.id);
         if (deletedGuestIds.length > 0) {
           sanitizedUpdates.deletedGuestIds = deletedGuestIds;
+          deletedGuestIds.forEach(id => deletedGuestIdsRef.current.add(id));
         }
 
         sanitizedUpdates.guests = updates.guests.map((g: any) => {
@@ -222,8 +244,12 @@ export function EventCardProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) throw new Error('Inashindwa kuhifadhi taarifa kwenye server');
       
-      // Trigger actual revalidation to stay perfectly in sync
-      swrMutate();
+      const resJson = await response.json();
+      if (resJson && resJson.state) {
+        swrMutate(resJson.state, false);
+      } else {
+        swrMutate();
+      }
     } catch (err: any) {
       console.error('Error in saveState hook:', err);
       setError(err.message || 'Mabadiliko hayakuweza kuhifadhiwa.');
