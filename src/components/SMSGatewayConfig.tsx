@@ -36,6 +36,53 @@ export default function SMSGatewayConfig() {
   const [hasFetchedIds, setHasFetchedIds] = useState(false);
   const [availableIds, setAvailableIds] = useState<{ id: string, sender_id: string, status: string }[]>([]);
 
+  // WhatsApp Webhook & Auto-Reply Diagnostics State
+  const [whatsappLogs, setWhatsappLogs] = useState<any[]>([]);
+  const [botTestPhone, setBotTestPhone] = useState('255622443249');
+  const [botTestMessage, setBotTestMessage] = useState('Ukumbi uko wapi?');
+  const [isTestingBot, setIsTestingBot] = useState(false);
+  const [botTestResult, setBotTestResult] = useState<any>(null);
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch('/api/whatsapp-logs');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setWhatsappLogs(data);
+      }
+    } catch (e) {
+      console.warn("Error fetching whatsapp logs:", e);
+    }
+  };
+
+  const handleTestChatbot = async () => {
+    if (!botTestPhone || !botTestMessage) return;
+    setIsTestingBot(true);
+    setBotTestResult(null);
+    try {
+      const res = await fetch('/api/whatsapp/test-autoreply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: botTestPhone, message: botTestMessage })
+      });
+      const data = await res.json();
+      setBotTestResult(data);
+      fetchLogs();
+    } catch (err: any) {
+      setBotTestResult({ success: false, error: err.message || "Failed to reach server" });
+    } finally {
+      setIsTestingBot(false);
+    }
+  };
+
+  const handleClearLogs = async () => {
+    if (!confirm(isEn ? "Clear all WhatsApp logs?" : "Futa kumbukumbu zote za WhatsApp?")) return;
+    try {
+      await fetch('/api/whatsapp-logs', { method: 'DELETE' });
+      setWhatsappLogs([]);
+    } catch (e) {}
+  };
+
   useEffect(() => {
     setAvailableIds([]);
     setHasFetchedIds(false);
@@ -123,6 +170,7 @@ export default function SMSGatewayConfig() {
         }
         setIsLoaded(true);
         fetchBalance();
+        fetchLogs();
       })
       .catch(err => {
         console.error("Error fetching SMS gateway settings:", err);
@@ -752,6 +800,215 @@ export default function SMSGatewayConfig() {
                 </div>
               )}
             </div>
+
+        {/* WHATSAPP CHATBOT LIVE TEST & WEBHOOK LOGS */}
+        <div className="mt-8 border-t border-white/10 pt-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">🤖</span>
+                {isEn ? "WhatsApp AI Chatbot & Webhook Diagnostics" : "Uchunguzi & Kumbukumbu za WhatsApp AI Chatbot"}
+              </h3>
+              <p className="text-[10px] text-slate-400">
+                {isEn 
+                  ? "Verify real-time incoming messages, AI responses, and Meta API delivery status." 
+                  : "Angalia jumbe zinazoingia kutoka kwa wageni, majibu ya AI, na hali ya uwasilishaji kule Meta."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchLogs}
+              className="bg-white/5 hover:bg-white/10 text-xs text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/30 flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              {isEn ? "Refresh Logs" : "Anzisha Kumbukumbu"}
+            </button>
+          </div>
+
+          {/* Webhook URL & Meta Configuration Guide Box */}
+          <div className="bg-[#0b1329] border border-emerald-500/30 rounded-xl p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+              <div className="text-[10px]">
+                <span className="text-emerald-400 font-bold block text-[11px] mb-0.5">🔗 {isEn ? "WhatsApp Webhook Callback URL:" : "1. Anwani ya Webhook (Callback URL Meta Dashboard):"}</span>
+                <code className="text-emerald-300 font-mono text-[11px] select-all break-all">{typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/whatsapp</code>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    navigator.clipboard.writeText(`${window.location.origin}/api/webhook/whatsapp`);
+                    alert(isEn ? "Webhook URL copied!" : "Webhook URL imekopwa!");
+                  }
+                }}
+                className="bg-emerald-600/30 border border-emerald-500/40 hover:bg-emerald-600/50 text-emerald-200 text-[10px] font-bold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+              >
+                {isEn ? "Copy URL" : "Kopi Anwani"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px]">
+              <div className="bg-white/5 p-2.5 rounded-lg border border-white/5 space-y-1">
+                <span className="text-slate-300 font-bold block">🔑 {isEn ? "2. Verify Token:" : "2. Neno la Uhakiki (Verify Token):"}</span>
+                <div className="flex items-center justify-between bg-black/40 px-2 py-1 rounded text-emerald-300 font-mono text-[11px]">
+                  <span>eventcard</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('eventcard');
+                      alert(isEn ? "Verify Token copied!" : "Verify Token imekopwa!");
+                    }}
+                    className="text-[9px] text-slate-400 hover:text-white cursor-pointer ml-2"
+                  >
+                    Kopi
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400">
+                  {isEn ? "Use this token when Meta asks for Verify Token." : "Weka neno hili wakati Meta inapoomba Verify Token kule Developer Portal."}
+                </p>
+              </div>
+
+              <div className="bg-white/5 p-2.5 rounded-lg border border-white/5 space-y-1">
+                <span className="text-slate-300 font-bold block">⚡ {isEn ? "3. Required Webhook Field:" : "3. Subiri/Bonyeza Subscribe kwenye Meta:"}</span>
+                <div className="bg-black/40 px-2 py-1 rounded text-amber-300 font-mono text-[11px]">
+                  messages
+                </div>
+                <p className="text-[9px] text-slate-400">
+                  {isEn 
+                    ? "In Meta Dashboard -> WhatsApp -> Configuration, click Subscribe on 'messages'." 
+                    : "Kwenye Meta Dashboard -> WhatsApp -> Configuration, hakikisha umebonyeza 'Subscribe' kwenye kisanduku cha 'messages'."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Direct Chatbot Test Box */}
+          <div className="bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-4 space-y-3">
+            <h4 className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+              🧪 {isEn ? "Direct Chatbot Auto-Reply Tester" : "Jaribu Chatbot Hapa Hapa (Direct Auto-Reply Test)"}
+            </h4>
+            <p className="text-[10px] text-slate-300">
+              {isEn 
+                ? "Simulate a guest asking a question (e.g., 'Ukumbi uko wapi?') to test AI response generation and Meta message delivery."
+                : "Weka namba ya simu na ujumbe wa mgeni (mf. 'Ukumbi uko wapi?') ili kuona jinsi AI inavyojibu na ikiwa ujumbe unamfikia mgeni."}
+            </p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input
+                type="text"
+                placeholder="Namba ya Simu (mf: 255622443249)"
+                value={botTestPhone}
+                onChange={(e) => setBotTestPhone(e.target.value)}
+                className="bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              <input
+                type="text"
+                placeholder="Ujumbe (mf: Ukumbi uko wapi?)"
+                value={botTestMessage}
+                onChange={(e) => setBotTestMessage(e.target.value)}
+                className="sm:col-span-2 bg-[#050b18] border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestChatbot}
+              disabled={isTestingBot || !botTestPhone || !botTestMessage}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-[10px] uppercase px-4 py-2 rounded-lg transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {isTestingBot ? (isEn ? "Generating Reply & Sending..." : "Inatengeneza Majibu & Kutuma...") : (isEn ? "Send Test Message" : "Tuma Ujumbe Wa Majaribio")}
+            </button>
+
+            {botTestResult && (
+              <div className={`p-3 rounded-xl border text-[11px] space-y-1.5 ${botTestResult.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-rose-500/10 border-rose-500/30 text-rose-200'}`}>
+                <div className="font-bold flex items-center justify-between">
+                  <span>{botTestResult.success ? '✅ Ujumbe Umetumwa Kwenye WhatsApp!' : '❌ Shida Imetokea Katika Kutuma'}</span>
+                  <span className="text-[9px] opacity-75 font-mono">Meta Token: {botTestResult.metaTokenFound ? 'OK' : 'MISSING'}, Phone ID: {botTestResult.phoneIdFound ? 'OK' : 'MISSING'}</span>
+                </div>
+                <div className="bg-black/40 p-2 rounded-lg font-sans text-[10px] whitespace-pre-wrap border border-white/10">
+                  <strong>Jibu la AI Bot:</strong> {botTestResult.botReply}
+                </div>
+                {botTestResult.error && (
+                  <div className="text-[10px] text-rose-300 font-mono bg-rose-950/60 p-2 rounded">
+                    <strong>Meta Error:</strong> {botTestResult.error}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Live Webhook Logs Table */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-300">
+                📜 {isEn ? "Recent WhatsApp Webhook Interactions" : "Kumbukumbu za Ujumbe za Hivi Karibuni"}
+              </span>
+              {whatsappLogs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearLogs}
+                  className="text-[9px] text-rose-400 hover:underline cursor-pointer"
+                >
+                  {isEn ? "Clear Logs" : "Futa Kumbukumbu"}
+                </button>
+              )}
+            </div>
+
+            {whatsappLogs.length === 0 ? (
+              <div className="bg-[#080e1d] border border-white/5 rounded-xl p-4 text-center text-slate-500 text-[11px]">
+                {isEn ? "No WhatsApp Webhook events recorded yet. Send a WhatsApp message to your business number to see live interactions here." : "Bado hakuna kumbukumbu za jumbe zilizoingia. Tuma ujumbe kwenye namba yako ya WhatsApp kuona majibu hapa kwa muda halisi."}
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {whatsappLogs.map((log: any) => (
+                  <div key={log.id} className="bg-[#070d19] border border-white/10 rounded-xl p-3 space-y-1.5 text-[10px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white">{log.guestName}</span>
+                        <span className="text-slate-400 font-mono">({log.fromPhone})</span>
+                      </div>
+                      <span className="text-[9px] text-slate-500 font-mono">
+                        {new Date(log.timestamp).toLocaleTimeString()} - {new Date(log.timestamp).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <div className="bg-blue-500/5 border border-blue-500/10 p-2 rounded-lg text-slate-300">
+                      <span className="text-blue-400 font-bold block text-[9px] uppercase">Ujumbe wa Mgeni:</span>
+                      "{log.incomingMessage}"
+                    </div>
+
+                    <div className="bg-emerald-500/5 border border-emerald-500/10 p-2 rounded-lg text-slate-200">
+                      <span className="text-emerald-400 font-bold block text-[9px] uppercase">Jibu la AI Bot:</span>
+                      {log.botReply}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      {log.status === 'sent' && (
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded text-[9px] font-bold">
+                          ✅ Imetumwa Vizuri Meta Graph API
+                        </span>
+                      )}
+                      {log.status === 'fallback_sent' && (
+                        <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded text-[9px] font-bold">
+                          📩 Imetumwa kwa Njia Mbadala (SMS Gateway)
+                        </span>
+                      )}
+                      {log.status === 'no_token' && (
+                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-[9px] font-bold">
+                          ⚠️ Token ya Meta / Phone ID Haipatikani
+                        </span>
+                      )}
+                      {log.status === 'failed' && (
+                        <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded text-[9px] font-bold">
+                          ❌ Imeshindikana ({log.error || 'Meta Error'})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="flex gap-3 pt-3">
           <button
