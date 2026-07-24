@@ -2546,8 +2546,13 @@ ${aiContext}
 
 Ujumbe wa Mgeni: "${textBody}"
 
-MWONGOZO:
+MWONGOZO MUHIMU:
 - Jibu kwa Kiswahili kirafiki, kwa heshima na ukarimu.
+- MARUFUKU KUTAJA LA AU KUTANGAZA LENGO KUU LA MICHANGO YA SHEREHE ("Lengo la michango")! Usiseme kabisa "Lengo la michango ni TZS X".
+- Kama mgeni anauliza kuhusu ahadi yake, mchango wake, au salio lake:
+  1. Kama ameshakamilisha mchango wake (Salio = TZS 0 na ameweka ahadi): Mueleze kwa furaha kuwa ameshakamilisha mchango wake kikamilifu, na umpe shukrani nyingi sana kwa mchango wake.
+  2. Kama anaidaiwa (Salio ni zaidi ya TZS 0): Mwambie kiasi anachodaiwa (Salio lililobaki: TZS X) pekee kwa usahihi, na mueleze ajisikie huru kukamilisha au kuwasiliana na waandaji (${event.contact1 || 'Kamati'}).
+  3. Kama hana ahadi iliyosajiliwa au namba haipo kwenye orodha: Mueleze kwa ukarimu kuwa namba yake haijatambuliwa kwenye orodha ya ahadi bado na mpe mawasiliano ya waandaji (${event.contact1 || 'Kamati'}). Usitaje lengo la michango.
 - Kama anauliza ukumbi au tarehe au jinsi ya kuchangia/RSVP, mpe maelekezo kamili ya ukumbi (${venueName}), tarehe (${event.date || 'Haijawekwa'}), na namba za simu za waandaji (${event.contact1 || ''}).
 - Majibu yawe mafupi, yasiwe marefu sana kwani ni ya kuonekana kwenye WhatsApp chat. Tumia *bold* badala ya **bold** kwenye WhatsApp formatting.`,
                           });
@@ -2564,8 +2569,22 @@ MWONGOZO:
                           botReply = `Habari! Ukumbi wa sherehe ya *${event.name || 'sherehe yetu'}* ni *${venueName}*. Tarehe ni *${event.date || '2026-08-08'}* kuanzia saa *${event.time || '19:00'} ${event.period || 'Usiku'}*. Karibu sana! 🎉`;
                         } else if (lowerText.includes("tarehe") || lowerText.includes("muda") || lowerText.includes("saa") || lowerText.includes("date") || lowerText.includes("time")) {
                           botReply = `Habari! Sherehe ya *${event.name || 'sherehe yetu'}* itafanyika tarehe *${event.date || '2026-08-08'}* kuanzia saa *${event.time || '19:00'} ${event.period || 'Usiku'}* katika ukumbi wa *${venueName}*. Karibu! 🎉`;
-                        } else if (lowerText.includes("mchango") || lowerText.includes("pesa") || lowerText.includes("lipa") || lowerText.includes("ahadi") || lowerText.includes("pledge") || lowerText.includes("changia")) {
-                          botReply = `Habari! Lengo la michango ya *${event.name || 'sherehe'}* ni TZS ${targetAmount.toLocaleString()}. Kwa maelezo zaidi au kulipia ahadi, tafadhali wasiliana na waandaji (${event.contact1 || 'Kamati'}). Asante kwa mchango wako! 🙏`;
+                        } else if (lowerText.includes("mchango") || lowerText.includes("pesa") || lowerText.includes("lipa") || lowerText.includes("ahadi") || lowerText.includes("pledge") || lowerText.includes("changia") || lowerText.includes("salio") || lowerText.includes("baki")) {
+                          if (matchedGuest) {
+                            const pledgeAmt = Number(matchedGuest.pledgeAmount) || 0;
+                            const paidAmt = Number(matchedGuest.paidAmount) || 0;
+                            const balanceAmt = Math.max(0, pledgeAmt - paidAmt);
+
+                            if (pledgeAmt > 0 && balanceAmt === 0) {
+                              botReply = `Habari *${matchedGuest.name}*! 👋\n\nTunakushukuru sana! Umeshakamilisha mchango wako wote wa TZS ${pledgeAmt.toLocaleString()} kikamilifu kwa ajili ya *${event.name || 'sherehe'}*.\n\nAsante sana kwa mchango na ushirikiano wako mkubwa! Mungu akubariki sana! 🙏🎉`;
+                            } else if (pledgeAmt > 0 && balanceAmt > 0) {
+                              botReply = `Habari *${matchedGuest.name}*! 👋\n\nTaarifa za mchango wako kwa sherehe ya *${event.name || 'sherehe'}*:\n• *Kiasi Unachodaiwa (Salio):* TZS ${balanceAmt.toLocaleString()}\n• *Ahadi Yako:* TZS ${pledgeAmt.toLocaleString()}\n• *Kiasi Ulicholipa:* TZS ${paidAmt.toLocaleString()}\n\nTafadhali kamilisha salio lako kabla ya sherehe. Kwa maelezo zaidi au kulipia, wasiliana na waandaji (${event.contact1 || 'Kamati'}). Asante sana! 🙏`;
+                            } else {
+                              botReply = `Habari *${matchedGuest.name}*! 👋\n\nHujaweka ahadi au mchango uliosajiliwa bado kwa sherehe ya *${event.name || 'sherehe'}*.\n\nKama ungependa kuweka ahadi au kutoa mchango wako, tafadhali wasiliana na waandaji (${event.contact1 || 'Kamati'}). Karibu sana! 🙏`;
+                            }
+                          } else {
+                            botReply = `Habari! 👋\n\nNamba yako ya simu haijaandikishwa kwenye orodha ya wageni wetu bado kwa sherehe ya *${event.name || 'sherehe'}*.\n\nKwa maelezo zaidi au kuweka ahadi/mchango wako, tafadhali wasiliana na waandaji (${event.contact1 || 'Kamati'}). Asante! 🙏`;
+                          }
                         } else {
                           botReply = `Habari! Asante kwa kuwasiliana na Msaidizi wa AI wa sherehe ya *${event.name || 'EVENTCARD'}* 🤖.\n\n• *Tarehe:* ${event.date || '2026-08-08'}\n• *Ukumbi:* ${venueName}\n• *Mawasiliano:* ${event.contact1 || ''}\n\nKwa taarifa zaidi au uthibitisho wa RSVP, tafadhali wasiliana na waandaji.`;
                         }
@@ -2772,8 +2791,13 @@ ${aiContext}
 
 Ujumbe wa Mgeni: "${textBody}"
 
-MWONGOZO:
+MWONGOZO MUHIMU:
 - Jibu kwa Kiswahili kirafiki, kwa heshima na ukarimu.
+- MARUFUKU KUTAJA AU KUTANGAZA LENGO KUU LA MICHANGO YA SHEREHE ("Lengo la michango")! Usiseme kabisa "Lengo la michango ni TZS X".
+- Kama mgeni anauliza kuhusu ahadi yake, mchango wake, au salio lake:
+  1. Kama ameshakamilisha mchango wake (Salio = TZS 0 na ameweka ahadi): Mueleze kwa furaha kuwa ameshakamilisha mchango wake kikamilifu, na umpe shukrani nyingi sana kwa mchango wake.
+  2. Kama anaidaiwa (Salio ni zaidi ya TZS 0): Mwambie kiasi anachodaiwa (Salio lililobaki: TZS X) pekee kwa usahihi, na mueleze ajisikie huru kukamilisha au kuwasiliana na waandaji (${event.contact1 || 'Kamati'}).
+  3. Kama hana ahadi iliyosajiliwa au namba haipo kwenye orodha: Mueleze kwa ukarimu kuwa namba yake haijatambuliwa kwenye orodha ya ahadi bado na mpe mawasiliano ya waandaji (${event.contact1 || 'Kamati'}). Usitaje lengo la michango.
 - Kama anauliza ukumbi au tarehe au jinsi ya kuchangia/RSVP, mpe maelekezo kamili ya ukumbi (${venueName}), tarehe (${event.date || 'Haijawekwa'}), na namba za simu za waandaji (${event.contact1 || ''}).
 - Majibu yawe mafupi, yasiwe marefu sana kwani ni ya kuonekana kwenye WhatsApp chat. Tumia *bold* badala ya **bold** kwenye WhatsApp formatting.`,
           });
@@ -2790,8 +2814,22 @@ MWONGOZO:
           botReply = `Habari! Ukumbi wa sherehe ya *${event.name || 'sherehe yetu'}* ni *${venueName}*. Tarehe ni *${event.date || '2026-08-08'}* kuanzia saa *${event.time || '19:00'} ${event.period || 'Usiku'}*. Karibu sana! 🎉`;
         } else if (lowerText.includes("tarehe") || lowerText.includes("muda") || lowerText.includes("saa") || lowerText.includes("date") || lowerText.includes("time")) {
           botReply = `Habari! Sherehe ya *${event.name || 'sherehe yetu'}* itafanyika tarehe *${event.date || '2026-08-08'}* kuanzia saa *${event.time || '19:00'} ${event.period || 'Usiku'}* katika ukumbi wa *${venueName}*. Karibu! 🎉`;
-        } else if (lowerText.includes("mchango") || lowerText.includes("pesa") || lowerText.includes("lipa") || lowerText.includes("ahadi") || lowerText.includes("pledge") || lowerText.includes("changia")) {
-          botReply = `Habari! Lengo la michango ya *${event.name || 'sherehe'}* ni TZS ${targetAmount.toLocaleString()}. Kwa maelezo zaidi au kulipia ahadi, tafadhali wasiliana na waandaji (${event.contact1 || 'Kamati'}). Asante kwa mchango wako! 🙏`;
+        } else if (lowerText.includes("mchango") || lowerText.includes("pesa") || lowerText.includes("lipa") || lowerText.includes("ahadi") || lowerText.includes("pledge") || lowerText.includes("changia") || lowerText.includes("salio") || lowerText.includes("baki")) {
+          if (matchedGuest) {
+            const pledgeAmt = Number(matchedGuest.pledgeAmount) || 0;
+            const paidAmt = Number(matchedGuest.paidAmount) || 0;
+            const balanceAmt = Math.max(0, pledgeAmt - paidAmt);
+
+            if (pledgeAmt > 0 && balanceAmt === 0) {
+              botReply = `Habari *${matchedGuest.name}*! 👋\n\nTunakushukuru sana! Umeshakamilisha mchango wako wote wa TZS ${pledgeAmt.toLocaleString()} kikamilifu kwa ajili ya *${event.name || 'sherehe'}*.\n\nAsante sana kwa mchango na ushirikiano wako mkubwa! Mungu akubariki sana! 🙏🎉`;
+            } else if (pledgeAmt > 0 && balanceAmt > 0) {
+              botReply = `Habari *${matchedGuest.name}*! 👋\n\nTaarifa za mchango wako kwa sherehe ya *${event.name || 'sherehe'}*:\n• *Kiasi Unachodaiwa (Salio):* TZS ${balanceAmt.toLocaleString()}\n• *Ahadi Yako:* TZS ${pledgeAmt.toLocaleString()}\n• *Kiasi Ulicholipa:* TZS ${paidAmt.toLocaleString()}\n\nTafadhali kamilisha salio lako kabla ya sherehe. Kwa maelezo zaidi au kulipia, wasiliana na waandaji (${event.contact1 || 'Kamati'}). Asante sana! 🙏`;
+            } else {
+              botReply = `Habari *${matchedGuest.name}*! 👋\n\nHujaweka ahadi au mchango uliosajiliwa bado kwa sherehe ya *${event.name || 'sherehe'}*.\n\nKama ungependa kuweka ahadi au kutoa mchango wako, tafadhali wasiliana na waandaji (${event.contact1 || 'Kamati'}). Karibu sana! 🙏`;
+            }
+          } else {
+            botReply = `Habari! 👋\n\nNamba yako ya simu haijaandikishwa kwenye orodha ya wageni wetu bado kwa sherehe ya *${event.name || 'sherehe'}*.\n\nKwa maelezo zaidi au kuweka ahadi/mchango wako, tafadhali wasiliana na waandaji (${event.contact1 || 'Kamati'}). Asante! 🙏`;
+          }
         } else {
           botReply = `Habari! Asante kwa kuwasiliana na Msaidizi wa AI wa sherehe ya *${event.name || 'EVENTCARD'}* 🤖.\n\n• *Tarehe:* ${event.date || '2026-08-08'}\n• *Ukumbi:* ${venueName}\n• *Mawasiliano:* ${event.contact1 || ''}\n\nKwa taarifa zaidi au uthibitisho wa RSVP, tafadhali wasiliana na waandaji.`;
         }
